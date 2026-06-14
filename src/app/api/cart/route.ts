@@ -1,24 +1,24 @@
 import { NextResponse } from "next/server";
-import { addCartItem, getCart, updateCartItem } from "@/lib/wcCart";
-import { readSessionCookie, writeSessionCookie } from "@/lib/sessionCookie";
+import { addItem, getCart, updateItem, ensureCartToken, readCartToken } from "@/lib/cart";
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : "Не вдалося оновити кошик";
 }
 
 export async function GET() {
-  const session = await readSessionCookie();
-  const { cart, sessionCookie } = await getCart(session);
-  await writeSessionCookie(sessionCookie);
-  return NextResponse.json(cart);
+  const token = await readCartToken();
+  return NextResponse.json(await getCart(token));
 }
 
 export async function POST(req: Request) {
-  const { id, quantity } = (await req.json()) as { id: number; quantity?: number };
-  const session = await readSessionCookie();
+  const { product_id, variation, quantity } = (await req.json()) as {
+    product_id: string;
+    variation?: string;
+    quantity?: number;
+  };
   try {
-    const { cart, sessionCookie } = await addCartItem(session, id, quantity ?? 1);
-    await writeSessionCookie(sessionCookie);
+    const token = await ensureCartToken();
+    const cart = await addItem(token, String(product_id), variation ?? "", quantity ?? 1);
     return NextResponse.json(cart);
   } catch (e) {
     return NextResponse.json({ error: errorMessage(e) }, { status: 409 });
@@ -27,10 +27,10 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const { key, quantity } = (await req.json()) as { key: string; quantity: number };
-  const session = await readSessionCookie();
   try {
-    const { cart, sessionCookie } = await updateCartItem(session, key, quantity);
-    await writeSessionCookie(sessionCookie);
+    const token = await readCartToken();
+    if (!token) return NextResponse.json({ items: [], items_count: 0, subtotal: 0 });
+    const cart = await updateItem(token, key, quantity);
     return NextResponse.json(cart);
   } catch (e) {
     return NextResponse.json({ error: errorMessage(e) }, { status: 409 });

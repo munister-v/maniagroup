@@ -280,15 +280,15 @@ export const JOURNAL: {
 export type MegaMenu = {
   label: string;
   href: string;
-  columns: { title: string; links: { label: string; slug: string; logo?: string }[] }[];
-  featured: { title: string; caption: string; tone: string; slug: string; image?: string };
+  columns: { title: string; links: { label: string; slug: string; logo?: string; href?: string }[] }[];
+  featured: { title: string; caption: string; tone: string; slug: string; image?: string; href?: string };
 };
 
 // hrefs/slugs map to real WooCommerce category slugs on maniagroup.com.ua
 export const MEGA_MENU: MegaMenu[] = [
   {
     label: "Бренди",
-    href: "/catalog?category=ea7",
+    href: "/catalog",
     columns: [
       {
         title: "Популярні",
@@ -313,7 +313,7 @@ export const MEGA_MENU: MegaMenu[] = [
   },
   {
     label: "Жінкам",
-    href: "/catalog?category=zhenskoe",
+    href: "/catalog?gender=women",
     columns: [
       {
         title: "Одяг",
@@ -334,11 +334,11 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe", image: "/images/02_dropdown-zhinocha-kolektsiya.webp" },
+    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe", href: "/catalog?gender=women", image: "/images/02_dropdown-zhinocha-kolektsiya.webp" },
   },
   {
     label: "Чоловікам",
-    href: "/catalog?category=muzhskoe",
+    href: "/catalog?gender=men",
     columns: [
       {
         title: "Одяг",
@@ -359,7 +359,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe", image: "/images/03_dropdown-cholovicha-kolektsiya.webp" },
+    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe", href: "/catalog?gender=men", image: "/images/03_dropdown-cholovicha-kolektsiya.webp" },
   },
   {
     label: "Аромати для дому",

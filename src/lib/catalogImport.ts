@@ -16,7 +16,7 @@
  */
 
 import * as XLSX from "xlsx";
-import { getDb, setMeta } from "./db";
+import { replaceCatalog, setMeta, type ProductRow } from "./db";
 
 const STORE_API = "https://maniagroup.com.ua/wp-json/wc/store/products";
 
@@ -184,11 +184,9 @@ export async function importCatalog(opts: {
   onProgress?: ImportProgress;
 }): Promise<ImportResult> {
   const onProgress = opts.onProgress ?? (() => {});
-  const db = getDb();
-  if (!db) throw new Error("SQLite unavailable (better-sqlite3 not built?)");
 
   const start = Date.now();
-  setMeta("sync_status", "syncing");
+  await setMeta("sync_status", "syncing");
 
   try {
     onProgress("Парсинг MG.xls…");
@@ -234,7 +232,7 @@ export async function importCatalog(opts: {
         id: pid, sku: id, name: entry?.name || w.name, slug: String(pid),
         brand, category, category_slug: catSlug, gender,
         price, regular_price: regular, sale_price: sale > 0 ? sale : null,
-        is_in_stock: 1, status: "publish",
+        is_in_stock: true, status: "publish",
         image_src: entry?.images[0]?.src ?? "",
         images: JSON.stringify(entry?.images ?? []),
         attributes: sizeAttributes(w.sizes),
@@ -256,7 +254,7 @@ export async function importCatalog(opts: {
         id: SYNTH_OFFSET + Number(code), sku: code, name: `${m.name} ${m.brand}`.trim(), slug: code,
         brand: m.brand || "Mania Group", category, category_slug: catSlug, gender: m.gender,
         price: sale > 0 ? sale : m.base, regular_price: m.base, sale_price: sale > 0 ? sale : null,
-        is_in_stock: 0, status: "publish",
+        is_in_stock: false, status: "publish",
         image_src: "", images: "[]", attributes: "[]",
         description: "", short_description: "",
         color: m.color, country: m.country, season: "", collection: m.collection,
@@ -267,46 +265,25 @@ export async function importCatalog(opts: {
 
     onProgress(`Запис у БД: ${rows.length} товарів…`);
 
-    const cols = [
-      "id", "sku", "name", "slug", "brand", "category", "category_slug", "gender",
-      "price", "regular_price", "sale_price", "is_in_stock", "status",
-      "image_src", "images", "attributes", "description", "short_description",
-      "color", "country", "season", "collection", "composition", "created_at", "updated_at",
-    ];
-    const insert = db.prepare(
-      `INSERT OR REPLACE INTO products (${cols.join(",")}) VALUES (${cols.map((c) => "@" + c).join(",")})`,
-    );
-    const insertCat = db.prepare(
-      "INSERT OR REPLACE INTO categories(id, name, slug, parent, count) VALUES (?,?,?,?,?)",
-    );
+    await replaceCatalog(rows as unknown as ProductRow[], Array.from(categories.values()));
 
-    const tx = db.transaction(() => {
-      db.prepare("DELETE FROM products").run();
-      db.prepare("DELETE FROM categories").run();
-      for (const r of rows) insert.run(r);
-      let cid = 1;
-      for (const c of categories.values()) insertCat.run(cid++, c.name, c.slug, 0, c.count);
-      db.exec("INSERT INTO products_fts(products_fts) VALUES('rebuild');");
-    });
-    tx();
-
-    const inStock = rows.filter((r) => r.is_in_stock === 1).length;
+    const inStock = rows.filter((r) => r.is_in_stock === true).length;
     const archived = rows.length - inStock;
 
-    setMeta("last_sync", now);
-    setMeta("source", "xls");
-    setMeta("total_products", String(rows.length));
-    setMeta("in_stock_products", String(inStock));
-    setMeta("sync_status", "idle");
-    setMeta("sync_error", "");
+    await setMeta("last_sync", now);
+    await setMeta("source", "xls");
+    await setMeta("total_products", String(rows.length));
+    await setMeta("in_stock_products", String(inStock));
+    await setMeta("sync_status", "idle");
+    await setMeta("sync_error", "");
 
     return {
       inStock, archived, total: rows.length, withImages,
       categories: categories.size, ms: Date.now() - start,
     };
   } catch (err) {
-    setMeta("sync_status", "error");
-    setMeta("sync_error", String(err));
+    await setMeta("sync_status", "error");
+    await setMeta("sync_error", String(err));
     throw err;
   }
 }

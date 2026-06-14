@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { formatPrice } from "@/lib/catalog";
-import { cartItemPriceUah, type WcCart } from "@/lib/wcCart";
-import { wcStateForArea } from "@/lib/uaRegions";
+import type { Cart } from "@/lib/cart";
 import { NovaPoshtaPicker, type NpSelection } from "@/components/NovaPoshtaPicker";
 
 type Form = {
@@ -13,10 +12,8 @@ type Form = {
   last_name: string;
   phone: string;
   email: string;
-  state: string;
   city: string;
-  address_1: string;
-  postcode: string;
+  branch: string;
   note: string;
 };
 
@@ -25,19 +22,17 @@ const EMPTY: Form = {
   last_name: "",
   phone: "",
   email: "",
-  state: "",
   city: "",
-  address_1: "",
-  postcode: "",
+  branch: "",
   note: "",
 };
 
 export function CheckoutForm() {
-  const [cart, setCart] = useState<WcCart | null>(null);
+  const [cart, setCart] = useState<Cart | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [order, setOrder] = useState<number | null>(null);
+  const [order, setOrder] = useState<string | number | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/cart");
@@ -56,13 +51,11 @@ export function CheckoutForm() {
     setForm((f) => ({
       ...f,
       city: s.city,
-      state: wcStateForArea(s.area),
-      address_1: s.warehouse,
-      postcode: s.postcode,
+      branch: s.warehouse,
     }));
   }
 
-  const deliveryReady = Boolean(form.city && form.address_1 && form.state);
+  const deliveryReady = Boolean(form.city && form.branch);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,24 +65,20 @@ export function CheckoutForm() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        billing: {
-          first_name: form.first_name,
-          last_name: form.last_name,
-          address_1: form.address_1,
-          city: form.city,
-          state: form.state,
-          postcode: form.postcode,
-          country: "UA",
-          email: form.email,
-          phone: form.phone,
-        },
+        first_name: form.first_name,
+        last_name: form.last_name,
+        phone: form.phone,
+        email: form.email,
+        city: form.city,
+        branch: form.branch,
         note: form.note,
+        payment_method: "cod",
       }),
     });
     const data = await res.json();
     setStatus("idle");
     if (data.ok) {
-      setOrder(data.orderId);
+      setOrder(data.number ?? data.orderId);
       window.dispatchEvent(new CustomEvent("cart:updated", { detail: { count: 0 } }));
     } else {
       setError(data.message ?? "Сталася помилка. Спробуйте ще раз.");
@@ -100,7 +89,7 @@ export function CheckoutForm() {
     return (
       <section className="wrap flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
         <p className="text-[11px] uppercase tracking-luxe text-muted">Дякуємо за замовлення</p>
-        <h1 className="mt-3 font-display text-4xl text-ink">Замовлення №{order}</h1>
+        <h1 className="mt-3 font-display text-4xl text-ink">Замовлення {order}</h1>
         <p className="mt-4 max-w-md text-sm leading-relaxed text-muted">
           Ми зв&rsquo;яжемося з вами найближчим часом для підтвердження. Оплата —
           при отриманні (накладений платіж).
@@ -116,9 +105,7 @@ export function CheckoutForm() {
   }
 
   const items = cart?.items ?? [];
-  const subtotal = cart
-    ? Math.round(Number(cart.totals.total_price) / 10 ** cart.totals.currency_minor_unit)
-    : 0;
+  const subtotal = cart?.subtotal ?? 0;
 
   if (cart && items.length === 0) {
     return (
@@ -161,9 +148,9 @@ export function CheckoutForm() {
               Доставка · Нова Пошта
             </legend>
             <NovaPoshtaPicker onChange={onDelivery} />
-            {form.address_1 && (
+            {form.branch && (
               <p className="text-xs text-muted">
-                Обрано: {form.city}, {form.address_1}
+                Обрано: {form.city}, {form.branch}
               </p>
             )}
           </fieldset>
@@ -197,15 +184,17 @@ export function CheckoutForm() {
               {items.map((it) => (
                 <div key={it.key} className="flex gap-3">
                   <div className="relative aspect-[3/4] w-14 shrink-0 overflow-hidden bg-cloud">
-                    {it.images[0]?.src && (
-                      <Image src={it.images[0].src} alt={it.name} fill sizes="56px" className="object-cover" />
+                    {it.image && (
+                      <Image src={it.image} alt={it.name} fill sizes="56px" className="object-cover" />
                     )}
                   </div>
                   <div className="flex-1 text-sm">
                     <p className="leading-snug text-ink">{it.name}</p>
-                    <p className="mt-1 text-xs text-muted">× {it.quantity}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {it.variation ? `${it.variation} · ` : ""}× {it.quantity}
+                    </p>
                   </div>
-                  <span className="text-sm tabular-nums text-ink">{formatPrice(cartItemPriceUah(it))}</span>
+                  <span className="text-sm tabular-nums text-ink">{formatPrice(it.line_total)}</span>
                 </div>
               ))}
             </div>

@@ -5,11 +5,17 @@ import { getMeta } from "@/lib/db";
 
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
+  const [status, last_sync, total, error] = await Promise.all([
+    getMeta("sync_status"),
+    getMeta("last_sync"),
+    getMeta("total_products"),
+    getMeta("sync_error"),
+  ]);
   return NextResponse.json({
-    status: getMeta("sync_status") || "idle",
-    last_sync: getMeta("last_sync"),
-    total_products: Number(getMeta("total_products") || 0),
-    error: getMeta("sync_error"),
+    status: status || "idle",
+    last_sync,
+    total_products: Number(total || 0),
+    error,
     has_wc_creds: hasWcCredentials(),
   });
 }
@@ -19,7 +25,7 @@ export async function POST() {
   if (!hasWcCredentials()) {
     return NextResponse.json({ error: "WC_CREDS_MISSING" }, { status: 503 });
   }
-  if (getMeta("sync_status") === "syncing") {
+  if ((await getMeta("sync_status")) === "syncing") {
     return NextResponse.json({ ok: false, error: "already_syncing" });
   }
 

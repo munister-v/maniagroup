@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { MEGA_MENU, type MegaMenu } from "@/lib/catalog";
 import { formatPrice } from "@/lib/catalog";
 import { CartDrawer } from "./CartDrawer";
@@ -68,6 +68,11 @@ export function Header() {
   const [results, setResults] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  // Only the homepage has a dark full-bleed hero behind the header, so the
+  // transparent/white-text treatment only makes sense there. Everywhere else
+  // the header is solid (light bg, dark text) — otherwise it's invisible.
+  const overHero = pathname === "/";
 
   useEffect(() => {
     const q = query.trim();
@@ -93,7 +98,7 @@ export function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const solid = scrolled || active !== null || mobileOpen;
+  const solid = scrolled || active !== null || mobileOpen || !overHero;
   const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
@@ -170,22 +175,24 @@ export function Header() {
             >
               <Icon d={SOCIAL_ICONS.telegram} />
             </a>
-            <button aria-label="Акаунт" className="hidden hover:opacity-60 md:block">
+            <Link href="/account/profile" aria-label="Акаунт" className="hidden hover:opacity-60 md:block">
               <Icon d={ICONS.user} />
-            </button>
+            </Link>
             <button
               onClick={() => setCartOpen(true)}
               aria-label="Кошик"
               className="relative hover:opacity-60"
             >
               <Icon d={ICONS.bag} />
-              <span
-                className={`absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-medium ${
-                  solid ? "bg-ink text-paper" : "bg-paper text-ink"
-                }`}
-              >
-                {cartCount > 0 ? cartCount : ""}
-              </span>
+              {cartCount > 0 && (
+                <span
+                  className={`absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-medium ${
+                    solid ? "bg-ink text-paper" : "bg-paper text-ink"
+                  }`}
+                >
+                  {cartCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -198,16 +205,18 @@ export function Header() {
         >
           <div className="wrap flex h-12 items-center justify-center gap-9">
             {MEGA_MENU.map((item) => (
-              <button
+              <Link
                 key={item.label}
+                href={item.href}
                 onMouseEnter={() => setActive(item.label)}
                 onFocus={() => setActive(item.label)}
+                onClick={() => setActive(null)}
                 className={`link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe transition-opacity ${
                   active === item.label ? "opacity-100" : "opacity-75 hover:opacity-100"
                 }`}
               >
                 {item.label}
-              </button>
+              </Link>
             ))}
             <a
               href="/delivery"
@@ -413,10 +422,10 @@ export function Header() {
             </span>
           )}
         </button>
-        <button className="flex flex-col items-center gap-1 py-2.5 text-ink">
+        <Link href="/account/profile" className="flex flex-col items-center gap-1 py-2.5 text-ink">
           <Icon d={ICONS.user} />
           <span className="text-[9px] uppercase tracking-luxe">Профіль</span>
-        </button>
+        </Link>
       </nav>
 
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
@@ -437,7 +446,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
               {col.links.map((l) => (
                 <li key={l.slug}>
                   <Link
-                    href={`/catalog?category=${l.slug}`}
+                    href={l.href ?? `/catalog?category=${l.slug}`}
                     className="flex items-center text-sm text-ink/80 transition-colors hover:text-ink"
                   >
                     {l.logo ? (
@@ -459,7 +468,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
         ))}
 
         <Link
-          href={`/catalog?category=${item.featured.slug}`}
+          href={item.featured.href ?? `/catalog?category=${item.featured.slug}`}
           className="group relative col-start-3 col-end-5 aspect-[16/9] overflow-hidden"
         >
           <div

@@ -2,38 +2,31 @@
 
 import { useState } from "react";
 
-type Variation = { id: number; attributes: { name: string; value: string }[] };
-type SizeTerm = { id: number; name: string; slug: string };
-
 export function AddToCartButton({
   inStock,
   productId,
   sizes,
-  variations,
 }: {
   inStock: boolean;
-  productId: number;
-  sizes: SizeTerm[];
-  variations: Variation[];
+  productId: number | string;
+  sizes: string[];
 }) {
-  const [selected, setSelected] = useState<string | null>(sizes[0]?.slug ?? null);
+  const [selected, setSelected] = useState<string | null>(sizes[0] ?? null);
   const [qty, setQty] = useState(1);
   const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const variationId =
-    sizes.length === 0
-      ? productId
-      : variations.find((v) => v.attributes.some((a) => a.value === selected))?.id;
+  const needsSize = sizes.length > 0;
+  const canAdd = inStock && (!needsSize || !!selected);
 
   async function addToCart() {
-    if (!variationId) return;
+    if (!canAdd) return;
     setStatus("loading");
     setError(null);
     const res = await fetch("/api/cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: variationId, quantity: qty }),
+      body: JSON.stringify({ product_id: String(productId), variation: selected ?? "", quantity: qty }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -48,19 +41,19 @@ export function AddToCartButton({
 
   return (
     <>
-      {sizes.length > 0 && (
+      {needsSize && (
         <div className="mt-8">
           <p className="text-[11px] uppercase tracking-luxe text-muted">Розмір</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {sizes.map((s) => (
               <button
-                key={s.id}
-                onClick={() => setSelected(s.slug)}
+                key={s}
+                onClick={() => setSelected(s)}
                 className={`flex h-11 min-w-11 items-center justify-center border px-3 text-sm uppercase transition-colors ${
-                  selected === s.slug ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
+                  selected === s ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
                 }`}
               >
-                {s.name}
+                {s}
               </button>
             ))}
           </div>
@@ -90,7 +83,7 @@ export function AddToCartButton({
 
         <button
           onClick={addToCart}
-          disabled={!inStock || !variationId || status === "loading"}
+          disabled={!canAdd || status === "loading"}
           className="h-12 flex-1 bg-ink text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-40"
         >
         {!inStock

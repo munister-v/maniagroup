@@ -3,9 +3,6 @@ import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
 import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands } from "@/lib/productSource";
-import { fetchCategories, fetchProducts } from "@/lib/wc";
-import { fromWcProduct } from "@/lib/catalog";
-import { isDbReady } from "@/lib/db";
 
 export const metadata = {
   title: "Каталог — Mania Group",
@@ -16,8 +13,6 @@ const SORTS: Record<string, { orderby: "date" | "price"; order: "asc" | "desc"; 
   price_asc:  { orderby: "price", order: "asc",  label: "Дешевші спочатку" },
   price_desc: { orderby: "price", order: "desc",  label: "Дорожчі спочатку" },
 };
-
-const BRAND_NAME = /^[A-Z0-9][A-Z0-9 .&'-]+$/;
 
 const GENDERS: { slug: string; label: string }[] = [
   { slug: "women", label: "Жінкам" },
@@ -46,23 +41,14 @@ export default async function CatalogPage({
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
   const perPage = 24;
 
-  const dbReady = isDbReady();
-
   // ── Categories + brands facets ────────────────────────────────────────
   const categories = await getCatalogCategories();
 
-  // Brands: real brand column in DB mode; uppercase-category heuristic on WC fallback.
-  const brands = dbReady
-    ? dbBrands({ categorySlug, gender }).slice(0, 24)
-    : categories
-        .filter((c) => c.count > 0 && BRAND_NAME.test(c.name) && c.name.length <= 28)
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 16)
-        .map((c) => ({ name: c.name, slug: c.slug }));
+  const brands = (await dbBrands({ categorySlug, gender })).slice(0, 24);
   const brandName = brandSlugParam ? brands.find((b) => b.slug === brandSlugParam)?.name : undefined;
 
   // ── Products ─────────────────────────────────────────────────────────
-  const { products, total, source } = await getCatalogProducts({
+  const { products, total } = await getCatalogProducts({
     categorySlug,
     brandName,
     gender: gender === "women" || gender === "men" ? gender : undefined,
@@ -74,31 +60,13 @@ export default async function CatalogPage({
     order,
     page,
     perPage,
-    // When DB is not ready, catalog/page needs categoryId for WC Store API
-    categoryId: dbReady ? undefined : categories.find((c) => c.slug === categorySlug)?.id,
   });
 
   // ── Size facets ───────────────────────────────────────────────────────
-  let sizes: { slug: string; name: string }[] = [];
-
-  if (dbReady) {
-    sizes = dbSizeFacets({ categorySlug, q });
-  } else {
-    // WC Store API fallback: sample 50 products for size terms
-    const catId = categories.find((c) => c.slug === categorySlug)?.id;
-    const facetSource = await fetchProducts({ perPage: 50, category: catId, search: q }).catch(() => []);
-    const sizeMap = new Map<string, string>();
-    for (const p of facetSource) {
-      const terms = p.attributes.find((a) => a.taxonomy === "pa_size")?.terms ?? [];
-      for (const t of terms) sizeMap.set(t.slug, t.name);
-    }
-    sizes = Array.from(sizeMap, ([slug, name]) => ({ slug, name })).sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { numeric: true })
-    );
-  }
+  const sizes = await dbSizeFacets({ categorySlug, q });
 
   // ── Pagination ────────────────────────────────────────────────────────
-  const totalPages = dbReady ? Math.max(1, Math.ceil(total / perPage)) : null;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   const categoryFacets = categories
     .filter((c) => c.count > 0)
@@ -137,11 +105,9 @@ export default async function CatalogPage({
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
           <h1 className="font-display text-3xl text-ink md:text-4xl">{title}</h1>
-          {source === "db" && (
-            <span className="text-[10px] uppercase tracking-luxe text-muted/50">
-              {total.toLocaleString("uk-UA")} товарів · SQLite
-            </span>
-          )}
+          <span className="text-[10px] uppercase tracking-luxe text-muted/50">
+            {total.toLocaleString("uk-UA")} товарів
+          </span>
         </div>
       </Reveal>
 
@@ -153,7 +119,7 @@ export default async function CatalogPage({
           />
         </div>
 
-        <div>
+        <div className="min-w-0">
           {/* Gender toggle */}
           <div className="mb-4 flex gap-2">
             {GENDERS.map((g) => {
@@ -196,9 +162,7 @@ export default async function CatalogPage({
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
             <p className="text-sm text-muted">
               {products.length
-                ? dbReady
-                  ? `${((page - 1) * perPage + 1)}–${Math.min(page * perPage, total)} з ${total.toLocaleString("uk-UA")}`
-                  : `Знайдено ${products.length} товарів`
+                ? `${((page - 1) * perPage + 1)}–${Math.min(page * perPage, total)} з ${total.toLocaleString("uk-UA")}`
                 : "Товарів не знайдено"}
             </p>
             <div className="flex items-center gap-2 text-[11px] uppercase tracking-luxe">

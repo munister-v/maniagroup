@@ -3,15 +3,15 @@ import Image from "next/image";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
-import { BRANDS, CATEGORIES, fromWcProduct, type Product } from "@/lib/catalog";
-import { fetchProducts } from "@/lib/wc";
+import { BRANDS, CATEGORIES, type Product } from "@/lib/catalog";
+import { getProducts } from "@/lib/productSource";
 import { getSiteContent } from "@/lib/siteContent";
 
 export default async function Home() {
   let products: Product[] = [];
   try {
-    const wcProducts = await fetchProducts({ perPage: 8, orderby: "date" });
-    products = wcProducts.map(fromWcProduct);
+    const res = await getProducts({ perPage: 8, orderby: "date", order: "desc" });
+    products = res.products;
   } catch {
     products = [];
   }
@@ -77,13 +77,13 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           style={{ animationDelay: "270ms" }}
         >
           <Link
-            href="#women"
+            href="/catalog"
             className="inline-flex h-12 items-center bg-paper px-8 text-[12px] uppercase tracking-luxe text-ink transition-opacity hover:opacity-85"
           >
             Перейти до каталогу
           </Link>
           <Link
-            href="#brands"
+            href="/catalog"
             className="link-underline text-[12px] uppercase tracking-luxe text-paper"
           >
             Усі бренди →
@@ -209,18 +209,20 @@ function Editorial() {
       <Reveal>
         <div className="grid items-center gap-8 overflow-hidden bg-ink text-paper md:grid-cols-2">
           <div className="relative min-h-[320px] md:min-h-[480px]">
+            <Image
+              src="/images/origine-authentic-detail.png"
+              alt="Оригінальна деталь — Mania Group"
+              fill
+              sizes="(min-width: 768px) 50vw, 100vw"
+              className="object-cover object-center"
+            />
             <div
               className="absolute inset-0"
               style={{
-                backgroundColor: "#b9ae9b",
                 backgroundImage:
-                  "radial-gradient(120% 80% at 30% 18%, rgba(255,255,255,0.45), transparent 55%), linear-gradient(160deg, rgba(23,19,15,0) 50%, rgba(23,19,15,0.4) 100%)",
+                  "linear-gradient(160deg, rgba(23,19,15,0) 50%, rgba(23,19,15,0.35) 100%)",
               }}
             />
-            <Grain variant="strong" />
-            <span className="absolute bottom-6 left-7 font-display text-6xl leading-none text-ink/15">
-              Origine
-            </span>
           </div>
           <div className="px-8 py-12 md:px-12 md:py-16">
             <p className="text-[11px] uppercase tracking-luxe text-paper/60">

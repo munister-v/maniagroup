@@ -5,8 +5,8 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Магазин",
     links: [
-      { label: "Жінкам", href: "/catalog?category=women" },
-      { label: "Чоловікам", href: "/catalog?category=men" },
+      { label: "Жінкам", href: "/catalog?gender=women" },
+      { label: "Чоловікам", href: "/catalog?gender=men" },
       { label: "Бренди", href: "/catalog" },
       { label: "Новинки", href: "/catalog?sort=newest" },
       { label: "Sale", href: "/catalog?sort=price_asc" },
@@ -108,7 +108,7 @@ export async function Footer() {
                 Facebook
               </a>
             )}
-            {!facebook && <span>Facebook</span>}
+            {!facebook && null}
           </div>
         </div>
       </div>

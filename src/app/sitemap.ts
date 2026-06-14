@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { fetchCategories, fetchProducts } from "@/lib/wc";
+import { getCatalogCategories, getProducts } from "@/lib/productSource";
 
 const BASE = "https://maniagroup.munister.com.ua";
 
@@ -13,7 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/contacts`, changeFrequency: "monthly", priority: 0.3 },
   ];
 
-  const categories = await fetchCategories().catch(() => []);
+  const categories = await getCatalogCategories().catch(() => []);
   const categoryPages: MetadataRoute.Sitemap = categories
     .filter((c) => c.count > 0)
     .map((c) => ({
@@ -22,7 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6,
     }));
 
-  const products = await fetchProducts({ perPage: 100, orderby: "date" }).catch(() => []);
+  const { products } = await getProducts({ perPage: 200, orderby: "date", order: "desc" }).catch(() => ({ products: [] }));
   const productPages: MetadataRoute.Sitemap = products.map((p) => ({
     url: `${BASE}/product/${p.id}`,
     changeFrequency: "weekly" as const,

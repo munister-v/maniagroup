@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import type { SiteContent } from "@/lib/siteContent";
-import { formatPrice, type Product } from "@/lib/catalog";
+import { formatPrice } from "@/lib/catalog";
+import { AdminProducts } from "./AdminProducts";
 
 /* ─── Types ─── */
 
@@ -37,8 +38,6 @@ type SyncState = {
   has_wc_creds: boolean;
 };
 
-type EditState = { id: string; regularPrice: string; salePrice: string };
-type PriceStatus = "idle" | "saving" | "saved" | "error" | "no-creds";
 
 /* ─── Nav ─── */
 
@@ -112,12 +111,6 @@ export function AdminDashboard({
   const [contentStatus, setContentStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [unsaved, setUnsaved] = useState(false);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [prodLoading, setProdLoading] = useState(false);
-  const [prodSearch, setProdSearch] = useState("");
-  const [editing, setEditing] = useState<EditState | null>(null);
-  const [priceStatus, setPriceStatus] = useState<PriceStatus>("idle");
-
   const [orders, setOrders] = useState<WcOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderStatusFilter, setOrderStatusFilter] = useState("");
@@ -130,7 +123,6 @@ export function AdminDashboard({
   const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const router = useRouter();
-  const prodLoaded = useRef(false);
 
   // Load stats + sync state on mount
   useEffect(() => {
@@ -171,29 +163,11 @@ export function AdminDashboard({
     }, 2000);
   }
 
-  // Load products when navigating to that section
-  useEffect(() => {
-    if (section === "products" && !prodLoaded.current) {
-      prodLoaded.current = true;
-      loadProducts("");
-    }
-  }, [section]);
-
   // Load orders when navigating to that section or filter changes
   useEffect(() => {
     if (section === "orders") loadOrders(orderStatusFilter, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, orderStatusFilter]);
-
-  async function loadProducts(q: string) {
-    setProdLoading(true);
-    try {
-      const res = await fetch(`/api/admin/products${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-      if (res.ok) setProducts(await res.json());
-    } finally {
-      setProdLoading(false);
-    }
-  }
 
   async function loadOrders(status: string, page: number) {
     setOrdersLoading(true);
@@ -348,41 +322,7 @@ export function AdminDashboard({
             <ContentSection content={content} update={update} />
           )}
           {section === "catalog" && <CatalogImportSection />}
-          {section === "products" && (
-            <ProductsSection
-              products={products}
-              loading={prodLoading}
-              search={prodSearch}
-              editing={editing}
-              priceStatus={priceStatus}
-              onSearch={(q) => { setProdSearch(q); loadProducts(q); }}
-              onStartEdit={(p) => {
-                setPriceStatus("idle");
-                setEditing({ id: p.id, regularPrice: String(p.oldPrice ?? p.price), salePrice: p.oldPrice ? String(p.price) : "" });
-              }}
-              onCancelEdit={() => { setEditing(null); setPriceStatus("idle"); }}
-              onSaveEdit={async () => {
-                if (!editing) return;
-                setPriceStatus("saving");
-                const res = await fetch(`/api/admin/products/${editing.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ regular_price: editing.regularPrice, sale_price: editing.salePrice || "" }),
-                });
-                if (res.status === 503) { setPriceStatus("no-creds"); return; }
-                if (res.ok) {
-                  setPriceStatus("saved");
-                  setEditing(null);
-                  loadProducts(prodSearch);
-                  setTimeout(() => setPriceStatus("idle"), 2500);
-                } else {
-                  setPriceStatus("error");
-                  setTimeout(() => setPriceStatus("idle"), 3000);
-                }
-              }}
-              onEditChange={(field, val) => setEditing((e) => e && { ...e, [field]: val })}
-            />
-          )}
+          {section === "products" && <AdminProducts />}
           {section === "orders" && (
             <OrdersSection
               orders={orders}
@@ -650,6 +590,16 @@ function StatCard({
 
 /* ─── Content ─── */
 
+type ContentTab = "home" | "contacts" | "about" | "delivery" | "returns";
+
+const CONTENT_TABS: { id: ContentTab; label: string }[] = [
+  { id: "home",     label: "Головна" },
+  { id: "contacts", label: "Контакти" },
+  { id: "about",    label: "Про нас" },
+  { id: "delivery", label: "Доставка" },
+  { id: "returns",  label: "Повернення" },
+];
+
 function ContentSection({
   content,
   update,
@@ -657,252 +607,276 @@ function ContentSection({
   content: SiteContent;
   update: (fn: (c: SiteContent) => SiteContent) => void;
 }) {
-  function hero(field: keyof SiteContent["hero"], value: string) {
-    update((c) => ({ ...c, hero: { ...c.hero, [field]: value } }));
+  const [tab, setTab] = useState<ContentTab>("home");
+
+  function set<K extends keyof SiteContent>(key: K, val: SiteContent[K]) {
+    update((c) => ({ ...c, [key]: val }));
   }
-  function service(i: number, field: "title" | "text", value: string) {
-    update((c) => ({
-      ...c,
-      services: c.services.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)),
-    }));
+  function hero(field: keyof SiteContent["hero"], v: string) {
+    update((c) => ({ ...c, hero: { ...c.hero, [field]: v } }));
   }
-  function contact(field: keyof SiteContent["contacts"], value: string) {
-    update((c) => ({ ...c, contacts: { ...c.contacts, [field]: value } }));
+  function contact(field: keyof SiteContent["contacts"], v: string) {
+    update((c) => ({ ...c, contacts: { ...c.contacts, [field]: v } }));
+  }
+  function aboutF(field: keyof SiteContent["about"], v: unknown) {
+    update((c) => ({ ...c, about: { ...c.about, [field]: v } }));
+  }
+  function deliveryF(field: keyof SiteContent["delivery"], v: unknown) {
+    update((c) => ({ ...c, delivery: { ...c.delivery, [field]: v } }));
+  }
+  function returnsF(field: keyof SiteContent["returns"], v: unknown) {
+    update((c) => ({ ...c, returns: { ...c.returns, [field]: v } }));
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <Card title="Рядок оголошень" subtitle="Темна смуга над меню на всіх сторінках">
-        <Field
-          label="Текст оголошення"
-          value={content.announcement}
-          onChange={(v) => update((c) => ({ ...c, announcement: v }))}
-          placeholder="Безкоштовна доставка від 3 000 ₴…"
-        />
-      </Card>
-
-      <Card title="Hero-блок" subtitle="Перший екран головної сторінки">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Надпис над заголовком" value={content.hero.eyebrow} onChange={(v) => hero("eyebrow", v)} />
-          <Field label="Заголовок — рядок 1" value={content.hero.titleLine1} onChange={(v) => hero("titleLine1", v)} />
-          <Field label="Акцентне слово (курсив)" value={content.hero.titleAccent} onChange={(v) => hero("titleAccent", v)} />
-          <Field label="Підзаголовок" value={content.hero.subtitle} onChange={(v) => hero("subtitle", v)} textarea />
-        </div>
-      </Card>
-
-      <Card title="Блоки переваг" subtitle="4 плашки перед футером головної сторінки">
-        <div className="grid grid-cols-2 gap-4">
-          {content.services.map((s, i) => (
-            <div key={i} className="space-y-3 rounded-[3px] border border-[#eceae6] p-4">
-              <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Блок {i + 1}</p>
-              <Field label="Заголовок" value={s.title} onChange={(v) => service(i, "title", v)} />
-              <Field label="Текст" value={s.text} onChange={(v) => service(i, "text", v)} />
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Контакти" subtitle="Відображаються у футері сайту">
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Телефон" value={content.contacts.phone} onChange={(v) => contact("phone", v)} placeholder="+38 (0__) ___-__-__" />
-          <Field label="Email" value={content.contacts.email} onChange={(v) => contact("email", v)} placeholder="info@example.com" />
-          <Field label="Instagram (URL)" value={content.contacts.instagram} onChange={(v) => contact("instagram", v)} placeholder="https://instagram.com/…" />
-          <Field label="Facebook (URL)" value={content.contacts.facebook} onChange={(v) => contact("facebook", v)} placeholder="https://facebook.com/…" />
-          <div className="col-span-2">
-            <Field label="Адреса" value={content.contacts.address} onChange={(v) => contact("address", v)} placeholder="Місто, вулиця" />
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/* ─── Products ─── */
-
-function ProductsSection({
-  products,
-  loading,
-  search,
-  editing,
-  priceStatus,
-  onSearch,
-  onStartEdit,
-  onCancelEdit,
-  onSaveEdit,
-  onEditChange,
-}: {
-  products: Product[];
-  loading: boolean;
-  search: string;
-  editing: EditState | null;
-  priceStatus: PriceStatus;
-  onSearch: (q: string) => void;
-  onStartEdit: (p: Product) => void;
-  onCancelEdit: () => void;
-  onSaveEdit: () => void;
-  onEditChange: (field: "regularPrice" | "salePrice", val: string) => void;
-}) {
-  return (
-    <div>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <input
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder="Пошук товарів…"
-          className="h-9 w-72 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-sm text-[#17130f] placeholder:text-[#b9ae9b] focus:border-[#17130f] focus:outline-none"
-        />
-        {loading
-          ? <span className="text-[11px] text-[#9c8f7d]">Завантаження…</span>
-          : products.length > 0 && <span className="text-[11px] text-[#9c8f7d]">{products.length} товарів</span>
-        }
-        {priceStatus === "saved" && <span className="text-[11px] text-emerald-600">✓ Ціну оновлено в WooCommerce</span>}
-        {priceStatus === "error" && <span className="text-[11px] text-red-600">Помилка збереження</span>}
-        {priceStatus === "no-creds" && (
-          <span className="text-[11px] text-amber-600">
-            Додайте WOOCOMMERCE_KEY і WOOCOMMERCE_SECRET у .env.local
-          </span>
-        )}
+    <div className="max-w-3xl">
+      {/* Sub-tabs */}
+      <div className="mb-6 flex gap-1 rounded-[3px] border border-[#e8e4de] bg-white p-1">
+        {CONTENT_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 rounded-[2px] py-1.5 text-[11px] uppercase tracking-[0.12em] transition-colors ${
+              tab === t.id ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {loading && products.length === 0 ? (
-        <div className="space-y-2">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-[3px] bg-[#ede9e3]" />
-          ))}
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-[3px] border border-[#e8e4de] bg-white">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
-                <th className="w-10 px-4 py-3 text-left">#</th>
-                <th className="px-4 py-3 text-left">Товар</th>
-                <th className="px-4 py-3 text-left">Бренд</th>
-                <th className="px-4 py-3 text-right">Ціна</th>
-                <th className="px-4 py-3 text-right">Акція</th>
-                <th className="px-4 py-3 text-center w-28">Статус</th>
-                <th className="w-24 px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#f7f4f0]">
-              {products.map((p, i) => {
-                const isEditing = editing?.id === p.id;
-                const regularPrice = p.oldPrice ?? p.price;
-                const salePrice = p.oldPrice ? p.price : null;
-                return (
-                  <tr key={p.id} className={`transition-colors ${isEditing ? "bg-[#faf8f5]" : "hover:bg-[#fdfcfb]"}`}>
-                    <td className="px-4 py-3 text-[11px] tabular-nums text-[#b9ae9b]">{i + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {p.image ? (
-                          <div className="h-10 w-8 shrink-0 overflow-hidden rounded-[2px] bg-[#f0ece6]">
-                            <Image src={p.image} alt={p.name} width={32} height={40} className="h-full w-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="h-10 w-8 shrink-0 rounded-[2px]" style={{ backgroundColor: p.tone }} />
-                        )}
-                        <a href={`/product/${p.slug}`} target="_blank" className="font-medium text-[#17130f] hover:underline">
-                          {p.name}
-                        </a>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{p.brand}</td>
-                    <td className="px-4 py-3 text-right">
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          value={editing.regularPrice}
-                          onChange={(e) => onEditChange("regularPrice", e.target.value)}
-                          className="h-8 w-28 rounded-[3px] border border-[#17130f]/30 bg-white px-2 text-right text-sm tabular-nums focus:border-[#17130f] focus:outline-none"
-                          min="0"
-                        />
-                      ) : (
-                        <span className="tabular-nums">{formatPrice(regularPrice)}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {isEditing ? (
-                        <input
-                          type="number"
-                          value={editing.salePrice}
-                          onChange={(e) => onEditChange("salePrice", e.target.value)}
-                          className="h-8 w-28 rounded-[3px] border border-[#17130f]/30 bg-white px-2 text-right text-sm tabular-nums focus:border-[#17130f] focus:outline-none"
-                          placeholder="0 = без акції"
-                          min="0"
-                        />
-                      ) : salePrice != null ? (
-                        <span className="font-medium tabular-nums text-[#c0392b]">{formatPrice(salePrice)}</span>
-                      ) : (
-                        <span className="text-[#d0c8be]">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {isEditing && priceStatus === "saving" ? (
-                        <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Збереження…</span>
-                      ) : (
-                        <span
-                          className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider"
-                          style={{
-                            background: p.tag === "sale" ? "#fff0ee" : p.tag === "last" ? "#fff8e1" : "#edfbf0",
-                            color: p.tag === "sale" ? "#c0392b" : p.tag === "last" ? "#92600a" : "#1a6b34",
-                          }}
-                        >
-                          {p.tag === "last" ? "Останній" : p.tag === "sale" ? "Sale" : "В наявності"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isEditing ? (
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={onSaveEdit}
-                            disabled={priceStatus === "saving"}
-                            title="Зберегти"
-                            className="flex h-7 w-7 items-center justify-center rounded-[3px] bg-[#17130f] text-white transition-opacity hover:opacity-80 disabled:opacity-40"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M20 6L9 17l-5-5" /></svg>
-                          </button>
-                          <button
-                            onClick={onCancelEdit}
-                            title="Скасувати"
-                            className="flex h-7 w-7 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#9c8f7d] transition-colors hover:text-[#17130f]"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M18 6L6 18M6 6l12 12" /></svg>
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end">
-                          <button
-                            onClick={() => onStartEdit(p)}
-                            title="Редагувати ціну"
-                            className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#b9ae9b] transition-colors hover:bg-[#f0ece6] hover:text-[#17130f]"
-                          >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5Z" />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {products.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#9c8f7d]">Товарів не знайдено</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p className="mt-3 text-[11px] text-[#b9ae9b]">
-        Редагування цін потребує WooCommerce REST API ключів у .env.local
-      </p>
+      <div className="space-y-6">
+        {/* ── Головна ── */}
+        {tab === "home" && (
+          <>
+            <Card title="Рядок оголошень" subtitle="Темна смуга над меню на всіх сторінках">
+              <Field label="Текст" value={content.announcement}
+                onChange={(v) => set("announcement", v)}
+                placeholder="Безкоштовна доставка від 3 000 ₴…" />
+            </Card>
+
+            <Card title="Hero-блок" subtitle="Перший екран головної сторінки">
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Надпис над заголовком" value={content.hero.eyebrow} onChange={(v) => hero("eyebrow", v)} />
+                <Field label="Заголовок рядок 1" value={content.hero.titleLine1} onChange={(v) => hero("titleLine1", v)} />
+                <Field label="Акцент (курсив)" value={content.hero.titleAccent} onChange={(v) => hero("titleAccent", v)} />
+                <Field label="Підзаголовок" value={content.hero.subtitle} onChange={(v) => hero("subtitle", v)} textarea />
+              </div>
+            </Card>
+
+            <Card title="Блоки переваг" subtitle="4 картки перед футером">
+              <div className="grid grid-cols-2 gap-4">
+                {content.services.map((s, i) => (
+                  <div key={i} className="space-y-3 rounded-[3px] border border-[#eceae6] p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Блок {i + 1}</p>
+                    <Field label="Заголовок" value={s.title}
+                      onChange={(v) => set("services", content.services.map((x, j) => j === i ? { ...x, title: v } : x))} />
+                    <Field label="Текст" value={s.text}
+                      onChange={(v) => set("services", content.services.map((x, j) => j === i ? { ...x, text: v } : x))} />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </>
+        )}
+
+        {/* ── Контакти ── */}
+        {tab === "contacts" && (
+          <Card title="Контактна інформація" subtitle="Відображається в шапці, футері та сторінці Контакти">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Телефон" value={content.contacts.phone} onChange={(v) => contact("phone", v)} placeholder="+38 (0__) ___-__-__" />
+              <Field label="Робочі години" value={content.contacts.workingHours ?? ""} onChange={(v) => contact("workingHours", v)} placeholder="Щодня · 9:00 — 20:00" />
+              <Field label="Email" value={content.contacts.email} onChange={(v) => contact("email", v)} placeholder="info@example.com" />
+              <Field label="Адреса" value={content.contacts.address} onChange={(v) => contact("address", v)} placeholder="Місто, вулиця" />
+              <Field label="Instagram (URL)" value={content.contacts.instagram} onChange={(v) => contact("instagram", v)} placeholder="https://instagram.com/…" />
+              <Field label="Telegram (URL)" value={(content.contacts as { telegram?: string }).telegram ?? ""} onChange={(v) => contact("telegram" as keyof SiteContent["contacts"], v)} placeholder="https://t.me/…" />
+              <div className="col-span-2">
+                <Field label="Facebook (URL)" value={content.contacts.facebook} onChange={(v) => contact("facebook", v)} placeholder="https://facebook.com/…" />
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* ── Про нас ── */}
+        {tab === "about" && (
+          <>
+            <Card title="Hero-секція" subtitle="Великий заголовок на сторінці «Про нас»">
+              <div className="space-y-4">
+                <Field label="Заголовок героя" value={content.about.heroTitle}
+                  onChange={(v) => aboutF("heroTitle", v)} />
+                <Field label="Підзаголовок героя" value={content.about.heroSubtitle}
+                  onChange={(v) => aboutF("heroSubtitle", v)} textarea />
+              </div>
+            </Card>
+
+            <Card title="Гарантія оригіналу" subtitle="Темна секція на сторінці">
+              <div className="space-y-4">
+                <Field label="Основний текст" value={content.about.story}
+                  onChange={(v) => aboutF("story", v)} textarea />
+                <Field label="Другий абзац" value={content.about.guaranteeText}
+                  onChange={(v) => aboutF("guaranteeText", v)} textarea />
+              </div>
+            </Card>
+
+            <Card title="Наші принципи" subtitle="4 картки «Чому обирають нас»">
+              <div className="space-y-4">
+                {content.about.values.map((v, i) => (
+                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Принцип {i + 1}</p>
+                      <button onClick={() => aboutF("values", content.about.values.filter((_, j) => j !== i))}
+                        className="text-[10px] text-red-400 hover:text-red-600">✕ Видалити</button>
+                    </div>
+                    <Field label="Заголовок" value={v.title}
+                      onChange={(val) => aboutF("values", content.about.values.map((x, j) => j === i ? { ...x, title: val } : x))} />
+                    <Field label="Текст" value={v.text}
+                      onChange={(val) => aboutF("values", content.about.values.map((x, j) => j === i ? { ...x, text: val } : x))} textarea />
+                  </div>
+                ))}
+                <button onClick={() => aboutF("values", [...content.about.values, { title: "", text: "" }])}
+                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  + Додати принцип
+                </button>
+              </div>
+            </Card>
+          </>
+        )}
+
+        {/* ── Доставка ── */}
+        {tab === "delivery" && (
+          <>
+            <Card title="Заголовок сторінки" subtitle="Текст під назвою «Доставка та оплата»">
+              <Field label="Підзаголовок" value={content.delivery.subtitle}
+                onChange={(v) => deliveryF("subtitle", v)} textarea />
+            </Card>
+
+            <Card title="Інфо-картки" subtitle="4 блоки умов доставки">
+              <div className="space-y-4">
+                {content.delivery.cards.map((c, i) => (
+                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Картка {i + 1}</p>
+                      <button onClick={() => deliveryF("cards", content.delivery.cards.filter((_, j) => j !== i))}
+                        className="text-[10px] text-red-400 hover:text-red-600">✕</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Мітка (eyebrow)" value={c.eyebrow}
+                        onChange={(v) => deliveryF("cards", content.delivery.cards.map((x, j) => j === i ? { ...x, eyebrow: v } : x))} />
+                      <Field label="Заголовок" value={c.title}
+                        onChange={(v) => deliveryF("cards", content.delivery.cards.map((x, j) => j === i ? { ...x, title: v } : x))} />
+                    </div>
+                    <Field label="Текст" value={c.text}
+                      onChange={(v) => deliveryF("cards", content.delivery.cards.map((x, j) => j === i ? { ...x, text: v } : x))} textarea />
+                  </div>
+                ))}
+                <button onClick={() => deliveryF("cards", [...content.delivery.cards, { eyebrow: "", title: "", text: "" }])}
+                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  + Додати картку
+                </button>
+              </div>
+            </Card>
+
+            <Card title="Оплата" subtitle="Текст блоку «Накладений платіж»">
+              <Field label="Опис оплати" value={content.delivery.paymentNote}
+                onChange={(v) => deliveryF("paymentNote", v)} textarea />
+            </Card>
+
+            <Card title="Часті питання (FAQ)" subtitle="Запитання та відповіді внизу сторінки">
+              <div className="space-y-4">
+                {content.delivery.faq.map((item, i) => (
+                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Питання {i + 1}</p>
+                      <button onClick={() => deliveryF("faq", content.delivery.faq.filter((_, j) => j !== i))}
+                        className="text-[10px] text-red-400 hover:text-red-600">✕</button>
+                    </div>
+                    <Field label="Питання" value={item.q}
+                      onChange={(v) => deliveryF("faq", content.delivery.faq.map((x, j) => j === i ? { ...x, q: v } : x))} />
+                    <Field label="Відповідь" value={item.a}
+                      onChange={(v) => deliveryF("faq", content.delivery.faq.map((x, j) => j === i ? { ...x, a: v } : x))} textarea />
+                  </div>
+                ))}
+                <button onClick={() => deliveryF("faq", [...content.delivery.faq, { q: "", a: "" }])}
+                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  + Додати питання
+                </button>
+              </div>
+            </Card>
+
+            <Card title="CTA-блок" subtitle="Нижній заклик до дії">
+              <Field label="Заголовок" value={content.delivery.ctaTitle}
+                onChange={(v) => deliveryF("ctaTitle", v)} />
+            </Card>
+          </>
+        )}
+
+        {/* ── Повернення ── */}
+        {tab === "returns" && (
+          <>
+            <Card title="Вступ" subtitle="Текст під заголовком «Обмін і повернення»">
+              <Field label="Підзаголовок" value={content.returns.subtitle}
+                onChange={(v) => returnsF("subtitle", v)} textarea />
+            </Card>
+
+            <Card title="Три кроки" subtitle="Покроковий процес повернення">
+              <div className="space-y-4">
+                {content.returns.steps.map((s, i) => (
+                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Крок {i + 1}</p>
+                      <button onClick={() => returnsF("steps", content.returns.steps.filter((_, j) => j !== i))}
+                        className="text-[10px] text-red-400 hover:text-red-600">✕</button>
+                    </div>
+                    <Field label="Заголовок" value={s.title}
+                      onChange={(v) => returnsF("steps", content.returns.steps.map((x, j) => j === i ? { ...x, title: v } : x))} />
+                    <Field label="Текст" value={s.text}
+                      onChange={(v) => returnsF("steps", content.returns.steps.map((x, j) => j === i ? { ...x, text: v } : x))} textarea />
+                  </div>
+                ))}
+                <button onClick={() => returnsF("steps", [...content.returns.steps, { title: "", text: "" }])}
+                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  + Додати крок
+                </button>
+              </div>
+            </Card>
+
+            <Card title="Умови повернення" subtitle="Список обов'язкових умов">
+              <div className="space-y-3">
+                {content.returns.conditions.map((cond, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-[#9c8f7d]" />
+                    <textarea
+                      value={cond}
+                      onChange={(e) => returnsF("conditions", content.returns.conditions.map((x, j) => j === i ? e.target.value : x))}
+                      rows={2}
+                      className="flex-1 resize-none rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-sm text-[#17130f] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                    />
+                    <button onClick={() => returnsF("conditions", content.returns.conditions.filter((_, j) => j !== i))}
+                      className="mt-2 text-[11px] text-red-400 hover:text-red-600">✕</button>
+                  </div>
+                ))}
+                <button onClick={() => returnsF("conditions", [...content.returns.conditions, ""])}
+                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  + Додати умову
+                </button>
+              </div>
+            </Card>
+
+            <Card title="Гарантія при браку" subtitle="Темна секція внизу сторінки">
+              <div className="space-y-4">
+                <Field label="Заголовок" value={content.returns.guaranteeTitle}
+                  onChange={(v) => returnsF("guaranteeTitle", v)} />
+                <Field label="Текст" value={content.returns.guaranteeText}
+                  onChange={(v) => returnsF("guaranteeText", v)} textarea />
+              </div>
+            </Card>
+          </>
+        )}
+      </div>
     </div>
   );
 }
+
 
 /* ─── Orders ─── */
 

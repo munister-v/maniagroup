@@ -1,14 +1,14 @@
 /**
- * Hybrid product source: reads from SQLite when available, falls back to
- * WooCommerce Store API. The catalog page calls only this layer and never
- * touches wc.ts directly — makes the future cut-over zero-risk.
+ * Product source — Postgres only. Mania Group's own store engine is now the
+ * single source of truth; WooCommerce is no longer queried at runtime (it is
+ * only used by the one-shot import script in catalogImport.ts / wc-import).
  */
 
 import type { Product } from "./catalog";
-import type { WcCategory } from "./wc";
-import { fetchProducts, fetchCategories, priceToUah } from "./wc";
-import { fromWcProduct } from "./catalog";
-import { getDb, isDbReady } from "./db";
+import { q, q1 } from "./pg";
+
+// WcCategory shape kept for callers; categories now come from our own table.
+export type WcCategory = { id: number; name: string; slug: string; parent: number; count: number };
 
 // ── DB row → Product ────────────────────────────────────────────────────
 
@@ -19,22 +19,38 @@ function toneFor(id: number): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function asImages(v: any): { src: string }[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") { try { return JSON.parse(v); } catch { return []; } }
+  return [];
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function asAttrs(v: any): any[] {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string") { try { return JSON.parse(v); } catch { return []; } }
+  return [];
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function rowToProduct(row: any): Product {
-  const images: { src: string }[] = JSON.parse(row.images ?? "[]");
-  const onSale = row.sale_price !== null && row.sale_price < row.regular_price;
-  const inStock = row.is_in_stock === 1;
+  const images = asImages(row.images);
+  const regular = Number(row.regular_price);
+  const sale = row.sale_price === null || row.sale_price === undefined ? null : Number(row.sale_price);
+  const onSale = sale !== null && sale < regular;
+  const inStock = row.is_in_stock === true || row.is_in_stock === 1;
+  const id = Number(row.id);
 
   return {
     id: String(row.id),
     slug: row.slug || String(row.id),
     name: row.name,
     brand: row.brand,
-    price: onSale ? (row.sale_price as number) : (row.regular_price as number),
-    oldPrice: onSale ? (row.regular_price as number) : undefined,
+    price: onSale ? (sale as number) : regular,
+    oldPrice: onSale ? regular : undefined,
     gender: row.gender === "men" ? "men" : "women",
     category: row.category,
     categorySlug: row.category_slug || undefined,
-    tone: toneFor(row.id as number),
+    tone: toneFor(id),
     tag: !inStock ? undefined : onSale ? "sale" : undefined,
     image: images[0]?.src || undefined,
     inStock,
@@ -63,126 +79,80 @@ export type CatalogQuery = {
 export type CatalogResult = {
   products: Product[];
   total: number;
-  source: "db" | "wc";
+  source: "db";
 };
 
-// ── SQLite query ─────────────────────────────────────────────────────────
+// ── Core query ─────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function dbQuery(params: CatalogQuery): CatalogResult {
-  const db = getDb()!;
+async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
+  const conds: string[] = ["status = 'publish'"];
+  const bind: unknown[] = [];
+  const p = (v: unknown) => { bind.push(v); return `$${bind.length}`; };
 
-  const conditions: string[] = ["p.status = 'publish'"];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bind: Record<string, any> = {};
-  let useFts = false;
+  if (params.q && params.q.trim()) {
+    const term = params.q.trim();
+    conds.push(`(name ILIKE ${p("%" + term + "%")} OR brand ILIKE ${p("%" + term + "%")} OR category ILIKE ${p("%" + term + "%")})`);
+  }
+  if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
+  if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
+  if (params.gender)        conds.push(`gender = ${p(params.gender)}`);
+  if (params.size)          conds.push(`attributes::text LIKE ${p('%"slug":"' + params.size + '"%')}`);
+  if (params.minPrice)      conds.push(`price >= ${p(params.minPrice)}`);
+  if (params.maxPrice)      conds.push(`price <= ${p(params.maxPrice)}`);
 
-  if (params.q) {
-    useFts = true;
-    bind.q = params.q.trim().split(/\s+/).map((w) => `"${w}"*`).join(" ");
-  }
-  if (params.categorySlug) {
-    conditions.push("p.category_slug = @cat");
-    bind.cat = params.categorySlug;
-  }
-  if (params.brandName) {
-    conditions.push("p.brand = @brand");
-    bind.brand = params.brandName;
-  }
-  if (params.gender) {
-    conditions.push("p.gender = @gender");
-    bind.gender = params.gender;
-  }
-  if (params.size) {
-    conditions.push(`p.attributes LIKE @size`);
-    bind.size = `%"slug":"${params.size}"%`;
-  }
-  if (params.minPrice) {
-    conditions.push("p.price >= @minP");
-    bind.minP = params.minPrice;
-  }
-  if (params.maxPrice) {
-    conditions.push("p.price <= @maxP");
-    bind.maxP = params.maxPrice;
-  }
-
-  const fromClause = useFts
-    ? "FROM products p JOIN products_fts ON products_fts.rowid = p.id AND products_fts MATCH @q"
-    : "FROM products p";
-
-  const where = conditions.join(" AND ");
-
-  // In-stock products always rank above archived ("Немає в наявності").
-  let orderClause: string;
-  if (params.orderby === "price") {
-    orderClause = `ORDER BY p.is_in_stock DESC, p.price ${(params.order ?? "asc").toUpperCase()}`;
-  } else {
-    orderClause = "ORDER BY p.is_in_stock DESC, p.id DESC"; // newest first by default
-  }
+  const where = conds.join(" AND ");
+  const order =
+    params.orderby === "price"
+      ? `ORDER BY is_in_stock DESC, price ${(params.order ?? "asc").toUpperCase() === "DESC" ? "DESC" : "ASC"}`
+      : "ORDER BY is_in_stock DESC, id DESC";
 
   const limit = params.perPage ?? 24;
   const offset = ((params.page ?? 1) - 1) * limit;
 
-  const rows = db
-    .prepare(`SELECT p.* ${fromClause} WHERE ${where} ${orderClause} LIMIT ${limit} OFFSET ${offset}`)
-    .all(bind) as Record<string, unknown>[];
+  const rows = await q(
+    `SELECT * FROM products WHERE ${where} ${order} LIMIT ${p(limit)} OFFSET ${p(offset)}`,
+    bind,
+  );
+  const countRow = await q1<{ cnt: string }>(
+    `SELECT count(*)::text AS cnt FROM products WHERE ${where}`,
+    bind.slice(0, bind.length - 2),
+  );
 
-  const { cnt } = db
-    .prepare(`SELECT COUNT(*) as cnt ${fromClause} WHERE ${where}`)
-    .get(bind) as { cnt: number };
-
-  return {
-    products: rows.map(rowToProduct),
-    total: cnt,
-    source: "db",
-  };
+  return { products: rows.map(rowToProduct), total: Number(countRow?.cnt ?? 0), source: "db" };
 }
 
-// ── Size facets from DB ──────────────────────────────────────────────────
+// ── Size facets ──────────────────────────────────────────────────────────
 
-export function dbSizeFacets(params: { categorySlug?: string; q?: string }): { slug: string; name: string }[] {
-  const db = getDb();
-  if (!db) return [];
+export async function dbSizeFacets(params: { categorySlug?: string; q?: string }): Promise<{ slug: string; name: string }[]> {
+  const conds = ["status = 'publish'", "attributes::text != '[]'"];
+  const bind: unknown[] = [];
+  if (params.categorySlug) { bind.push(params.categorySlug); conds.push(`category_slug = $${bind.length}`); }
 
-  const conditions = ["status = 'publish'", "attributes != '[]'"];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bind: Record<string, any> = {};
-  if (params.categorySlug) {
-    conditions.push("category_slug = @cat");
-    bind.cat = params.categorySlug;
-  }
-
-  const rows = db
-    .prepare(`SELECT attributes FROM products WHERE ${conditions.join(" AND ")} LIMIT 500`)
-    .all(bind) as { attributes: string }[];
+  const rows = await q<{ attributes: unknown }>(
+    `SELECT attributes FROM products WHERE ${conds.join(" AND ")} LIMIT 500`,
+    bind,
+  );
 
   const map = new Map<string, string>();
   for (const row of rows) {
-    try {
-      const attrs: { taxonomy: string; terms: { name: string; slug: string }[] }[] = JSON.parse(row.attributes);
-      for (const attr of attrs) {
-        if (attr.taxonomy === "pa_size") {
-          for (const t of attr.terms) map.set(t.slug, t.name);
-        }
-      }
-    } catch { /* skip invalid JSON */ }
+    for (const attr of asAttrs(row.attributes) as { taxonomy: string; terms: { name: string; slug: string }[] }[]) {
+      if (attr.taxonomy === "pa_size") for (const t of attr.terms) map.set(t.slug, t.name);
+    }
   }
   return Array.from(map, ([slug, name]) => ({ slug, name })).sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { numeric: true })
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
   );
 }
 
-// ── Category facets from DB ──────────────────────────────────────────────
+// ── Categories ─────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function dbCategories(): WcCategory[] {
-  const db = getDb()!;
-  return db
-    .prepare("SELECT id, name, slug, parent, count FROM categories ORDER BY count DESC, name ASC")
-    .all() as WcCategory[];
+export async function getCatalogCategories(): Promise<WcCategory[]> {
+  return q<WcCategory>(
+    "SELECT id, name, slug, parent, count FROM categories ORDER BY count DESC, name ASC",
+  );
 }
 
-// ── Single product from DB (fallback for archived / no-Store-API items) ───
+// ── Single product ─────────────────────────────────────────────────────
 
 export type DbProductDetail = {
   product: Product;
@@ -194,19 +164,13 @@ export type DbProductDetail = {
   inStock: boolean;
 };
 
-export function dbProductById(id: string): DbProductDetail | null {
-  const db = getDb();
-  if (!db || !/^\d+$/.test(id)) return null;
+export async function dbProductById(id: string): Promise<DbProductDetail | null> {
+  if (!/^\d+$/.test(id)) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const row = db.prepare("SELECT * FROM products WHERE id = ?").get(Number(id)) as any;
+  const row = await q1<any>("SELECT * FROM products WHERE id = $1", [Number(id)]);
   if (!row) return null;
-  let sizes: string[] = [];
-  try {
-    const attrs = JSON.parse(row.attributes || "[]");
-    sizes = (attrs.find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? []).map(
-      (t: { name: string }) => t.name,
-    );
-  } catch { /* ignore */ }
+  const sizes = (asAttrs(row.attributes).find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? [])
+    .map((t: { name: string }) => t.name);
   return {
     product: rowToProduct(row),
     sizes,
@@ -214,32 +178,22 @@ export function dbProductById(id: string): DbProductDetail | null {
     color: row.color || undefined,
     season: row.season || undefined,
     country: row.country || undefined,
-    inStock: row.is_in_stock === 1,
+    inStock: row.is_in_stock === true,
   };
 }
 
-// ── Brand facets from DB (only brands with in-stock products) ─────────────
+// ── Brand facets ─────────────────────────────────────────────────────────
 
-export function dbBrands(filters?: { categorySlug?: string; gender?: string }): { name: string; slug: string }[] {
-  const db = getDb();
-  if (!db) return [];
-  const conditions = ["is_in_stock = 1", "brand != ''", "brand != 'Mania Group'"];
-  const params: Record<string, string> = {};
-  if (filters?.categorySlug) {
-    conditions.push("category_slug = @categorySlug");
-    params.categorySlug = filters.categorySlug;
-  }
-  if (filters?.gender === "women" || filters?.gender === "men") {
-    conditions.push("gender = @gender");
-    params.gender = filters.gender;
-  }
-  const rows = db
-    .prepare(
-      `SELECT brand, COUNT(*) n FROM products
-       WHERE ${conditions.join(" AND ")}
-       GROUP BY brand ORDER BY n DESC`,
-    )
-    .all(params) as { brand: string; n: number }[];
+export async function dbBrands(filters?: { categorySlug?: string; gender?: string }): Promise<{ name: string; slug: string }[]> {
+  const conds = ["is_in_stock = TRUE", "brand <> ''", "brand <> 'Mania Group'"];
+  const bind: unknown[] = [];
+  if (filters?.categorySlug) { bind.push(filters.categorySlug); conds.push(`category_slug = $${bind.length}`); }
+  if (filters?.gender === "women" || filters?.gender === "men") { bind.push(filters.gender); conds.push(`gender = $${bind.length}`); }
+
+  const rows = await q<{ brand: string }>(
+    `SELECT brand, COUNT(*) n FROM products WHERE ${conds.join(" AND ")} GROUP BY brand ORDER BY n DESC`,
+    bind,
+  );
   return rows.map((r) => ({ name: r.brand, slug: brandSlug(r.brand) }));
 }
 
@@ -251,71 +205,25 @@ export function brandSlug(name: string): string {
 // ── Public API ───────────────────────────────────────────────────────────
 
 export async function getProducts(params: CatalogQuery): Promise<CatalogResult> {
-  if (isDbReady()) {
-    try {
-      return dbQuery(params);
-    } catch (e) {
-      console.warn("[productSource] DB query failed, falling back to WC:", e);
-    }
-  }
-
-  // WC Store API fallback
-  const wcProducts = await fetchProducts({
-    perPage: params.perPage ?? 24,
-    category: undefined, // no id here; handled by catalog/page.tsx lookup
-    search: params.q,
-    orderby: params.orderby === "price" ? "price" : "date",
-    order: params.order ?? "desc",
-    minPrice: params.minPrice,
-    maxPrice: params.maxPrice,
-    sizeSlug: params.size,
-  }).catch(() => []);
-
-  return {
-    products: wcProducts.map(fromWcProduct),
-    total: wcProducts.length,
-    source: "wc",
-  };
+  return runQuery(params);
 }
 
 export async function getCatalogProducts(
-  params: CatalogQuery & { categoryId?: number }
+  params: CatalogQuery & { categoryId?: number },
 ): Promise<CatalogResult> {
-  if (isDbReady()) {
-    try {
-      return dbQuery(params);
-    } catch (e) {
-      console.warn("[productSource] DB query failed, falling back to WC:", e);
-    }
-  }
-
-  // WC fallback (needs category id, not slug)
-  const wcProducts = await fetchProducts({
-    perPage: params.perPage ?? 24,
-    category: params.categoryId,
-    search: params.q,
-    orderby: params.orderby === "price" ? "price" : "date",
-    order: params.order ?? "desc",
-    minPrice: params.minPrice,
-    maxPrice: params.maxPrice,
-    sizeSlug: params.size,
-  }).catch(() => []);
-
-  return {
-    products: wcProducts.map(fromWcProduct),
-    total: wcProducts.length,
-    source: "wc",
-  };
+  return runQuery(params);
 }
 
-export async function getCatalogCategories(): Promise<WcCategory[]> {
-  if (isDbReady()) {
-    try {
-      return dbCategories();
-    } catch { /* fall through */ }
-  }
-  return fetchCategories().catch(() => []);
+/** Fetch a set of products by id, preserving the input order. */
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  const numeric = ids.map((s) => Number(s)).filter((n) => Number.isFinite(n));
+  if (numeric.length === 0) return [];
+  const rows = await q(`SELECT * FROM products WHERE id = ANY($1)`, [numeric]);
+  const byId = new Map(rows.map((r) => [String((r as { id: unknown }).id), rowToProduct(r)]));
+  return ids.map((id) => byId.get(id)).filter((p): p is Product => !!p);
 }
 
-// Re-export priceToUah for callers that used wc.ts
-export { priceToUah };
+/** UAH price passthrough (kept for callers that imported it from wc.ts). */
+export function priceToUah(v: string | number): number {
+  return typeof v === "number" ? v : Number(v) || 0;
+}

@@ -1,21 +1,50 @@
 import { NextResponse } from "next/server";
-import { clearCart, placeOrder, type Address } from "@/lib/wcCart";
-import { readSessionCookie, writeSessionCookie } from "@/lib/sessionCookie";
+import { readCartToken } from "@/lib/cart";
+import { createOrder } from "@/lib/orders";
+import { getSessionAccount } from "@/lib/accountAuth";
+
+type CheckoutBody = {
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string;
+  city: string;
+  branch: string;
+  note?: string;
+  payment_method?: "cod" | "prepay";
+};
 
 export async function POST(req: Request) {
-  const { billing, note } = (await req.json()) as { billing: Address; note?: string };
-  const session = await readSessionCookie();
-
-  const result = await placeOrder(session, billing, note);
-
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, message: result.message }, { status: 400 });
+  const body = (await req.json()) as CheckoutBody;
+  const token = await readCartToken();
+  if (!token) {
+    return NextResponse.json({ ok: false, message: "Кошик порожній" }, { status: 400 });
   }
 
-  // WC does not auto-empty the cart on a COD Store-API checkout — clear it
-  const clearedCookie = await clearCart(result.sessionCookie).catch(() => result.sessionCookie);
+  if (!body.first_name || !body.phone || !body.city || !body.branch) {
+    return NextResponse.json({ ok: false, message: "Заповніть обовʼязкові поля" }, { status: 400 });
+  }
 
-  await writeSessionCookie(clearedCookie ?? result.sessionCookie);
+  const account = await getSessionAccount();
 
-  return NextResponse.json({ ok: true, orderId: result.orderId, status: result.status });
+  try {
+    const { id, number } = await createOrder({
+      cartToken: token,
+      accountId: account?.id ?? null,
+      email: body.email,
+      phone: body.phone,
+      firstName: body.first_name,
+      lastName: body.last_name,
+      shippingCity: body.city,
+      shippingBranch: body.branch,
+      comment: body.note,
+      paymentMethod: body.payment_method ?? "cod",
+    });
+    return NextResponse.json({ ok: true, orderId: id, number, status: "pending" });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, message: e instanceof Error ? e.message : "Не вдалося оформити замовлення" },
+      { status: 400 },
+    );
+  }
 }

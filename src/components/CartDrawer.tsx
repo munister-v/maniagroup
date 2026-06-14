@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { formatPrice } from "@/lib/catalog";
-import { cartItemPriceUah, type WcCart } from "@/lib/wcCart";
+import type { Cart } from "@/lib/cart";
 
 export function CartDrawer({
   open,
@@ -13,12 +13,12 @@ export function CartDrawer({
   open: boolean;
   onClose: () => void;
 }) {
-  const [cart, setCart] = useState<WcCart | null>(null);
+  const [cart, setCart] = useState<Cart | null>(null);
   const [pending, setPending] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/cart");
-    const data = (await res.json()) as WcCart;
+    const data = (await res.json()) as Cart;
     setCart(data);
     window.dispatchEvent(new CustomEvent("cart:updated", { detail: { count: data.items_count } }));
   }, []);
@@ -51,14 +51,14 @@ export function CartDrawer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, quantity }),
     });
-    const data = (await res.json()) as WcCart;
+    const data = (await res.json()) as Cart;
     setCart(data);
     setPending(null);
     window.dispatchEvent(new CustomEvent("cart:updated", { detail: { count: data.items_count } }));
   }
 
   const items = cart?.items ?? [];
-  const subtotal = cart ? Math.round(Number(cart.totals.total_price) / 10 ** cart.totals.currency_minor_unit) : 0;
+  const subtotal = cart?.subtotal ?? 0;
 
   return (
     <div
@@ -101,17 +101,16 @@ export function CartDrawer({
           {items.map((it) => (
             <div key={it.key} className="flex gap-4 border-b border-line py-5">
               <div className="relative aspect-[3/4] w-20 shrink-0 overflow-hidden bg-cloud">
-                {it.images[0]?.src && (
-                  <Image src={it.images[0].src} alt={it.name} fill sizes="80px" className="object-cover" />
+                {it.image && (
+                  <Image src={it.image} alt={it.name} fill sizes="80px" className="object-cover" />
                 )}
               </div>
               <div className="flex-1">
+                <p className="text-[10px] uppercase tracking-luxe text-muted">{it.brand}</p>
                 <h3 className="text-sm text-ink">{it.name}</h3>
-                {it.variation.map((v) => (
-                  <p key={v.attribute} className="mt-1 text-xs text-muted">
-                    {v.attribute}: {v.value}
-                  </p>
-                ))}
+                {it.variation && (
+                  <p className="mt-1 text-xs text-muted">Розмір: {it.variation}</p>
+                )}
                 <div className="mt-2.5 flex items-center justify-between">
                   <div className="flex items-center border border-line text-ink">
                     <button
@@ -133,7 +132,7 @@ export function CartDrawer({
                     </button>
                   </div>
                   <span className="text-sm tabular-nums text-ink">
-                    {formatPrice(cartItemPriceUah(it))}
+                    {formatPrice(it.line_total)}
                   </span>
                 </div>
               </div>

@@ -3,7 +3,7 @@
  * Runs server-side only. Does NOT depend on Store API.
  */
 
-import { getDb, setMeta } from "./db";
+import { replaceCatalog, setMeta, type ProductRow } from "./db";
 
 const WC_BASE = "https://maniagroup.com.ua/wp-json/wc/v3";
 
@@ -90,23 +90,28 @@ function mapProduct(p: V3Product): Record<string, unknown> {
 
   return {
     id: p.id,
+    sku: "",
     name: p.name.replace(/\s*\([^)]*\)\s*$/, "").trim(),
     slug: p.slug || String(p.id),
     brand,
     category: catEntry?.name ?? "Одяг",
     category_slug: catEntry?.slug ?? "",
+    gender: "",
     price: onSale ? sale! : regular,
     regular_price: regular,
     sale_price: onSale ? sale : null,
-    is_in_stock: p.stock_status === "instock" ? 1 : 0,
+    is_in_stock: p.stock_status === "instock",
     status: p.status,
     image_src: images[0]?.src ?? "",
     images: JSON.stringify(images),
     attributes: JSON.stringify(attributes),
     description: p.description ?? "",
     short_description: p.short_description ?? "",
-    created_at: p.date_created ?? "",
-    updated_at: p.date_modified ?? "",
+    color: "",
+    country: "",
+    season: "",
+    collection: "",
+    composition: "",
   };
 }
 
@@ -120,47 +125,18 @@ export type SyncResult = {
 };
 
 export async function syncCatalog(): Promise<SyncResult> {
-  const db = getDb();
-  if (!db) throw new Error("SQLite unavailable");
-
   const start = Date.now();
-  setMeta("sync_status", "syncing");
+  await setMeta("sync_status", "syncing");
 
   try {
     // ── 1. categories ──
     const catRes = await wcV3Get<V3Category[]>("/categories?per_page=100&hide_empty=false");
-    const insertCat = db.prepare(`
-      INSERT OR REPLACE INTO categories(id, name, slug, parent, count) VALUES (?,?,?,?,?)
-    `);
-    db.prepare("DELETE FROM categories").run();
-    const insertCatsTx = db.transaction((cats: V3Category[]) => {
-      for (const c of cats) insertCat.run(c.id, c.name, c.slug, c.parent, c.count);
-    });
-    insertCatsTx(catRes.data);
+    const categories = catRes.data.map((c) => ({ name: c.name, slug: c.slug, count: c.count }));
 
     // ── 2. products (paginated) ──
-    const insertProd = db.prepare(`
-      INSERT OR REPLACE INTO products
-        (id, name, slug, brand, category, category_slug, price, regular_price,
-         sale_price, is_in_stock, status, image_src, images, attributes,
-         description, short_description, created_at, updated_at)
-      VALUES
-        (@id,@name,@slug,@brand,@category,@category_slug,@price,@regular_price,
-         @sale_price,@is_in_stock,@status,@image_src,@images,@attributes,
-         @description,@short_description,@created_at,@updated_at)
-    `);
-
+    const rows: ProductRow[] = [];
     let page = 1;
     let pages = 0;
-    let synced = 0;
-
-    // Full replace in one transaction per page
-    const insertPageTx = db.transaction((rows: Record<string, unknown>[]) => {
-      for (const row of rows) insertProd.run(row);
-    });
-
-    // Clear existing products before re-sync
-    db.prepare("DELETE FROM products").run();
 
     while (true) {
       const { data: products } = await wcV3Get<V3Product[]>(
@@ -168,29 +144,28 @@ export async function syncCatalog(): Promise<SyncResult> {
       );
       if (!products.length) break;
 
-      insertPageTx(products.map(mapProduct));
-      synced += products.length;
+      for (const p of products) rows.push(mapProduct(p) as unknown as ProductRow);
       pages++;
       page++;
 
       if (products.length < 100) break; // last page
     }
 
-    // ── 3. Rebuild FTS index ──
-    db.exec(`
-      INSERT INTO products_fts(products_fts) VALUES('rebuild');
-    `);
+    // ── 3. Full replace in Postgres ──
+    await replaceCatalog(rows, categories);
 
-    // ── 4. Update meta ──
+    const synced = rows.length;
     const now = new Date().toISOString();
-    setMeta("last_sync", now);
-    setMeta("total_products", String(synced));
-    setMeta("sync_status", "idle");
+    await setMeta("last_sync", now);
+    await setMeta("source", "wc");
+    await setMeta("total_products", String(synced));
+    await setMeta("sync_status", "idle");
+    await setMeta("sync_error", "");
 
     return { synced, pages, ms: Date.now() - start };
   } catch (err) {
-    setMeta("sync_status", "error");
-    setMeta("sync_error", String(err));
+    await setMeta("sync_status", "error");
+    await setMeta("sync_error", String(err));
     throw err;
   }
 }
