@@ -1,26 +1,171 @@
 @import "tailwindcss";
 
+/* ── Mania Group · design tokens ──────────────────────────────── */
+@theme {
+  /* Warm premium neutrals — paper & ink, restrained palette */
+  --color-ink: #17130f; /* near-black, warm */
+  --color-paper: #f6f3ee; /* off-white background */
+  --color-cloud: #ece7df; /* tile / hairline fill */
+  --color-line: #ddd6cb; /* hairlines & borders */
+  --color-muted: #8c8174; /* secondary text */
+  --color-accent: #7a5c3e; /* bronze — used sparingly */
+
+  --font-sans: var(--font-jost), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light; /* fixed light premium theme — never OS dark */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+/* page width wrapper */
+.wrap {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+}
+@media (min-width: 640px) {
+  .wrap {
+    padding-inline: 2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .wrap {
+    padding-inline: 3rem;
+  }
+}
+
+/* tracked uppercase — used for eyebrows, nav, labels */
+.tracking-luxe {
+  letter-spacing: 0.2em;
+}
+.tracking-wordmark {
+  letter-spacing: 0.34em;
+}
+
+/* infinite brand marquee */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee 38s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* underline-on-hover link */
+.link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.4s ease;
+}
+.link-underline:hover {
+  background-size: 100% 1px;
+}
+
+/* ── film grain — applied to art surfaces (hero, tiles, covers) ── */
+.grain-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+}
+.grain-soft {
+  opacity: 0.09;
+  mix-blend-mode: multiply;
+}
+.grain-strong {
+  opacity: 0.16;
+  mix-blend-mode: soft-light;
+}
+
+/* ── scroll-reveal ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity 0.9s cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── hero entrance ── */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero-rise {
+  animation: rise 0.95s both cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* ── slow gradient drift for the hero backdrop ── */
+@keyframes drift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.animate-drift {
+  background-size: 200% 200%;
+  animation: drift 22s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .hero-rise {
+    animation: none;
+  }
+  .animate-drift,
+  .animate-marquee {
+    animation: none;
+  }
 }
