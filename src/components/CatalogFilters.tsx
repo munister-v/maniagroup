@@ -48,6 +48,7 @@ export function CatalogFilters({
   }
 
   const hasActive = active.size || active.min || active.max;
+  const activeCount = [active.category, active.size, active.min || active.max].filter(Boolean).length;
 
   const renderBody = () => (
     <div className="space-y-8">
@@ -155,6 +156,11 @@ export function CatalogFilters({
           <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
         </svg>
         Фільтри
+        {activeCount > 0 && (
+          <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-ink px-1 text-[9px] tabular-nums text-paper">
+            {activeCount}
+          </span>
+        )}
       </button>
 
       {/* desktop sidebar */}

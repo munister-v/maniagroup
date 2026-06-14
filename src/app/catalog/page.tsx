@@ -111,7 +111,7 @@ export default async function CatalogPage({
 
         <div>
           {brands.length > 0 && (
-            <div className="mb-6 flex flex-wrap gap-2">
+            <div className="mb-6 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:-mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {brands.map((b) => {
                 const active = categorySlug === b.slug;
                 const params = new URLSearchParams();
@@ -126,7 +126,7 @@ export default async function CatalogPage({
                   <Link
                     key={b.slug}
                     href={qs ? `/catalog?${qs}` : "/catalog"}
-                    className={`border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
+                    className={`shrink-0 border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
                       active
                         ? "border-ink bg-ink text-paper"
                         : "border-line text-ink hover:border-ink"
