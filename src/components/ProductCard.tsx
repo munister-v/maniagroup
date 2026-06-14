@@ -19,7 +19,7 @@ export function ProductCard({ product }: { product: Product }) {
         <ProductMedia tone={tone} brand={brand} category={category} image={image} />
 
         {discount ? (
-          <span className="absolute left-3 top-3 z-20 bg-[#b3392c] px-2.5 py-1 text-[10px] uppercase tracking-luxe text-paper">
+          <span className="absolute left-3 top-3 z-20 bg-[#b3392c] px-3 py-1.5 text-[12px] font-semibold uppercase tracking-luxe text-paper">
             -{discount}%
           </span>
         ) : (
@@ -64,11 +64,11 @@ export function ProductCard({ product }: { product: Product }) {
           </div>
         </div>
         <div className="mt-1.5 flex items-baseline gap-2">
-          <span className={`text-sm tabular-nums ${discount ? "text-[#b3392c]" : "text-ink"}`}>
+          <span className={`text-base font-medium tabular-nums ${discount ? "text-[#b3392c]" : "text-ink"}`}>
             {formatPrice(price)}
           </span>
           {oldPrice && (
-            <span className="text-xs tabular-nums text-muted line-through">
+            <span className="text-sm tabular-nums text-muted line-through">
               {formatPrice(oldPrice)}
             </span>
           )}

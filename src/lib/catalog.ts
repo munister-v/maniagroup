@@ -44,24 +44,28 @@ export const CATEGORIES: {
   caption: string;
   href: string;
   tone: string;
+  image: string;
 }[] = [
   {
     label: "Жінкам",
     caption: "Сукні · верхній одяг · взуття · аксесуари",
     href: "/catalog?category=zhenskoe",
     tone: "#d8cfc1",
+    image: "/images/cat-women.webp",
   },
   {
     label: "Чоловікам",
     caption: "Сорочки · поло · костюми · взуття",
     href: "/catalog?category=muzhskoe",
     tone: "#c4bcb0",
+    image: "/images/cat-men.webp",
   },
   {
     label: "Аромати для дому",
     caption: "Дифузори · інтер'єрні парфуми · сашле",
     href: "/catalog?category=aromatizatory",
     tone: "#cbb8a4",
+    image: "/images/cat-home.webp",
   },
 ];
 

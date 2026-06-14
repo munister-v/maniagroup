@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
@@ -34,12 +35,20 @@ export default async function Home() {
 /* ─────────────────────────────────────────────────────────── Hero */
 function Hero({ hero }: { hero: SiteContent["hero"] }) {
   return (
-    <section className="relative isolate -mt-16 overflow-hidden bg-ink text-paper md:-mt-20">
+    <section className="relative isolate -mt-16 overflow-hidden bg-ink text-paper md:-mt-[120px]">
+      <Image
+        src="/images/hero.webp"
+        alt="Mania Group — нова колекція"
+        fill
+        priority
+        sizes="100vw"
+        className="absolute inset-0 -z-20 object-cover object-center"
+      />
       <div
-        className="absolute inset-0 -z-10 animate-drift"
+        className="absolute inset-0 -z-10"
         style={{
           backgroundImage:
-            "radial-gradient(120% 90% at 80% 8%, rgba(201,189,171,0.34), transparent 55%), radial-gradient(90% 80% at 8% 92%, rgba(122,92,62,0.36), transparent 55%), linear-gradient(150deg, #1c1712 0%, #241d17 50%, #15110d 100%)",
+            "linear-gradient(90deg, rgba(18,14,10,0.92) 0%, rgba(18,14,10,0.62) 38%, rgba(18,14,10,0.18) 70%, rgba(18,14,10,0.45) 100%)",
         }}
       />
       <Grain variant="strong" />
@@ -124,25 +133,32 @@ function CategoryTrio() {
           <Reveal key={cat.href} delay={i * 80}>
             <Link
               href={cat.href}
+              style={{ backgroundColor: cat.tone }}
               className="group relative flex aspect-[3/4] flex-col justify-end overflow-hidden p-7 md:aspect-[4/5]"
             >
+              <Image
+                src={cat.image}
+                alt={cat.label}
+                fill
+                sizes="(min-width: 768px) 33vw, 100vw"
+                className="object-cover transition-transform duration-[1300ms] ease-out group-hover:scale-105"
+              />
               <div
-                className="absolute inset-0 transition-transform duration-[1300ms] ease-out group-hover:scale-105"
+                className="absolute inset-0"
                 style={{
-                  backgroundColor: cat.tone,
                   backgroundImage:
-                    "linear-gradient(180deg, rgba(255,255,255,0) 35%, rgba(23,19,15,0.46) 100%)",
+                    "linear-gradient(180deg, rgba(23,19,15,0) 28%, rgba(23,19,15,0.66) 100%)",
                 }}
               />
               <Grain />
               <div className="pointer-events-none absolute inset-4 border border-paper/15" />
               <div className="relative text-paper">
-                <h3 className="font-display text-2xl md:text-3xl">{cat.label}</h3>
+                <h3 className="font-display text-3xl md:text-4xl">{cat.label}</h3>
                 <p className="mt-1.5 text-[12px] uppercase tracking-luxe text-paper/85">
                   {cat.caption}
                 </p>
-                <span className="mt-4 inline-block text-[11px] uppercase tracking-luxe text-paper underline-offset-4 group-hover:underline">
-                  Дивитися →
+                <span className="mt-5 inline-flex h-11 items-center bg-paper px-6 text-[11px] uppercase tracking-luxe text-ink transition-opacity group-hover:opacity-85">
+                  Дивитися каталог →
                 </span>
               </div>
             </Link>

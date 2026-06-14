@@ -110,6 +110,35 @@ export default async function CatalogPage({
         </div>
 
         <div>
+          {brands.length > 0 && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              {brands.map((b) => {
+                const active = categorySlug === b.slug;
+                const params = new URLSearchParams();
+                if (!active) params.set("category", b.slug);
+                if (q) params.set("q", q);
+                if (size) params.set("size", size);
+                if (min) params.set("min", min);
+                if (max) params.set("max", max);
+                if (sortKey !== "newest") params.set("sort", sortKey);
+                const qs = params.toString();
+                return (
+                  <Link
+                    key={b.slug}
+                    href={qs ? `/catalog?${qs}` : "/catalog"}
+                    className={`border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
+                      active
+                        ? "border-ink bg-ink text-paper"
+                        : "border-line text-ink hover:border-ink"
+                    }`}
+                  >
+                    {b.name}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
             <p className="text-sm text-muted">
               {products.length
@@ -132,7 +161,7 @@ export default async function CatalogPage({
             </div>
           </div>
 
-          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 xl:grid-cols-4">
+          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {products.map((product, i) => (
               <Reveal key={product.id} delay={(i % 4) * 70}>
                 <ProductCard product={product} />

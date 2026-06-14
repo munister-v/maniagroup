@@ -79,61 +79,42 @@ export function Header() {
             : "border-b border-transparent text-paper"
         }`}
       >
-        <div className="wrap grid h-16 grid-cols-[1fr_auto_1fr] items-center md:h-20">
-          {/* left — nav */}
-          <nav className="hidden items-center gap-7 md:flex">
-            {MEGA_MENU.map((item) => (
-              <button
-                key={item.label}
-                onMouseEnter={() => setActive(item.label)}
-                onFocus={() => setActive(item.label)}
-                className={`link-underline text-[11px] uppercase tracking-luxe transition-opacity ${
-                  active === item.label ? "opacity-100" : "opacity-75 hover:opacity-100"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <a
-              href="#delivery"
-              onMouseEnter={() => setActive(null)}
-              className="link-underline text-[11px] uppercase tracking-luxe opacity-75 hover:opacity-100"
+        {/* top row — search · wordmark · account/cart */}
+        <div className="wrap grid h-16 grid-cols-[1fr_auto_1fr] items-center md:h-[72px]">
+          <div className="flex items-center">
+            <button
+              onClick={() => setMobileOpen((v) => !v)}
+              className="-ml-1 flex h-9 w-9 items-center justify-center md:hidden"
+              aria-label="Меню"
+              aria-expanded={mobileOpen}
             >
-              Доставка
-            </a>
-          </nav>
-
-          <button
-            onClick={() => setMobileOpen((v) => !v)}
-            className="-ml-1 flex h-9 w-9 items-center justify-center md:hidden"
-            aria-label="Меню"
-            aria-expanded={mobileOpen}
-          >
-            <Icon d={mobileOpen ? ICONS.close : ICONS.menu} />
-          </button>
+              <Icon d={mobileOpen ? ICONS.close : ICONS.menu} />
+            </button>
+            <button
+              onClick={() => setSearchOpen(true)}
+              aria-label="Пошук"
+              className="hidden items-center gap-2 text-[11px] uppercase tracking-luxe opacity-75 transition-opacity hover:opacity-100 md:flex"
+            >
+              <Icon d={ICONS.search} />
+              Пошук
+            </button>
+          </div>
 
           {/* center — wordmark */}
           <Link
             href="/"
             onMouseEnter={() => setActive(null)}
-            className="justify-self-center font-display text-xl tracking-wordmark md:text-2xl"
+            className="justify-self-center font-display text-2xl tracking-wordmark md:text-[1.65rem]"
           >
             MANIA&nbsp;GROUP
           </Link>
 
           {/* right — utilities */}
           <div
-            className="flex items-center justify-end gap-4 md:gap-5"
+            className="flex items-center justify-end gap-5"
             onMouseEnter={() => setActive(null)}
           >
-            <button
-              onClick={() => setSearchOpen(true)}
-              aria-label="Пошук"
-              className="hidden hover:opacity-60 sm:block"
-            >
-              <Icon d={ICONS.search} />
-            </button>
-            <button aria-label="Акаунт" className="hidden hover:opacity-60 sm:block">
+            <button aria-label="Акаунт" className="hidden hover:opacity-60 md:block">
               <Icon d={ICONS.user} />
             </button>
             <button
@@ -152,6 +133,35 @@ export function Header() {
             </button>
           </div>
         </div>
+
+        {/* nav row — centered (desktop) */}
+        <nav
+          className={`hidden border-t md:block ${
+            solid ? "border-line" : "border-paper/15"
+          }`}
+        >
+          <div className="wrap flex h-12 items-center justify-center gap-9">
+            {MEGA_MENU.map((item) => (
+              <button
+                key={item.label}
+                onMouseEnter={() => setActive(item.label)}
+                onFocus={() => setActive(item.label)}
+                className={`link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe transition-opacity ${
+                  active === item.label ? "opacity-100" : "opacity-75 hover:opacity-100"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+            <a
+              href="#delivery"
+              onMouseEnter={() => setActive(null)}
+              className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe opacity-75 hover:opacity-100"
+            >
+              Доставка
+            </a>
+          </div>
+        </nav>
 
         {/* mega-menu panel */}
         {active && (
