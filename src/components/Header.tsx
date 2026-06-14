@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { MEGA_MENU, type MegaMenu } from "@/lib/catalog";
 import { CartDrawer } from "./CartDrawer";
 import { Grain } from "./Grain";
@@ -36,6 +37,9 @@ export function Header() {
   const [active, setActive] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 48);
@@ -45,7 +49,18 @@ export function Header() {
   }, []);
 
   const solid = scrolled || active !== null || mobileOpen;
-  const cartCount = 2;
+  const [cartCount, setCartCount] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/cart")
+      .then((r) => r.json())
+      .then((c: { items_count: number }) => setCartCount(c.items_count));
+    const onUpdate = (e: Event) => {
+      setCartCount((e as CustomEvent<{ count: number }>).detail.count);
+    };
+    window.addEventListener("cart:updated", onUpdate);
+    return () => window.removeEventListener("cart:updated", onUpdate);
+  }, []);
 
   return (
     <>
@@ -111,7 +126,11 @@ export function Header() {
             className="flex items-center justify-end gap-4 md:gap-5"
             onMouseEnter={() => setActive(null)}
           >
-            <button aria-label="Пошук" className="hidden hover:opacity-60 sm:block">
+            <button
+              onClick={() => setSearchOpen(true)}
+              aria-label="Пошук"
+              className="hidden hover:opacity-60 sm:block"
+            >
               <Icon d={ICONS.search} />
             </button>
             <button aria-label="Акаунт" className="hidden hover:opacity-60 sm:block">
@@ -128,7 +147,7 @@ export function Header() {
                   solid ? "bg-ink text-paper" : "bg-paper text-ink"
                 }`}
               >
-                {cartCount}
+                {cartCount > 0 ? cartCount : ""}
               </span>
             </button>
           </div>
@@ -168,6 +187,82 @@ export function Header() {
         </nav>
       )}
 
+      {/* search overlay */}
+      <div
+        className={`fixed inset-0 z-[70] ${searchOpen ? "" : "pointer-events-none"}`}
+        aria-hidden={!searchOpen}
+      >
+        <div
+          onClick={() => setSearchOpen(false)}
+          className={`absolute inset-0 bg-ink/40 transition-opacity duration-300 ${
+            searchOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        <div
+          className={`absolute inset-x-0 top-0 bg-paper transition-transform duration-400 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${
+            searchOpen ? "translate-y-0" : "-translate-y-full"
+          }`}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!query.trim()) return;
+              setSearchOpen(false);
+              router.push(`/catalog?q=${encodeURIComponent(query.trim())}`);
+            }}
+            className="wrap flex items-center gap-4 py-8"
+          >
+            <Icon d={ICONS.search} />
+            <input
+              autoFocus={searchOpen}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Шукати товари…"
+              className="flex-1 border-b border-line bg-transparent py-2 font-display text-2xl text-ink placeholder:text-muted focus:border-ink focus:outline-none md:text-3xl"
+            />
+            <button
+              type="button"
+              onClick={() => setSearchOpen(false)}
+              aria-label="Закрити"
+              className="text-ink hover:opacity-60"
+            >
+              <Icon d={ICONS.close} />
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* mobile bottom nav */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-paper/95 backdrop-blur-md md:hidden">
+        <Link href="/catalog" className="flex flex-col items-center gap-1 py-2.5 text-ink">
+          <Icon d={ICONS.menu} />
+          <span className="text-[9px] uppercase tracking-luxe">Каталог</span>
+        </Link>
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="flex flex-col items-center gap-1 py-2.5 text-ink"
+        >
+          <Icon d={ICONS.search} />
+          <span className="text-[9px] uppercase tracking-luxe">Пошук</span>
+        </button>
+        <button
+          onClick={() => setCartOpen(true)}
+          className="relative flex flex-col items-center gap-1 py-2.5 text-ink"
+        >
+          <Icon d={ICONS.bag} />
+          <span className="text-[9px] uppercase tracking-luxe">Кошик</span>
+          {cartCount > 0 && (
+            <span className="absolute right-6 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-1 text-[9px] font-medium text-paper">
+              {cartCount}
+            </span>
+          )}
+        </button>
+        <button className="flex flex-col items-center gap-1 py-2.5 text-ink">
+          <Icon d={ICONS.user} />
+          <span className="text-[9px] uppercase tracking-luxe">Профіль</span>
+        </button>
+      </nav>
+
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
     </>
   );
@@ -184,18 +279,21 @@ function MegaPanel({ item }: { item: MegaMenu }) {
             </h4>
             <ul className="mt-4 space-y-2.5">
               {col.links.map((l) => (
-                <li key={l}>
-                  <a href="#" className="text-sm text-ink/80 transition-colors hover:text-ink">
-                    {l}
-                  </a>
+                <li key={l.slug}>
+                  <Link
+                    href={`/catalog?category=${l.slug}`}
+                    className="text-sm text-ink/80 transition-colors hover:text-ink"
+                  >
+                    {l.label}
+                  </Link>
                 </li>
               ))}
             </ul>
           </div>
         ))}
 
-        <a
-          href={item.href}
+        <Link
+          href={`/catalog?category=${item.featured.slug}`}
           className="group relative col-start-3 col-end-5 aspect-[16/9] overflow-hidden"
         >
           <div
@@ -213,7 +311,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
               {item.featured.caption} →
             </span>
           </div>
-        </a>
+        </Link>
       </div>
     </div>
   );

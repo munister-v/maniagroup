@@ -2,17 +2,29 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
-import { BRANDS, CATEGORIES, JOURNAL, PRODUCTS } from "@/lib/catalog";
+import { BRANDS, CATEGORIES, fromWcProduct, type Product } from "@/lib/catalog";
+import { fetchProducts } from "@/lib/wc";
+import { getSiteContent, type SiteContent } from "@/lib/siteContent";
 
-export default function Home() {
+export default async function Home() {
+  let products: Product[] = [];
+  try {
+    const wcProducts = await fetchProducts({ perPage: 8, orderby: "date" });
+    products = wcProducts.map(fromWcProduct);
+  } catch {
+    products = [];
+  }
+
+  const content = await getSiteContent();
+
   return (
     <>
-      <Hero />
+      <Hero hero={content.hero} />
       <BrandMarquee />
       <CategoryTrio />
-      <NewArrivals />
+      <NewArrivals products={products} />
       <Editorial />
-      <Journal />
+      <Journal entries={content.journal} />
       <ServiceRow />
       <Newsletter />
     </>
@@ -20,7 +32,7 @@ export default function Home() {
 }
 
 /* ─────────────────────────────────────────────────────────── Hero */
-function Hero() {
+function Hero({ hero }: { hero: SiteContent["hero"] }) {
   return (
     <section className="relative isolate -mt-16 overflow-hidden bg-ink text-paper md:-mt-20">
       <div
@@ -37,21 +49,20 @@ function Hero() {
           className="hero-rise text-[11px] uppercase tracking-luxe text-paper/55"
           style={{ animationDelay: "0ms" }}
         >
-          Колекція SS&rsquo;26 · Україна
+          {hero.eyebrow}
         </p>
         <h1
           className="hero-rise mt-6 max-w-[15ch] font-display text-[clamp(2.8rem,8vw,7rem)] font-semibold leading-[0.93] tracking-tight"
           style={{ animationDelay: "90ms" }}
         >
-          Гардероб, що{" "}
-          <span className="italic text-[#d8c7a8]">говорить тихо</span>
+          {hero.titleLine1}{" "}
+          <span className="italic text-[#d8c7a8]">{hero.titleAccent}</span>
         </h1>
         <p
           className="hero-rise mt-7 max-w-md text-base leading-relaxed text-paper/70"
           style={{ animationDelay: "180ms" }}
         >
-          EA7, Moschino, Antony Morato, MC2 Saint Barth та інші — оригінальні
-          речі, дбайливо відібрані у європейських домів моди.
+          {hero.subtitle}
         </p>
         <div
           className="hero-rise mt-9 flex flex-wrap items-center gap-5"
@@ -143,7 +154,7 @@ function CategoryTrio() {
 }
 
 /* ───────────────────────────────────────────────── New arrivals */
-function NewArrivals() {
+function NewArrivals({ products }: { products: Product[] }) {
   return (
     <section id="women" className="wrap pb-16 md:pb-24">
       <Reveal>
@@ -157,7 +168,7 @@ function NewArrivals() {
             </h2>
           </div>
           <Link
-            href="#"
+            href="/catalog"
             className="link-underline hidden text-[12px] uppercase tracking-luxe text-ink sm:block"
           >
             Дивитися все →
@@ -166,7 +177,7 @@ function NewArrivals() {
       </Reveal>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-        {PRODUCTS.map((product, i) => (
+        {products.map((product, i) => (
           <Reveal key={product.id} delay={(i % 4) * 70}>
             <ProductCard product={product} />
           </Reveal>
@@ -222,7 +233,7 @@ function Editorial() {
 }
 
 /* ─────────────────────────────────────────────────── Journal */
-function Journal() {
+function Journal({ entries }: { entries: SiteContent["journal"] }) {
   return (
     <section className="wrap py-16 md:py-24">
       <Reveal>
@@ -245,7 +256,7 @@ function Journal() {
       </Reveal>
 
       <div className="grid gap-5 md:grid-cols-3">
-        {JOURNAL.map((article, i) => (
+        {entries.map((article, i) => (
           <Reveal key={article.id} delay={i * 80}>
             <Link href="#" className="group block">
               <div className="relative aspect-[4/5] overflow-hidden">

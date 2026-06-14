@@ -42,3 +42,4 @@ next-env.d.ts
 
 # local tooling
 .claude/
+data/site-content.json

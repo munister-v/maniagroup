@@ -16,6 +16,8 @@ export type Product = {
   category: string;
   tone: string; // placeholder tile colour until real photography lands
   tag?: Tag;
+  image?: string; // real product photo, when available
+  categorySlug?: string;
 };
 
 export const BRANDS = [
@@ -46,19 +48,19 @@ export const CATEGORIES: {
   {
     label: "Жінкам",
     caption: "Сукні · верхній одяг · взуття · аксесуари",
-    href: "#women",
+    href: "/catalog?category=zhenskoe",
     tone: "#d8cfc1",
   },
   {
     label: "Чоловікам",
     caption: "Сорочки · поло · костюми · взуття",
-    href: "#men",
+    href: "/catalog?category=muzhskoe",
     tone: "#c4bcb0",
   },
   {
     label: "Аромати для дому",
     caption: "Дифузори · інтер'єрні парфуми · сашле",
-    href: "#home",
+    href: "/catalog?category=aromatizatory",
     tone: "#cbb8a4",
   },
 ];
@@ -200,6 +202,12 @@ export const TAG_LABELS: Record<Tag, string> = {
   last: "Останній розмір",
 };
 
+/** Discount percentage for a product with an oldPrice, e.g. 20 for "-20%". */
+export function discountPercent(p: Product): number | null {
+  if (!p.oldPrice || p.oldPrice <= p.price) return null;
+  return Math.round((1 - p.price / p.oldPrice) * 100);
+}
+
 export function formatPrice(uah: number): string {
   return uah.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " ₴";
 }
@@ -264,47 +272,154 @@ export const JOURNAL: {
 export type MegaMenu = {
   label: string;
   href: string;
-  columns: { title: string; links: string[] }[];
-  featured: { title: string; caption: string; tone: string };
+  columns: { title: string; links: { label: string; slug: string }[] }[];
+  featured: { title: string; caption: string; tone: string; slug: string };
 };
 
+// hrefs/slugs map to real WooCommerce category slugs on maniagroup.com.ua
 export const MEGA_MENU: MegaMenu[] = [
   {
     label: "Бренди",
-    href: "#brands",
+    href: "/catalog?category=ea7",
     columns: [
-      { title: "Популярні", links: ["EA7 Emporio Armani", "Moschino", "Antony Morato", "Harmont & Blaine"] },
-      { title: "Ще бренди", links: ["MC2 Saint Barth", "Fred Mello", "J.B4", "Kocca"] },
+      {
+        title: "Популярні",
+        links: [
+          { label: "EA7 Emporio Armani", slug: "ea7" },
+          { label: "Moschino", slug: "love-moschino" },
+          { label: "Antony Morato", slug: "antony-morato-uomo" },
+          { label: "Harmont & Blaine", slug: "harmontblaine" },
+        ],
+      },
+      {
+        title: "Ще бренди",
+        links: [
+          { label: "MC2 Saint Barth", slug: "mc2-saint-barth" },
+          { label: "Fred Mello", slug: "fred-mello" },
+          { label: "J.B4", slug: "j-b4-just-before" },
+          { label: "Kocca", slug: "kocca" },
+        ],
+      },
     ],
-    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab" },
+    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab", slug: "j-b4-just-before" },
   },
   {
     label: "Жінкам",
-    href: "#women",
+    href: "/catalog?category=zhenskoe",
     columns: [
-      { title: "Одяг", links: ["Сукні", "Верхній одяг", "Спортивний одяг", "Пляжний одяг"] },
-      { title: "Взуття та аксесуари", links: ["Взуття", "Сумки", "Аксесуари", "Білизна"] },
+      {
+        title: "Одяг",
+        links: [
+          { label: "Сукні", slug: "zhenskie-platya" },
+          { label: "Верхній одяг", slug: "zhenskaya-verhniaya-odezhda" },
+          { label: "Спортивний одяг", slug: "muzhskaya-sportivnaya-odezhda-zhenskoe" },
+          { label: "Пляжний одяг", slug: "plyazh-jenskoe" },
+        ],
+      },
+      {
+        title: "Взуття та аксесуари",
+        links: [
+          { label: "Взуття", slug: "zhenskaya-obuv" },
+          { label: "Сумки", slug: "zhenskie-sumki-i-ryukzaki" },
+          { label: "Аксесуари", slug: "aksessuaryi" },
+          { label: "Білизна", slug: "spidnia-bilyzna-zhenskaya-odezhda" },
+        ],
+      },
     ],
-    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1" },
+    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe" },
   },
   {
     label: "Чоловікам",
-    href: "#men",
+    href: "/catalog?category=muzhskoe",
     columns: [
-      { title: "Одяг", links: ["Сорочки", "Поло", "Костюми", "Верхній одяг"] },
-      { title: "Взуття та аксесуари", links: ["Взуття", "Ремені", "Аксесуари", "Пляжний одяг"] },
+      {
+        title: "Одяг",
+        links: [
+          { label: "Сорочки", slug: "muzhskie-rubashki" },
+          { label: "Поло", slug: "muzhskie-polo" },
+          { label: "Верхній одяг", slug: "muzhskaya-verhnyaya-odezhda" },
+          { label: "Спортивний одяг", slug: "muzhskaya-sportivnaya-odezhda" },
+        ],
+      },
+      {
+        title: "Взуття та аксесуари",
+        links: [
+          { label: "Взуття", slug: "muzhskaya-obuv" },
+          { label: "Аксесуари", slug: "muzhskie-aksessuaryi" },
+          { label: "Пляжний одяг", slug: "plyazh-mujskoe" },
+          { label: "Сумки", slug: "muzhskie-sumki" },
+        ],
+      },
     ],
-    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0" },
+    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe" },
   },
   {
     label: "Аромати для дому",
-    href: "#home",
+    href: "/catalog?category=aromatizatory",
     columns: [
-      { title: "Категорії", links: ["Дифузори", "Інтер’єрні парфуми", "Змінні блоки", "Сашле"] },
+      {
+        title: "Категорії",
+        links: [
+          { label: "Дифузори", slug: "aromadiffuzory" },
+          { label: "Інтер’єрні парфуми", slug: "interyernyye_dukhi" },
+          { label: "Змінні блоки", slug: "smennyye_bloki" },
+          { label: "Сашле", slug: "aromaticheskiye_sashe" },
+        ],
+      },
     ],
-    featured: { title: "Аромати для дому", caption: "Новинки", tone: "#cbb8a4" },
+    featured: { title: "Аромати для дому", caption: "Новинки", tone: "#cbb8a4", slug: "aromatizatory" },
   },
 ];
+
+// ── Live catalog (WooCommerce) ──────────────────────────────────────────
+
+import type { WcProduct } from "./wc";
+import { priceToUah } from "./wc";
+
+const TONE_PALETTE = ["#c9bdab", "#cbbfbd", "#e3ddd1", "#c4c2ac", "#dccfb6", "#cbb8a4", "#c4bcb0", "#d6d3cc"];
+
+function toneFor(seed: string): string {
+  const s = String(seed ?? "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) % TONE_PALETTE.length;
+  return TONE_PALETTE[hash];
+}
+
+const MEN_HINTS = ["чолов", "муж"];
+const HOME_HINTS = ["арома", "дому", "interyer"];
+
+function genderFromCategories(categories: { name: string; slug: string }[]): Gender {
+  const text = categories.map((c) => `${c.name} ${c.slug}`.toLowerCase()).join(" ");
+  if (HOME_HINTS.some((h) => text.includes(h))) return "home";
+  if (MEN_HINTS.some((h) => text.includes(h))) return "men";
+  return "women";
+}
+
+/** Map a WooCommerce Store API product to our display Product shape. */
+export function fromWcProduct(p: WcProduct): Product {
+  const price = priceToUah(p.prices);
+  const regular = priceToUah({ price: p.prices.regular_price, currency_minor_unit: p.prices.currency_minor_unit });
+  const onSale = p.prices.sale_price && p.prices.sale_price !== p.prices.regular_price;
+
+  const brand = p.categories.find((c) => /^[A-Z0-9 .&']+$/.test(c.name))?.name ?? "Mania Group";
+  const categoryEntry = p.categories.find((c) => c.name !== brand);
+  const category = categoryEntry?.name ?? "Одяг";
+
+  return {
+    id: String(p.id),
+    slug: p.slug,
+    name: p.name.replace(/\s*\([^)]*\)\s*$/, ""),
+    brand,
+    price: onSale ? price : regular,
+    oldPrice: onSale ? regular : undefined,
+    gender: genderFromCategories(p.categories),
+    category,
+    tone: toneFor(p.slug),
+    tag: onSale ? "sale" : undefined,
+    image: p.images[0]?.src,
+    categorySlug: categoryEntry?.slug,
+  };
+}
 
 export type CartLine = { product: Product; size: string; qty: number };
 
