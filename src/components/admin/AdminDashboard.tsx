@@ -6,7 +6,7 @@ import Image from "next/image";
 import type { SiteContent } from "@/lib/siteContent";
 import { formatPrice, type Product } from "@/lib/catalog";
 
-type Section = "content" | "products" | "settings";
+type Section = "content" | "products" | "backup" | "settings";
 
 const NAV: { id: Section; label: string; d: string }[] = [
   { id: "content", label: "Контент", d: "M4 6h16M4 12h10M4 18h16" },
@@ -14,6 +14,11 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "products",
     label: "Товари",
     d: "M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5ZM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4Z",
+  },
+  {
+    id: "backup",
+    label: "Резервні копії",
+    d: "M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0L8 12m4 4V4",
   },
   {
     id: "settings",
@@ -139,7 +144,7 @@ export function AdminDashboard({ initial }: { initial: SiteContent }) {
             <h1 className="text-sm font-medium text-[#17130f]">
               {NAV.find((n) => n.id === section)?.label}
             </h1>
-            {unsaved && (
+            {unsaved && section === "content" && (
               <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                 Незбережено
@@ -160,13 +165,7 @@ export function AdminDashboard({ initial }: { initial: SiteContent }) {
                   : "cursor-default bg-[#17130f]/10 text-[#17130f]/30"
               }`}
             >
-              {status === "saving"
-                ? "Зберігаємо…"
-                : status === "saved"
-                ? "✓ Збережено"
-                : status === "error"
-                ? "Помилка"
-                : "Зберегти"}
+              {status === "saving" ? "Зберігаємо…" : status === "saved" ? "✓ Збережено" : status === "error" ? "Помилка" : "Зберегти"}
             </button>
           )}
         </header>
@@ -180,8 +179,10 @@ export function AdminDashboard({ initial }: { initial: SiteContent }) {
               loading={prodLoading}
               search={prodSearch}
               onSearch={(q) => { setProdSearch(q); loadProducts(q); }}
+              reload={() => loadProducts(prodSearch)}
             />
           )}
+          {section === "backup" && <BackupSection />}
           {section === "settings" && <SettingsSection />}
         </main>
       </div>
@@ -211,11 +212,7 @@ function ContentSection({
   return (
     <div className="max-w-3xl space-y-6">
       <Card title="Рядок оголошень" subtitle="Відображається над меню на всіх сторінках">
-        <Field
-          label="Текст"
-          value={content.announcement}
-          onChange={(v) => update((c) => ({ ...c, announcement: v }))}
-        />
+        <Field label="Текст" value={content.announcement} onChange={(v) => update((c) => ({ ...c, announcement: v }))} />
       </Card>
 
       <Card title="Hero-блок" subtitle="Перший екран головної сторінки">
@@ -244,20 +241,69 @@ function ContentSection({
 
 /* ─── Products ─── */
 
+type EditState = { id: string; regularPrice: string; salePrice: string };
+type SaveStatus = "idle" | "saving" | "saved" | "error" | "no-creds";
+
 function ProductsSection({
   products,
   loading,
   search,
   onSearch,
+  reload,
 }: {
   products: Product[];
   loading: boolean;
   search: string;
   onSearch: (q: string) => void;
+  reload: () => void;
 }) {
+  const [editing, setEditing] = useState<EditState | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+
+  function startEdit(p: Product) {
+    setSaveStatus("idle");
+    setEditing({
+      id: p.id,
+      regularPrice: String(p.oldPrice ?? p.price),
+      salePrice: p.oldPrice ? String(p.price) : "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditing(null);
+    setSaveStatus("idle");
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    setSaveStatus("saving");
+    const res = await fetch(`/api/admin/products/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        regular_price: editing.regularPrice,
+        sale_price: editing.salePrice || "",
+      }),
+    });
+    if (res.status === 503) {
+      setSaveStatus("no-creds");
+      return;
+    }
+    if (res.ok) {
+      setSaveStatus("saved");
+      setEditing(null);
+      reload();
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } else {
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    }
+  }
+
   return (
     <div>
-      <div className="mb-5 flex items-center gap-3">
+      {/* Search + status bar */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         <input
           value={search}
           onChange={(e) => onSearch(e.target.value)}
@@ -268,6 +314,13 @@ function ProductsSection({
           ? <span className="text-[11px] uppercase tracking-wider text-[#9c8f7d]">Завантаження…</span>
           : products.length > 0 && <span className="text-[11px] text-[#9c8f7d]">{products.length} товарів</span>
         }
+        {saveStatus === "saved" && <span className="text-[11px] text-emerald-600">✓ Ціну оновлено в WooCommerce</span>}
+        {saveStatus === "error" && <span className="text-[11px] text-red-600">Помилка збереження</span>}
+        {saveStatus === "no-creds" && (
+          <span className="text-[11px] text-amber-600">
+            Додайте WOOCOMMERCE_KEY і WOOCOMMERCE_SECRET у .env.local
+          </span>
+        )}
       </div>
 
       {loading && products.length === 0 ? (
@@ -284,57 +337,237 @@ function ProductsSection({
                 <th className="w-10 px-4 py-3 text-left">#</th>
                 <th className="px-4 py-3 text-left">Товар</th>
                 <th className="px-4 py-3 text-left">Бренд</th>
-                <th className="px-4 py-3 text-left">Категорія</th>
-                <th className="px-4 py-3 text-right">Ціна</th>
-                <th className="px-4 py-3 text-center">Статус</th>
+                <th className="px-4 py-3 text-right">Звичайна ціна</th>
+                <th className="px-4 py-3 text-right">Акційна ціна</th>
+                <th className="px-4 py-3 text-center w-28">Статус</th>
+                <th className="px-4 py-3 w-24"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f7f4f0]">
-              {products.map((p, i) => (
-                <tr key={p.id} className="group transition-colors hover:bg-[#faf8f5]">
-                  <td className="px-4 py-3 text-[11px] tabular-nums text-[#b9ae9b]">{i + 1}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {p.image ? (
-                        <div className="h-10 w-8 shrink-0 overflow-hidden rounded-[2px] bg-[#f0ece6]">
-                          <Image src={p.image} alt={p.name} width={32} height={40} className="h-full w-full object-cover" />
+              {products.map((p, i) => {
+                const isEditing = editing?.id === p.id;
+                const regularPrice = p.oldPrice ?? p.price;
+                const salePrice = p.oldPrice ? p.price : null;
+
+                return (
+                  <tr key={p.id} className={`transition-colors ${isEditing ? "bg-[#faf8f5]" : "hover:bg-[#fdfcfb]"}`}>
+                    <td className="px-4 py-3 text-[11px] tabular-nums text-[#b9ae9b]">{i + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        {p.image ? (
+                          <div className="h-10 w-8 shrink-0 overflow-hidden rounded-[2px] bg-[#f0ece6]">
+                            <Image src={p.image} alt={p.name} width={32} height={40} className="h-full w-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="h-10 w-8 shrink-0 rounded-[2px]" style={{ backgroundColor: p.tone }} />
+                        )}
+                        <a href={`/product/${p.slug}`} target="_blank" className="font-medium text-[#17130f] hover:underline">
+                          {p.name}
+                        </a>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{p.brand}</td>
+
+                    {/* Ціна звичайна */}
+                    <td className="px-4 py-3 text-right">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editing.regularPrice}
+                          onChange={(e) => setEditing((v) => v && { ...v, regularPrice: e.target.value })}
+                          className="h-8 w-28 rounded-[3px] border border-[#17130f]/30 bg-white px-2 text-right text-sm tabular-nums text-[#17130f] focus:border-[#17130f] focus:outline-none"
+                          placeholder="0"
+                          min="0"
+                        />
+                      ) : (
+                        <span className="tabular-nums text-[#17130f]">{formatPrice(regularPrice)}</span>
+                      )}
+                    </td>
+
+                    {/* Акційна ціна */}
+                    <td className="px-4 py-3 text-right">
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          value={editing.salePrice}
+                          onChange={(e) => setEditing((v) => v && { ...v, salePrice: e.target.value })}
+                          className="h-8 w-28 rounded-[3px] border border-[#17130f]/30 bg-white px-2 text-right text-sm tabular-nums text-[#17130f] focus:border-[#17130f] focus:outline-none"
+                          placeholder="0 = без акції"
+                          min="0"
+                        />
+                      ) : salePrice != null ? (
+                        <span className="font-medium tabular-nums text-[#b3392c]">{formatPrice(salePrice)}</span>
+                      ) : (
+                        <span className="text-[#d0c8be]">—</span>
+                      )}
+                    </td>
+
+                    {/* Статус */}
+                    <td className="px-4 py-3 text-center">
+                      {isEditing && saveStatus === "saving" ? (
+                        <span className="text-[10px] text-[#9c8f7d] uppercase tracking-wider">Збереження…</span>
+                      ) : (
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
+                          p.tag === "last" ? "bg-amber-50 text-amber-700" :
+                          p.tag === "sale" ? "bg-red-50 text-red-600" :
+                          "bg-emerald-50 text-emerald-700"
+                        }`}>
+                          {p.tag === "last" ? "Останній" : p.tag === "sale" ? "Sale" : "В наявності"}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Дії */}
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={saveEdit}
+                            disabled={saveStatus === "saving"}
+                            className="flex h-7 w-7 items-center justify-center rounded-[3px] bg-[#17130f] text-white hover:opacity-80 disabled:opacity-40 transition-opacity"
+                            title="Зберегти"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="flex h-7 w-7 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#9c8f7d] hover:text-[#17130f] transition-colors"
+                            title="Скасувати"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                              <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       ) : (
-                        <div className="h-10 w-8 shrink-0 rounded-[2px]" style={{ backgroundColor: p.tone }} />
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => startEdit(p)}
+                            className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#b9ae9b] hover:bg-[#f0ece6] hover:text-[#17130f] transition-colors"
+                            title="Редагувати ціну"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z" />
+                            </svg>
+                          </button>
+                        </div>
                       )}
-                      <a href={`/product/${p.slug}`} target="_blank" className="font-medium text-[#17130f] group-hover:underline">
-                        {p.name}
-                      </a>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{p.brand}</td>
-                  <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{p.category}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    <span className={p.oldPrice ? "font-medium text-[#b3392c]" : "text-[#17130f]"}>
-                      {formatPrice(p.price)}
-                    </span>
-                    {p.oldPrice && (
-                      <span className="ml-2 text-[11px] text-[#9c8f7d] line-through">{formatPrice(p.oldPrice)}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${
-                      p.tag === "last" ? "bg-amber-50 text-amber-700" : p.tag === "sale" ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"
-                    }`}>
-                      {p.tag === "last" ? "Останній" : p.tag === "sale" ? "Sale" : "В наявності"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
               {products.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#9c8f7d]">Товарів не знайдено</td>
+                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-[#9c8f7d]">Товарів не знайдено</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       )}
+
+      <p className="mt-3 text-[11px] text-[#b9ae9b]">
+        Редагування цін потребує WooCommerce REST API ключів (Read/Write) у .env.local
+      </p>
+    </div>
+  );
+}
+
+/* ─── Backup ─── */
+
+function BackupSection() {
+  const [importStatus, setImportStatus] = useState<"idle" | "importing" | "success" | "error">("idle");
+  const [importMsg, setImportMsg] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportStatus("importing");
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const res = await fetch("/api/admin/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        setImportStatus("success");
+        setImportMsg("Контент відновлено. Перезавантажте сторінку.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setImportStatus("error");
+        setImportMsg((err as { error?: string }).error ?? "Невірний формат файлу");
+      }
+    } catch {
+      setImportStatus("error");
+      setImportMsg("Помилка читання файлу");
+    }
+    if (fileRef.current) fileRef.current.value = "";
+    setTimeout(() => { setImportStatus("idle"); setImportMsg(""); }, 5000);
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      {/* Export */}
+      <Card title="Резервна копія контенту" subtitle="Завантажує поточний стан: оголошення, hero, блоки переваг">
+        <div className="flex items-center gap-4">
+          <a
+            href="/api/admin/export"
+            download
+            className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
+              <path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0L8 12m4 4V4" />
+            </svg>
+            Завантажити JSON
+          </a>
+          <span className="text-[12px] text-[#9c8f7d]">maniagroup-backup-YYYY-MM-DD.json</span>
+        </div>
+      </Card>
+
+      {/* Import */}
+      <Card title="Відновлення з файлу" subtitle="Завантажте раніше збережену копію — перезапише поточний контент">
+        <div className="flex flex-wrap items-center gap-4">
+          <label className={`inline-flex h-9 cursor-pointer items-center rounded-[3px] border border-[#e8e4de] bg-white px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:bg-[#f7f5f2] ${importStatus === "importing" ? "pointer-events-none opacity-50" : ""}`}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
+              <path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-8-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            {importStatus === "importing" ? "Відновлення…" : "Обрати файл .json"}
+            <input ref={fileRef} type="file" accept=".json" className="sr-only" onChange={handleImport} />
+          </label>
+
+          {importStatus === "success" && (
+            <span className="text-[11px] text-emerald-600">✓ {importMsg}</span>
+          )}
+          {importStatus === "error" && (
+            <span className="text-[11px] text-red-600">✗ {importMsg}</span>
+          )}
+        </div>
+      </Card>
+
+      {/* Info */}
+      <Card title="Що зберігається" subtitle="">
+        <ul className="space-y-2 text-[12px] text-[#9c8f7d]">
+          {[
+            "Рядок оголошень",
+            "Заголовок та підзаголовок Hero-блоку",
+            "Блоки переваг (4 плашки)",
+          ].map((item) => (
+            <li key={item} className="flex items-center gap-2">
+              <span className="h-1 w-1 rounded-full bg-[#b9ae9b]" />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-[11px] text-[#b9ae9b]">
+          Ціни і товари зберігаються у WooCommerce і не входять до резервної копії.
+        </p>
+      </Card>
     </div>
   );
 }
@@ -344,19 +577,34 @@ function ProductsSection({
 function SettingsSection() {
   return (
     <div className="max-w-2xl space-y-6">
-      <Card title="Загальна інформація">
+      <Card title="Сервер та API">
         <div className="space-y-3">
           <InfoRow label="Staging-домен" value="maniagroup.munister.com.ua" />
-          <InfoRow label="Живий магазин" value="maniagroup.com.ua (WordPress)" />
           <InfoRow label="WC Store API" value="maniagroup.com.ua/wp-json/wc/store" />
-          <InfoRow label="VPS" value="173.242.49.73 · pm2 maniagroup · port 3020" />
+          <InfoRow label="VPS" value="173.242.49.73 · pm2 maniagroup · :3020" />
         </div>
       </Card>
 
-      <Card title="Пароль адміна" subtitle="Змінити — оновіть змінну ADMIN_PASSWORD в .env.local та перезапустіть">
+      <Card title="WooCommerce REST API" subtitle="Потрібно для редагування цін товарів у розділі «Товари»">
+        <div className="space-y-3">
+          <p className="text-[12px] text-[#9c8f7d]">
+            Згенеруйте ключі у WP Admin → WooCommerce → Налаштування → Додатково → REST API → «Додати ключ» (доступ: читання/запис).
+          </p>
+          <div className="rounded-[3px] border border-[#e8e4de] bg-[#f7f5f2] px-4 py-3 font-mono text-[12px] leading-relaxed text-[#9c8f7d]">
+            WOOCOMMERCE_KEY=ck_xxxxxxxxxx<br />
+            WOOCOMMERCE_SECRET=cs_xxxxxxxxxx
+          </div>
+          <p className="text-[11px] text-[#b9ae9b]">
+            Додайте у файл .env.local на сервері та запустіть ./deploy.sh
+          </p>
+        </div>
+      </Card>
+
+      <Card title="Пароль адміна">
         <div className="rounded-[3px] border border-[#e8e4de] bg-[#f7f5f2] px-4 py-3 font-mono text-[12px] text-[#9c8f7d]">
           ADMIN_PASSWORD=ваш_новий_пароль
         </div>
+        <p className="mt-2 text-[11px] text-[#b9ae9b]">Після зміни: ./deploy.sh</p>
       </Card>
 
       <Card title="Деплой">
@@ -364,7 +612,7 @@ function SettingsSection() {
           ./deploy.sh
         </div>
         <p className="mt-2 text-[12px] text-[#b9ae9b]">
-          Запускається локально — git pull + npm build + pm2 restart на VPS.
+          git pull → npm build → pm2 restart — запускається з локального комп'ютера.
         </p>
       </Card>
     </div>
@@ -388,22 +636,16 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-4">
-      <span className="w-36 shrink-0 text-[11px] uppercase tracking-wider text-[#9c8f7d]">{label}</span>
+      <span className="w-32 shrink-0 text-[11px] uppercase tracking-wider text-[#9c8f7d]">{label}</span>
       <span className="font-mono text-[12px] text-[#17130f]">{value}</span>
     </div>
   );
 }
 
 function Field({
-  label,
-  value,
-  onChange,
-  textarea,
+  label, value, onChange, textarea,
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  textarea?: boolean;
+  label: string; value: string; onChange: (v: string) => void; textarea?: boolean;
 }) {
   return (
     <label className="block">
