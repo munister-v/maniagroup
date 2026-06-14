@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
-import { getCatalogProducts, getCatalogCategories, dbSizeFacets } from "@/lib/productSource";
+import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands } from "@/lib/productSource";
 import { fetchCategories, fetchProducts } from "@/lib/wc";
 import { fromWcProduct } from "@/lib/catalog";
 import { isDbReady } from "@/lib/db";
@@ -19,11 +19,18 @@ const SORTS: Record<string, { orderby: "date" | "price"; order: "asc" | "desc"; 
 
 const BRAND_NAME = /^[A-Z0-9][A-Z0-9 .&'-]+$/;
 
+const GENDERS: { slug: string; label: string }[] = [
+  { slug: "women", label: "Жінкам" },
+  { slug: "men", label: "Чоловікам" },
+];
+
 export default async function CatalogPage({
   searchParams,
 }: {
   searchParams: Promise<{
     category?: string;
+    brand?: string;
+    gender?: string;
     q?: string;
     sort?: string;
     size?: string;
@@ -33,7 +40,7 @@ export default async function CatalogPage({
   }>;
 }) {
   const sp = await searchParams;
-  const { category: categorySlug, q, size, min, max } = sp;
+  const { category: categorySlug, brand: brandSlugParam, gender, q, size, min, max } = sp;
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
   const { orderby, order } = SORTS[sortKey];
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
@@ -41,18 +48,24 @@ export default async function CatalogPage({
 
   const dbReady = isDbReady();
 
-  // ── Categories (for brand chips + lookup) ─────────────────────────────
+  // ── Categories + brands facets ────────────────────────────────────────
   const categories = await getCatalogCategories();
 
-  const brands = categories
-    .filter((c) => c.count > 0 && BRAND_NAME.test(c.name) && c.name.length <= 28)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 16)
-    .map((c) => ({ name: c.name, slug: c.slug }));
+  // Brands: real brand column in DB mode; uppercase-category heuristic on WC fallback.
+  const brands = dbReady
+    ? dbBrands().slice(0, 24)
+    : categories
+        .filter((c) => c.count > 0 && BRAND_NAME.test(c.name) && c.name.length <= 28)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 16)
+        .map((c) => ({ name: c.name, slug: c.slug }));
+  const brandName = brandSlugParam ? brands.find((b) => b.slug === brandSlugParam)?.name : undefined;
 
   // ── Products ─────────────────────────────────────────────────────────
   const { products, total, source } = await getCatalogProducts({
     categorySlug,
+    brandName,
+    gender: gender === "women" || gender === "men" ? gender : undefined,
     q,
     size,
     minPrice: min ? Number(min) : undefined,
@@ -87,13 +100,23 @@ export default async function CatalogPage({
   // ── Pagination ────────────────────────────────────────────────────────
   const totalPages = dbReady ? Math.max(1, Math.ceil(total / perPage)) : null;
 
-  const facets: Facets = { brands, sizes };
-  const title = categories.find((c) => c.slug === categorySlug)?.name
-    ?? (q ? `Пошук: ${q}` : "Усі товари");
+  const categoryFacets = categories
+    .filter((c) => c.count > 0)
+    .slice(0, 20)
+    .map((c) => ({ name: c.name, slug: c.slug }));
+
+  const facets: Facets = { brands, categories: categoryFacets, sizes };
+  const title =
+    brandName ??
+    categories.find((c) => c.slug === categorySlug)?.name ??
+    GENDERS.find((g) => g.slug === gender)?.label ??
+    (q ? `Пошук: ${q}` : "Усі товари");
 
   function buildHref(overrides: Record<string, string | undefined>) {
     const p: Record<string, string> = {};
     if (categorySlug) p.category = categorySlug;
+    if (brandSlugParam) p.brand = brandSlugParam;
+    if (gender) p.gender = gender;
     if (q) p.q = q;
     if (size) p.size = size;
     if (min) p.min = min;
@@ -126,20 +149,38 @@ export default async function CatalogPage({
         <div className="lg:pt-1">
           <CatalogFilters
             facets={facets}
-            active={{ category: categorySlug, q, sort: sortKey, size, min, max }}
+            active={{ category: categorySlug, brand: brandSlugParam, gender, q, sort: sortKey, size, min, max }}
           />
         </div>
 
         <div>
+          {/* Gender toggle */}
+          <div className="mb-4 flex gap-2">
+            {GENDERS.map((g) => {
+              const active = gender === g.slug;
+              return (
+                <Link
+                  key={g.slug}
+                  href={buildHref({ gender: active ? undefined : g.slug, page: undefined })}
+                  className={`border px-5 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
+                    active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
+                  }`}
+                >
+                  {g.label}
+                </Link>
+              );
+            })}
+          </div>
+
           {/* Brand chips — horizontal scroll */}
           {brands.length > 0 && (
             <div className="mb-6 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {brands.map((b) => {
-                const active = categorySlug === b.slug;
+                const active = brandSlugParam === b.slug;
                 return (
                   <Link
                     key={b.slug}
-                    href={buildHref(active ? { category: undefined } : { category: b.slug, page: undefined })}
+                    href={buildHref(active ? { brand: undefined } : { brand: b.slug, page: undefined })}
                     className={`shrink-0 border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
                       active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
                     }`}

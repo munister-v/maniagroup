@@ -22,6 +22,7 @@ function toneFor(id: number): string {
 function rowToProduct(row: any): Product {
   const images: { src: string }[] = JSON.parse(row.images ?? "[]");
   const onSale = row.sale_price !== null && row.sale_price < row.regular_price;
+  const inStock = row.is_in_stock === 1;
 
   return {
     id: String(row.id),
@@ -30,12 +31,16 @@ function rowToProduct(row: any): Product {
     brand: row.brand,
     price: onSale ? (row.sale_price as number) : (row.regular_price as number),
     oldPrice: onSale ? (row.regular_price as number) : undefined,
-    gender: "women",                    // approximation: catalog page doesn't use it
+    gender: row.gender === "men" ? "men" : "women",
     category: row.category,
     categorySlug: row.category_slug || undefined,
     tone: toneFor(row.id as number),
-    tag: onSale ? "sale" : undefined,
-    image: images[0]?.src,
+    tag: !inStock ? undefined : onSale ? "sale" : undefined,
+    image: images[0]?.src || undefined,
+    inStock,
+    color: row.color || undefined,
+    composition: row.composition || undefined,
+    season: row.season || undefined,
   };
 }
 
@@ -43,6 +48,8 @@ function rowToProduct(row: any): Product {
 
 export type CatalogQuery = {
   categorySlug?: string;
+  brandName?: string;
+  gender?: string;
   q?: string;
   size?: string;
   minPrice?: number;
@@ -78,6 +85,14 @@ function dbQuery(params: CatalogQuery): CatalogResult {
     conditions.push("p.category_slug = @cat");
     bind.cat = params.categorySlug;
   }
+  if (params.brandName) {
+    conditions.push("p.brand = @brand");
+    bind.brand = params.brandName;
+  }
+  if (params.gender) {
+    conditions.push("p.gender = @gender");
+    bind.gender = params.gender;
+  }
   if (params.size) {
     conditions.push(`p.attributes LIKE @size`);
     bind.size = `%"slug":"${params.size}"%`;
@@ -97,11 +112,12 @@ function dbQuery(params: CatalogQuery): CatalogResult {
 
   const where = conditions.join(" AND ");
 
+  // In-stock products always rank above archived ("Немає в наявності").
   let orderClause: string;
   if (params.orderby === "price") {
-    orderClause = `ORDER BY p.price ${(params.order ?? "asc").toUpperCase()}`;
+    orderClause = `ORDER BY p.is_in_stock DESC, p.price ${(params.order ?? "asc").toUpperCase()}`;
   } else {
-    orderClause = "ORDER BY p.id DESC"; // newest first by default
+    orderClause = "ORDER BY p.is_in_stock DESC, p.id DESC"; // newest first by default
   }
 
   const limit = params.perPage ?? 24;
@@ -164,6 +180,62 @@ function dbCategories(): WcCategory[] {
   return db
     .prepare("SELECT id, name, slug, parent, count FROM categories ORDER BY count DESC, name ASC")
     .all() as WcCategory[];
+}
+
+// ── Single product from DB (fallback for archived / no-Store-API items) ───
+
+export type DbProductDetail = {
+  product: Product;
+  sizes: string[];
+  composition?: string;
+  color?: string;
+  season?: string;
+  country?: string;
+  inStock: boolean;
+};
+
+export function dbProductById(id: string): DbProductDetail | null {
+  const db = getDb();
+  if (!db || !/^\d+$/.test(id)) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = db.prepare("SELECT * FROM products WHERE id = ?").get(Number(id)) as any;
+  if (!row) return null;
+  let sizes: string[] = [];
+  try {
+    const attrs = JSON.parse(row.attributes || "[]");
+    sizes = (attrs.find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? []).map(
+      (t: { name: string }) => t.name,
+    );
+  } catch { /* ignore */ }
+  return {
+    product: rowToProduct(row),
+    sizes,
+    composition: row.composition || undefined,
+    color: row.color || undefined,
+    season: row.season || undefined,
+    country: row.country || undefined,
+    inStock: row.is_in_stock === 1,
+  };
+}
+
+// ── Brand facets from DB (only brands with in-stock products) ─────────────
+
+export function dbBrands(): { name: string; slug: string }[] {
+  const db = getDb();
+  if (!db) return [];
+  const rows = db
+    .prepare(
+      `SELECT brand, COUNT(*) n FROM products
+       WHERE is_in_stock = 1 AND brand != '' AND brand != 'Mania Group'
+       GROUP BY brand ORDER BY n DESC`,
+    )
+    .all() as { brand: string; n: number }[];
+  return rows.map((r) => ({ name: r.brand, slug: brandSlug(r.brand) }));
+}
+
+/** Stable slug for a brand name, reversible via the facet map on the page. */
+export function brandSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
 // ── Public API ───────────────────────────────────────────────────────────

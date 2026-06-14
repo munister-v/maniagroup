@@ -8,7 +8,7 @@ import { formatPrice, type Product } from "@/lib/catalog";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "products" | "orders" | "backup" | "settings";
+type Section = "overview" | "content" | "catalog" | "products" | "orders" | "backup" | "settings";
 
 type WcOrder = {
   id: number;
@@ -52,6 +52,11 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "content",
     label: "Контент",
     d: "M4 6h16M4 12h10M4 18h16",
+  },
+  {
+    id: "catalog",
+    label: "Каталог (XLS)",
+    d: "M4 4h16v4H4V4zm0 6h16v10H4V10zm4 3h8",
   },
   {
     id: "products",
@@ -342,6 +347,7 @@ export function AdminDashboard({
           {section === "content" && (
             <ContentSection content={content} update={update} />
           )}
+          {section === "catalog" && <CatalogImportSection />}
           {section === "products" && (
             <ProductsSection
               products={products}
@@ -1143,6 +1149,131 @@ function BackupSection() {
         <p className="mt-4 text-[11px] text-[#b9ae9b]">
           Ціни і товари зберігаються у WooCommerce і не входять до резервної копії.
         </p>
+      </Card>
+    </div>
+  );
+}
+
+/* ─── Catalog import (XLS) ─── */
+
+type CatalogImportResult = {
+  inStock: number; archived: number; total: number; withImages: number; categories: number;
+};
+
+function CatalogImportSection() {
+  const [mg, setMg] = useState<File | null>(null);
+  const [wp, setWp] = useState<File | null>(null);
+  const [status, setStatus] = useState<"idle" | "importing" | "done" | "error">("idle");
+  const [result, setResult] = useState<CatalogImportResult | null>(null);
+  const [error, setError] = useState("");
+  const [meta, setMeta] = useState<{ last_sync?: string; source?: string; total_products?: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/sync").then((r) => r.json()).then(setMeta).catch(() => {});
+  }, []);
+
+  async function run() {
+    if (!mg || !wp) return;
+    setStatus("importing");
+    setError("");
+    setResult(null);
+    const fd = new FormData();
+    fd.append("mg", mg);
+    fd.append("wp", wp);
+    try {
+      const res = await fetch("/api/admin/import-catalog", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setStatus("done");
+        setResult(data);
+      } else {
+        setStatus("error");
+        setError(data.error ?? "Помилка імпорту");
+      }
+    } catch {
+      setStatus("error");
+      setError("Не вдалося завантажити файли");
+    }
+  }
+
+  const pickClass =
+    "inline-flex h-9 cursor-pointer items-center rounded-[3px] border border-[#e8e4de] bg-white px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:bg-[#f7f5f2]";
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <Card title="Імпорт каталогу з XLS" subtitle="Дві вигрузки магазину: MG (повний перелік) + WP (поточні залишки)">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={pickClass}>
+              {mg ? "MG обрано ✓" : "Файл MG.xls"}
+              <input type="file" accept=".xls,.xlsx" className="sr-only"
+                onChange={(e) => setMg(e.target.files?.[0] ?? null)} />
+            </label>
+            <span className="max-w-[14rem] truncate text-[12px] text-[#9c8f7d]">{mg?.name}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={pickClass}>
+              {wp ? "WP обрано ✓" : "Файл WP.xls"}
+              <input type="file" accept=".xls,.xlsx" className="sr-only"
+                onChange={(e) => setWp(e.target.files?.[0] ?? null)} />
+            </label>
+            <span className="max-w-[14rem] truncate text-[12px] text-[#9c8f7d]">{wp?.name}</span>
+          </div>
+
+          <button
+            onClick={run}
+            disabled={!mg || !wp || status === "importing"}
+            className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
+          >
+            {status === "importing" ? "Імпортуємо… (~1 хв)" : "Імпортувати каталог"}
+          </button>
+
+          {status === "importing" && (
+            <p className="text-[12px] text-[#9c8f7d]">
+              Парсимо файли і підтягуємо фото зі Store API. Не закривайте сторінку.
+            </p>
+          )}
+          {status === "error" && <p className="text-[12px] text-red-600">✗ {error}</p>}
+          {status === "done" && result && (
+            <div className="rounded-[3px] border border-emerald-200 bg-emerald-50 p-4 text-[12px] text-emerald-800">
+              ✓ Готово: <b>{result.inStock}</b> у наявності, <b>{result.archived}</b> в архіві,
+              усього <b>{result.total}</b> · з фото {result.withImages} · категорій {result.categories}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <Card title="Поточний стан каталогу">
+        <dl className="space-y-2 text-[12px]">
+          <div className="flex gap-3">
+            <dt className="w-32 text-[#9c8f7d]">Джерело</dt>
+            <dd className="text-[#17130f]">{meta?.source === "xls" ? "XLS-імпорт" : meta?.source || "—"}</dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-32 text-[#9c8f7d]">Товарів у БД</dt>
+            <dd className="text-[#17130f]">{meta?.total_products ?? "—"}</dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-32 text-[#9c8f7d]">Останній імпорт</dt>
+            <dd className="text-[#17130f]">{meta?.last_sync ? new Date(meta.last_sync).toLocaleString("uk-UA") : "—"}</dd>
+          </div>
+        </dl>
+      </Card>
+
+      <Card title="Як це працює">
+        <ul className="space-y-2 text-[12px] text-[#9c8f7d]">
+          {[
+            "MG.xls — бренд, стать, склад, колір, ціни, наявні розміри",
+            "WP.xls — категорії, поточні залишки і ціни",
+            "Фото та посилання підтягуються зі Store API за КОД (sku)",
+            "Розпродане показується в каталозі з позначкою «Немає в наявності»",
+          ].map((t) => (
+            <li key={t} className="flex items-center gap-2">
+              <span className="h-1 w-1 rounded-full bg-[#b9ae9b]" />
+              {t}
+            </li>
+          ))}
+        </ul>
       </Card>
     </div>
   );

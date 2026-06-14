@@ -7,6 +7,8 @@ import { fetchCategories, fetchProductById, fetchProducts } from "@/lib/wc";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductGallery } from "@/components/ProductGallery";
+import { ProductMedia } from "@/components/ProductMedia";
+import { dbProductById, type DbProductDetail } from "@/lib/productSource";
 
 export async function generateMetadata({
   params,
@@ -15,7 +17,12 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const wcProduct = await fetchProductById(slug).catch(() => null);
-  if (!wcProduct) return {};
+  if (!wcProduct) {
+    const detail = dbProductById(slug);
+    if (!detail) return {};
+    const t = `${detail.product.name} — ${detail.product.brand} | Mania Group`;
+    return { title: t, description: `${detail.product.name} від ${detail.product.brand}. Mania Group.` };
+  }
 
   const product = fromWcProduct(wcProduct);
   const title = `${product.name} — ${product.brand} | Mania Group`;
@@ -29,7 +36,7 @@ export async function generateMetadata({
     openGraph: {
       title,
       description,
-      images: wcProduct.images[0]?.src ? [wcProduct.images[0].src] : [],
+      images: Array.isArray(wcProduct.images) && wcProduct.images[0]?.src ? [wcProduct.images[0].src] : [],
     },
   };
 }
@@ -42,11 +49,18 @@ export default async function ProductPage({
   const { slug } = await params;
   // `slug` is the numeric product id (the Store API has no usable slug here).
   const wcProduct = await fetchProductById(slug);
-  if (!wcProduct) notFound();
+  if (!wcProduct) {
+    // Archived / no-Store-API products live only in catalog.db.
+    const detail = dbProductById(slug);
+    if (!detail) notFound();
+    return <DbProductView detail={detail} />;
+  }
 
-  const product = fromWcProduct(wcProduct);
-  const images = wcProduct.images.length ? wcProduct.images : null;
-  const sizes = wcProduct.attributes.find((a) => a.taxonomy === "pa_size")?.terms ?? [];
+  // The Store API occasionally returns `images`/`attributes` as non-arrays.
+  const wcImages = Array.isArray(wcProduct.images) ? wcProduct.images : [];
+  const wcAttributes = Array.isArray(wcProduct.attributes) ? wcProduct.attributes : [];
+  const product = fromWcProduct({ ...wcProduct, images: wcImages, attributes: wcAttributes });
+  const sizes = wcAttributes.find((a) => a.taxonomy === "pa_size")?.terms ?? [];
 
   let related: ReturnType<typeof fromWcProduct>[] = [];
   if (product.categorySlug) {
@@ -72,7 +86,7 @@ export default async function ProductPage({
 
       <div className="mt-6 grid gap-10 md:grid-cols-2 md:gap-14">
         <Reveal>
-          <ProductGallery images={wcProduct.images} name={product.name} />
+          <ProductGallery images={wcImages} name={product.name} />
         </Reveal>
 
         <Reveal delay={100}>
@@ -125,6 +139,93 @@ export default async function ProductPage({
           </div>
         </Reveal>
       )}
+    </section>
+  );
+}
+
+/**
+ * Detail view for products that exist only in catalog.db — archived items
+ * ("Немає в наявності") and in-stock items the Store API didn't return.
+ * No live variations, so no add-to-cart.
+ */
+function DbProductView({ detail }: { detail: DbProductDetail }) {
+  const { product, sizes, composition, color, season, country, inStock } = detail;
+  const specs: { label: string; value: string }[] = [
+    { label: "Бренд", value: product.brand },
+    { label: "Колір", value: color ?? "" },
+    { label: "Сезон", value: season ?? "" },
+    { label: "Склад", value: composition ?? "" },
+    { label: "Країна", value: country ?? "" },
+  ].filter((s) => s.value);
+
+  return (
+    <section className="wrap py-12 md:py-16">
+      <p className="text-[11px] uppercase tracking-luxe text-muted">
+        <Link href="/" className="link-underline">Головна</Link>{" "}
+        / <Link href="/catalog" className="link-underline">Каталог</Link> / {product.category}
+      </p>
+
+      <div className="mt-6 grid gap-10 md:grid-cols-2 md:gap-14">
+        <Reveal>
+          <div className="group">
+            <ProductMedia tone={product.tone} brand={product.brand} category={product.category} image={product.image} />
+          </div>
+        </Reveal>
+
+        <Reveal delay={100}>
+          <div className="md:sticky md:top-36">
+            <p className="text-[11px] uppercase tracking-luxe text-muted">{product.brand}</p>
+            <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">{product.name}</h1>
+
+            <div className="mt-4 flex items-baseline gap-3">
+              <span className="text-xl tabular-nums text-ink">{formatPrice(product.price)}</span>
+              {product.oldPrice && (
+                <span className="text-base tabular-nums text-muted line-through">
+                  {formatPrice(product.oldPrice)}
+                </span>
+              )}
+            </div>
+
+            {!inStock && (
+              <div className="mt-6 border border-line bg-cloud/50 px-4 py-3 text-sm text-muted">
+                Цей товар наразі <span className="text-ink">немає в наявності</span>. Зателефонуйте
+                нам — можливо, його ще можна замовити або підкажемо схожий.
+              </div>
+            )}
+
+            {sizes.length > 0 && (
+              <div className="mt-6">
+                <p className="text-[11px] uppercase tracking-luxe text-muted">Розміри</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {sizes.map((s) => (
+                    <span key={s} className="flex h-9 min-w-9 items-center justify-center border border-line px-2.5 text-xs uppercase text-ink">
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {specs.length > 0 && (
+              <dl className="mt-8 space-y-2 border-t border-line pt-6 text-sm">
+                {specs.map((s) => (
+                  <div key={s.label} className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-muted">{s.label}</dt>
+                    <dd className="text-ink">{s.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            <Link
+              href="/catalog"
+              className="mt-8 inline-flex h-12 items-center border border-ink px-8 text-[12px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper"
+            >
+              До каталогу
+            </Link>
+          </div>
+        </Reveal>
+      </div>
     </section>
   );
 }

@@ -18,6 +18,10 @@ export type Product = {
   tag?: Tag;
   image?: string; // real product photo, when available
   categorySlug?: string;
+  inStock?: boolean; // false → archived ("Немає в наявності")
+  color?: string;
+  composition?: string;
+  season?: string;
 };
 
 export const BRANDS = [
@@ -405,8 +409,11 @@ export function fromWcProduct(p: WcProduct): Product {
   const regular = priceToUah({ price: p.prices.regular_price, currency_minor_unit: p.prices.currency_minor_unit });
   const onSale = p.prices.sale_price && p.prices.sale_price !== p.prices.regular_price;
 
-  const brand = p.categories.find((c) => /^[A-Z0-9 .&']+$/.test(c.name))?.name ?? "Mania Group";
-  const categoryEntry = p.categories.find((c) => c.name !== brand);
+  // Store API can return non-array images/categories on some products.
+  const cats = Array.isArray(p.categories) ? p.categories : [];
+  const imgs = Array.isArray(p.images) ? p.images : [];
+  const brand = cats.find((c) => /^[A-Z0-9 .&']+$/.test(c.name))?.name ?? "Mania Group";
+  const categoryEntry = cats.find((c) => c.name !== brand);
   const category = categoryEntry?.name ?? "Одяг";
 
   return {
@@ -418,11 +425,11 @@ export function fromWcProduct(p: WcProduct): Product {
     brand,
     price: onSale ? price : regular,
     oldPrice: onSale ? regular : undefined,
-    gender: genderFromCategories(p.categories),
+    gender: genderFromCategories(cats),
     category,
     tone: toneFor(p.slug),
     tag: onSale ? "sale" : undefined,
-    image: p.images[0]?.src,
+    image: imgs[0]?.src,
     categorySlug: categoryEntry?.slug,
   };
 }

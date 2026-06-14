@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 
 export type Facets = {
   brands: { name: string; slug: string }[];
+  categories?: { name: string; slug: string }[];
   sizes: { slug: string; name: string }[];
 };
 
 export type ActiveFilters = {
   category?: string;
+  brand?: string;
+  gender?: string;
   q?: string;
   sort?: string;
   size?: string;
@@ -33,6 +36,8 @@ export function CatalogFilters({
     const next = { ...active, ...overrides };
     const params = new URLSearchParams();
     if (next.category) params.set("category", next.category);
+    if (next.brand) params.set("brand", next.brand);
+    if (next.gender) params.set("gender", next.gender);
     if (next.q) params.set("q", next.q);
     if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
     if (next.size) params.set("size", next.size);
@@ -47,21 +52,41 @@ export function CatalogFilters({
     setOpen(false);
   }
 
-  const hasActive = active.size || active.min || active.max;
-  const activeCount = [active.category, active.size, active.min || active.max].filter(Boolean).length;
+  const hasActive = active.size || active.min || active.max || active.brand || active.category || active.gender;
+  const activeCount = [active.category, active.brand, active.gender, active.size, active.min || active.max].filter(Boolean).length;
 
   const renderBody = () => (
     <div className="space-y-8">
+      {facets.categories && facets.categories.length > 0 && (
+        <div>
+          <h3 className="text-[11px] uppercase tracking-luxe text-muted">Категорії</h3>
+          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
+            {facets.categories.map((c) => (
+              <li key={c.slug}>
+                <button
+                  onClick={() => go({ category: active.category === c.slug ? undefined : c.slug })}
+                  className={`text-sm transition-colors hover:text-ink ${
+                    active.category === c.slug ? "text-ink underline underline-offset-4" : "text-muted"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {facets.brands.length > 0 && (
         <div>
           <h3 className="text-[11px] uppercase tracking-luxe text-muted">Бренди</h3>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
             {facets.brands.map((b) => (
               <li key={b.slug}>
                 <button
-                  onClick={() => go({ category: b.slug })}
+                  onClick={() => go({ brand: active.brand === b.slug ? undefined : b.slug })}
                   className={`text-sm transition-colors hover:text-ink ${
-                    active.category === b.slug ? "text-ink underline underline-offset-4" : "text-muted"
+                    active.brand === b.slug ? "text-ink underline underline-offset-4" : "text-muted"
                   }`}
                 >
                   {b.name}
@@ -135,7 +160,7 @@ export function CatalogFilters({
           onClick={() => {
             setMin("");
             setMax("");
-            go({ size: undefined, min: undefined, max: undefined });
+            go({ size: undefined, min: undefined, max: undefined, brand: undefined, category: undefined, gender: undefined });
           }}
           className="link-underline text-[11px] uppercase tracking-luxe text-ink"
         >
