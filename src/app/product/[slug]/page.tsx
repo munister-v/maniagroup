@@ -1,12 +1,11 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Reveal } from "@/components/Reveal";
-import { Grain } from "@/components/Grain";
 import { fromWcProduct, formatPrice } from "@/lib/catalog";
 import { fetchCategories, fetchProductById, fetchProducts } from "@/lib/wc";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { ProductCard } from "@/components/ProductCard";
+import { ProductGallery } from "@/components/ProductGallery";
 
 export default async function ProductPage({
   params,
@@ -46,29 +45,11 @@ export default async function ProductPage({
 
       <div className="mt-6 grid gap-10 md:grid-cols-2 md:gap-14">
         <Reveal>
-          <div className="grid gap-3">
-            {images ? (
-              images.slice(0, 4).map((img) => (
-                <div key={img.id} className="relative aspect-[3/4] overflow-hidden bg-cloud">
-                  <Image
-                    src={img.src}
-                    alt={product.name}
-                    fill
-                    sizes="(min-width: 768px) 50vw, 100vw"
-                    className="object-cover"
-                  />
-                </div>
-              ))
-            ) : (
-              <div className="relative aspect-[3/4] overflow-hidden bg-cloud">
-                <Grain variant="strong" />
-              </div>
-            )}
-          </div>
+          <ProductGallery images={wcProduct.images} name={product.name} />
         </Reveal>
 
         <Reveal delay={100}>
-          <div className="md:sticky md:top-28">
+          <div className="md:sticky md:top-36">
             <p className="text-[11px] uppercase tracking-luxe text-muted">{product.brand}</p>
             <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">{product.name}</h1>
 

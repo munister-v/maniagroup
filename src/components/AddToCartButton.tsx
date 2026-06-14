@@ -17,6 +17,7 @@ export function AddToCartButton({
   variations: Variation[];
 }) {
   const [selected, setSelected] = useState<string | null>(sizes[0]?.slug ?? null);
+  const [qty, setQty] = useState(1);
   const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +33,7 @@ export function AddToCartButton({
     const res = await fetch("/api/cart", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: variationId, quantity: 1 }),
+      body: JSON.stringify({ id: variationId, quantity: qty }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -66,11 +67,32 @@ export function AddToCartButton({
         </div>
       )}
 
-      <button
-        onClick={addToCart}
-        disabled={!inStock || !variationId || status === "loading"}
-        className="mt-8 h-12 w-full bg-ink text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-40"
-      >
+      <div className="mt-8 flex gap-3">
+        <div className="flex items-center border border-line">
+          <button
+            type="button"
+            onClick={() => setQty((q) => Math.max(1, q - 1))}
+            className="flex h-12 w-10 items-center justify-center text-ink transition-colors hover:bg-cloud"
+            aria-label="Зменшити кількість"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14" strokeLinecap="round" /></svg>
+          </button>
+          <span className="w-10 text-center text-sm tabular-nums text-ink">{qty}</span>
+          <button
+            type="button"
+            onClick={() => setQty((q) => q + 1)}
+            className="flex h-12 w-10 items-center justify-center text-ink transition-colors hover:bg-cloud"
+            aria-label="Збільшити кількість"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+
+        <button
+          onClick={addToCart}
+          disabled={!inStock || !variationId || status === "loading"}
+          className="h-12 flex-1 bg-ink text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-40"
+        >
         {!inStock
           ? "Немає в наявності"
           : status === "loading"
@@ -78,7 +100,8 @@ export function AddToCartButton({
             : status === "done"
               ? "Додано ✓"
               : "У кошик"}
-      </button>
+        </button>
+      </div>
 
       {error && <p className="mt-3 text-sm text-[#b3392c]">{error}</p>}
     </>

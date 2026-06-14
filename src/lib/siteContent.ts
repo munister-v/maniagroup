@@ -10,6 +10,13 @@ export type SiteContent = {
     subtitle: string;
   };
   services: { title: string; text: string }[];
+  contacts: {
+    phone: string;
+    email: string;
+    instagram: string;
+    facebook: string;
+    address: string;
+  };
 };
 
 const FILE = path.join(process.cwd(), "data", "site-content.json");
@@ -29,6 +36,13 @@ export const DEFAULT_CONTENT: SiteContent = {
     { title: "Обмін і повернення", text: "14 днів, щоб ухвалити рішення" },
     { title: "Підтримка щодня", text: "+38 (096) 343-60-35 · 9:00–20:00" },
   ],
+  contacts: {
+    phone: "+38 (096) 343-60-35",
+    email: "",
+    instagram: "",
+    facebook: "",
+    address: "Україна",
+  },
 };
 
 export async function getSiteContent(): Promise<SiteContent> {
@@ -40,6 +54,7 @@ export async function getSiteContent(): Promise<SiteContent> {
       ...saved,
       hero: { ...DEFAULT_CONTENT.hero, ...(saved.hero ?? {}) },
       services: (saved.services as SiteContent["services"] | undefined) ?? DEFAULT_CONTENT.services,
+      contacts: { ...DEFAULT_CONTENT.contacts, ...((saved.contacts as SiteContent["contacts"] | undefined) ?? {}) },
     };
   } catch {
     return DEFAULT_CONTENT;
