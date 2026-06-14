@@ -29,6 +29,14 @@ type Stats = {
   on_hold?: number;
 };
 
+type SyncState = {
+  status: "idle" | "syncing" | "done" | "error";
+  last_sync: string;
+  total_products: number;
+  error: string;
+  has_wc_creds: boolean;
+};
+
 type EditState = { id: string; regularPrice: string; salePrice: string };
 type PriceStatus = "idle" | "saving" | "saved" | "error" | "no-creds";
 
@@ -113,11 +121,13 @@ export function AdminDashboard({
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentOrders, setRecentOrders] = useState<WcOrder[]>([]);
+  const [sync, setSync] = useState<SyncState | null>(null);
+  const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const router = useRouter();
   const prodLoaded = useRef(false);
 
-  // Load stats on mount
+  // Load stats + sync state on mount
   useEffect(() => {
     fetch("/api/admin/stats")
       .then((r) => r.json())
@@ -129,7 +139,32 @@ export function AdminDashboard({
             .then((o: WcOrder[]) => Array.isArray(o) && setRecentOrders(o));
         }
       });
+    fetch("/api/admin/sync")
+      .then((r) => r.json())
+      .then((s: SyncState) => setSync(s));
   }, []);
+
+  async function triggerSync() {
+    const res = await fetch("/api/admin/sync", { method: "POST" });
+    const data = await res.json() as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      setSync((s) => s ? { ...s, status: "error", error: data.error ?? "Помилка" } : s);
+      return;
+    }
+    setSync((s) => s ? { ...s, status: "syncing" } : s);
+    // Poll every 2 s until done
+    if (syncPollRef.current) clearInterval(syncPollRef.current);
+    syncPollRef.current = setInterval(async () => {
+      const r = await fetch("/api/admin/sync").then((x) => x.json()) as SyncState;
+      setSync(r);
+      if (r.status !== "syncing") {
+        clearInterval(syncPollRef.current!);
+        syncPollRef.current = null;
+        // Refresh stats count
+        fetch("/api/admin/stats").then((x) => x.json()).then((d: Stats) => setStats(d));
+      }
+    }, 2000);
+  }
 
   // Load products when navigating to that section
   useEffect(() => {
@@ -299,7 +334,9 @@ export function AdminDashboard({
             <OverviewSection
               stats={stats}
               recentOrders={recentOrders}
+              sync={sync}
               onNavigate={setSection}
+              onSync={triggerSync}
             />
           )}
           {section === "content" && (
@@ -364,11 +401,15 @@ export function AdminDashboard({
 function OverviewSection({
   stats,
   recentOrders,
+  sync,
   onNavigate,
+  onSync,
 }: {
   stats: Stats | null;
   recentOrders: WcOrder[];
+  sync: SyncState | null;
   onNavigate: (s: Section) => void;
+  onSync: () => void;
 }) {
   const loading = stats === null;
 
@@ -444,6 +485,9 @@ function OverviewSection({
         </a>
       </div>
 
+      {/* Sync card */}
+      <SyncCard sync={sync} onSync={onSync} />
+
       {/* Recent orders */}
       {recentOrders.length > 0 && (
         <div>
@@ -496,6 +540,71 @@ function OverviewSection({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SyncCard({ sync, onSync }: { sync: SyncState | null; onSync: () => void }) {
+  const isSyncing = sync?.status === "syncing";
+  const lastSync = sync?.last_sync
+    ? new Date(sync.last_sync).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[3px] border border-[#e8e4de] bg-white px-6 py-4">
+      <div className="flex items-center gap-4">
+        {/* Source indicator */}
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                sync?.total_products ? "bg-emerald-500" : "bg-[#d0c8be]"
+              }`}
+            />
+            <span className="text-[11px] uppercase tracking-[0.12em] text-[#17130f]">
+              {sync?.total_products
+                ? `SQLite · ${sync.total_products.toLocaleString("uk-UA")} товарів`
+                : "SQLite порожній — джерело: WooCommerce API"}
+            </span>
+          </div>
+          <p className="ml-4 text-[11px] text-[#9c8f7d]">
+            {isSyncing
+              ? "Синхронізація…"
+              : lastSync
+              ? `Останнє оновлення: ${lastSync}`
+              : "Ніколи не синхронізовано"}
+            {sync?.status === "error" && (
+              <span className="ml-2 text-red-600">{sync.error}</span>
+            )}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {sync?.status === "done" && (
+          <span className="text-[11px] text-emerald-600">✓ Готово</span>
+        )}
+        <button
+          onClick={onSync}
+          disabled={isSyncing || !sync?.has_wc_creds}
+          title={!sync?.has_wc_creds ? "Потрібні WC API ключі" : undefined}
+          className="flex h-8 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:border-[#17130f] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M23 4v6h-6M1 20v-6h6" />
+            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+          </svg>
+          {isSyncing ? "Синхронізація…" : "Синхронізувати"}
+        </button>
+      </div>
     </div>
   );
 }

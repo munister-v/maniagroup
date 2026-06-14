@@ -43,3 +43,6 @@ next-env.d.ts
 # local tooling
 .claude/
 data/site-content.json
+data/*.db
+data/*.db-shm
+data/*.db-wal
