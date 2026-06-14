@@ -64,13 +64,6 @@ export function Header() {
 
   return (
     <>
-      {/* announcement bar — scrolls away */}
-      <div className="bg-ink text-paper">
-        <p className="wrap py-2 text-center text-[11px] uppercase tracking-luxe">
-          Безкоштовна доставка Новою Поштою від 3 000 ₴ · Оригінал гарантовано
-        </p>
-      </div>
-
       <header
         onMouseLeave={() => setActive(null)}
         className={`sticky top-0 z-50 transition-colors duration-300 ${

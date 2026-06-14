@@ -1,27 +1,21 @@
 import { promises as fs } from "fs";
 import path from "path";
 
-export type JournalEntry = {
-  id: string;
-  kicker: string;
-  title: string;
-  read: string;
-  tone: string;
-};
-
 export type SiteContent = {
+  announcement: string;
   hero: {
     eyebrow: string;
     titleLine1: string;
     titleAccent: string;
     subtitle: string;
   };
-  journal: JournalEntry[];
+  services: { title: string; text: string }[];
 };
 
 const FILE = path.join(process.cwd(), "data", "site-content.json");
 
 export const DEFAULT_CONTENT: SiteContent = {
+  announcement: "Безкоштовна доставка Новою Поштою від 3 000 ₴ · Оригінал гарантовано",
   hero: {
     eyebrow: "Колекція SS’26 · Україна",
     titleLine1: "Гардероб, що",
@@ -29,17 +23,24 @@ export const DEFAULT_CONTENT: SiteContent = {
     subtitle:
       "EA7, Moschino, Antony Morato, MC2 Saint Barth та інші — оригінальні речі, дбайливо відібрані у європейських домів моди.",
   },
-  journal: [
-    { id: "j1", kicker: "Стиль", title: "Капсульний гардероб на сезон: сім речей, що працюють разом", read: "5 хв", tone: "#c4bcb0" },
-    { id: "j2", kicker: "Бренди", title: "MC2 Saint Barth: історія рив’єрного стилю з острова", read: "4 хв", tone: "#b9ae9b" },
-    { id: "j3", kicker: "Догляд", title: "Як доглядати за преміальним трикотажем удома", read: "3 хв", tone: "#cbb8a4" },
+  services: [
+    { title: "Тільки оригінал", text: "Прямі поставки від брендів та офіційних дистриб’юторів" },
+    { title: "Доставка по Україні", text: "Новою Поштою — безкоштовно від 3 000 ₴" },
+    { title: "Обмін і повернення", text: "14 днів, щоб ухвалити рішення" },
+    { title: "Підтримка щодня", text: "+38 (096) 343-60-35 · 9:00–20:00" },
   ],
 };
 
 export async function getSiteContent(): Promise<SiteContent> {
   try {
     const raw = await fs.readFile(FILE, "utf-8");
-    return { ...DEFAULT_CONTENT, ...JSON.parse(raw) };
+    const saved = JSON.parse(raw) as Partial<SiteContent> & Record<string, unknown>;
+    return {
+      ...DEFAULT_CONTENT,
+      ...saved,
+      hero: { ...DEFAULT_CONTENT.hero, ...(saved.hero ?? {}) },
+      services: (saved.services as SiteContent["services"] | undefined) ?? DEFAULT_CONTENT.services,
+    };
   } catch {
     return DEFAULT_CONTENT;
   }

@@ -5,7 +5,7 @@ import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
 import { BRANDS, CATEGORIES, fromWcProduct, type Product } from "@/lib/catalog";
 import { fetchProducts } from "@/lib/wc";
-import { getSiteContent, type SiteContent } from "@/lib/siteContent";
+import { getSiteContent } from "@/lib/siteContent";
 
 export default async function Home() {
   let products: Product[] = [];
@@ -25,15 +25,14 @@ export default async function Home() {
       <CategoryTrio />
       <NewArrivals products={products} />
       <Editorial />
-      <Journal entries={content.journal} />
-      <ServiceRow />
+      <ServiceRow services={content.services} />
       <Newsletter />
     </>
   );
 }
 
 /* ─────────────────────────────────────────────────────────── Hero */
-function Hero({ hero }: { hero: SiteContent["hero"] }) {
+function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string } }) {
   return (
     <section className="relative isolate -mt-16 overflow-hidden bg-ink text-paper md:-mt-[120px]">
       <Image
@@ -248,77 +247,13 @@ function Editorial() {
   );
 }
 
-/* ─────────────────────────────────────────────────── Journal */
-function Journal({ entries }: { entries: SiteContent["journal"] }) {
-  return (
-    <section className="wrap py-16 md:py-24">
-      <Reveal>
-        <div className="mb-8 flex items-end justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-luxe text-muted">
-              Stories
-            </p>
-            <h2 className="mt-2 font-display text-3xl text-ink md:text-4xl">
-              Журнал
-            </h2>
-          </div>
-          <Link
-            href="#"
-            className="link-underline hidden text-[12px] uppercase tracking-luxe text-ink sm:block"
-          >
-            Усі статті →
-          </Link>
-        </div>
-      </Reveal>
-
-      <div className="grid gap-5 md:grid-cols-3">
-        {entries.map((article, i) => (
-          <Reveal key={article.id} delay={i * 80}>
-            <Link href="#" className="group block">
-              <div className="relative aspect-[4/5] overflow-hidden">
-                <div
-                  className="absolute inset-0 transition-transform duration-[1300ms] ease-out group-hover:scale-105"
-                  style={{
-                    backgroundColor: article.tone,
-                    backgroundImage:
-                      "linear-gradient(180deg, rgba(255,255,255,0) 28%, rgba(23,19,15,0.52) 100%)",
-                  }}
-                />
-                <Grain />
-                <div className="absolute inset-0 flex flex-col justify-end p-6 text-paper">
-                  <span className="text-[10px] uppercase tracking-luxe text-paper/75">
-                    {article.kicker} · {article.read}
-                  </span>
-                  <h3 className="mt-2 max-w-[22ch] font-display text-xl leading-snug">
-                    {article.title}
-                  </h3>
-                  <span className="mt-3 text-[11px] uppercase tracking-luxe text-paper underline-offset-4 group-hover:underline">
-                    Читати →
-                  </span>
-                </div>
-              </div>
-            </Link>
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 /* ─────────────────────────────────────────────── Service row */
-const SERVICES: { title: string; text: string }[] = [
-  { title: "Тільки оригінал", text: "Прямі поставки від брендів та офіційних дистриб’юторів" },
-  { title: "Доставка по Україні", text: "Новою Поштою — безкоштовно від 3 000 ₴" },
-  { title: "Обмін і повернення", text: "14 днів, щоб ухвалити рішення" },
-  { title: "Підтримка щодня", text: "+38 (096) 343-60-35 · 9:00–20:00" },
-];
-
-function ServiceRow() {
+function ServiceRow({ services }: { services: { title: string; text: string }[] }) {
   return (
     <section id="delivery" className="wrap py-16 md:py-20">
       <Reveal>
         <div className="grid gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-          {SERVICES.map((s) => (
+          {services.map((s) => (
             <div key={s.title} className="bg-paper p-7">
               <h3 className="text-[12px] uppercase tracking-luxe text-ink">
                 {s.title}
