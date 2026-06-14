@@ -53,7 +53,7 @@ export default async function CatalogPage({
 
   // Brands: real brand column in DB mode; uppercase-category heuristic on WC fallback.
   const brands = dbReady
-    ? dbBrands().slice(0, 24)
+    ? dbBrands({ categorySlug, gender }).slice(0, 24)
     : categories
         .filter((c) => c.count > 0 && BRAND_NAME.test(c.name) && c.name.length <= 28)
         .sort((a, b) => b.count - a.count)

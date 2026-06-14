@@ -220,16 +220,26 @@ export function dbProductById(id: string): DbProductDetail | null {
 
 // ── Brand facets from DB (only brands with in-stock products) ─────────────
 
-export function dbBrands(): { name: string; slug: string }[] {
+export function dbBrands(filters?: { categorySlug?: string; gender?: string }): { name: string; slug: string }[] {
   const db = getDb();
   if (!db) return [];
+  const conditions = ["is_in_stock = 1", "brand != ''", "brand != 'Mania Group'"];
+  const params: Record<string, string> = {};
+  if (filters?.categorySlug) {
+    conditions.push("category_slug = @categorySlug");
+    params.categorySlug = filters.categorySlug;
+  }
+  if (filters?.gender === "women" || filters?.gender === "men") {
+    conditions.push("gender = @gender");
+    params.gender = filters.gender;
+  }
   const rows = db
     .prepare(
       `SELECT brand, COUNT(*) n FROM products
-       WHERE is_in_stock = 1 AND brand != '' AND brand != 'Mania Group'
+       WHERE ${conditions.join(" AND ")}
        GROUP BY brand ORDER BY n DESC`,
     )
-    .all() as { brand: string; n: number }[];
+    .all(params) as { brand: string; n: number }[];
   return rows.map((r) => ({ name: r.brand, slug: brandSlug(r.brand) }));
 }
 
