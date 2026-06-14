@@ -407,7 +407,9 @@ export function fromWcProduct(p: WcProduct): Product {
 
   return {
     id: String(p.id),
-    slug: p.slug,
+    // WooCommerce Store API on this install does NOT return `slug` and ignores
+    // ?slug= filtering, so we route by the always-present numeric id instead.
+    slug: p.slug ?? String(p.id),
     name: p.name.replace(/\s*\([^)]*\)\s*$/, ""),
     brand,
     price: onSale ? price : regular,

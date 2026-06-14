@@ -85,6 +85,20 @@ export async function fetchProductBySlug(slug: string): Promise<WcProduct | null
   return list[0] ?? null;
 }
 
+/**
+ * Fetch a single product by its numeric id. This is the reliable lookup on this
+ * install: the Store API omits `slug` and ignores `?slug=` filtering, so slug
+ * lookups silently returned the wrong (first) product.
+ */
+export async function fetchProductById(id: string | number): Promise<WcProduct | null> {
+  if (!/^\d+$/.test(String(id))) return null;
+  try {
+    return await wcFetch<WcProduct>(`/products/${id}`);
+  } catch {
+    return null;
+  }
+}
+
 /** Convert WC's minor-unit price string ("1302000") to UAH (1302). */
 export function priceToUah(price: { price: string; currency_minor_unit: number }): number {
   return Math.round(Number(price.price) / 10 ** price.currency_minor_unit);

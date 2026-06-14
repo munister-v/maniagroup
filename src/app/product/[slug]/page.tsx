@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
 import { fromWcProduct, formatPrice } from "@/lib/catalog";
-import { fetchCategories, fetchProductBySlug, fetchProducts } from "@/lib/wc";
+import { fetchCategories, fetchProductById, fetchProducts } from "@/lib/wc";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { ProductCard } from "@/components/ProductCard";
 
@@ -14,7 +14,8 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const wcProduct = await fetchProductBySlug(slug).catch(() => null);
+  // `slug` is the numeric product id (the Store API has no usable slug here).
+  const wcProduct = await fetchProductById(slug);
   if (!wcProduct) notFound();
 
   const product = fromWcProduct(wcProduct);
