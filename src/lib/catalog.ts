@@ -281,7 +281,7 @@ export type MegaMenu = {
   label: string;
   href: string;
   columns: { title: string; links: { label: string; slug: string }[] }[];
-  featured: { title: string; caption: string; tone: string; slug: string };
+  featured: { title: string; caption: string; tone: string; slug: string; image?: string };
 };
 
 // hrefs/slugs map to real WooCommerce category slugs on maniagroup.com.ua
@@ -309,7 +309,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab", slug: "j-b4-just-before" },
+    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab", slug: "j-b4-just-before", image: "/images/01_dropdown-season-ss26.webp" },
   },
   {
     label: "Жінкам",
@@ -334,7 +334,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe" },
+    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe", image: "/images/02_dropdown-zhinocha-kolektsiya.webp" },
   },
   {
     label: "Чоловікам",
@@ -359,7 +359,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe" },
+    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe", image: "/images/03_dropdown-cholovicha-kolektsiya.webp" },
   },
   {
     label: "Аромати для дому",
@@ -375,7 +375,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Аромати для дому", caption: "Новинки", tone: "#cbb8a4", slug: "aromatizatory" },
+    featured: { title: "Аромати для дому", caption: "Новинки", tone: "#cbb8a4", slug: "aromatizatory", image: "/images/04_dropdown-aromaty-dlya-domu.webp" },
   },
 ];
 

@@ -87,12 +87,22 @@ export async function Footer() {
         <div className="wrap flex flex-col items-center justify-between gap-3 py-6 text-[11px] uppercase tracking-luxe text-muted sm:flex-row">
           <p>© {new Date().getFullYear()} Mania Group · Усі права захищені</p>
           <div className="flex items-center gap-5">
-            {instagram && (
-              <a href={instagram} target="_blank" rel="noopener noreferrer" className="hover:text-ink">
-                Instagram
-              </a>
-            )}
-            {!instagram && <span>Instagram</span>}
+            <a
+              href={instagram || "https://instagram.com/maniagroup.ua"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-ink"
+            >
+              Instagram
+            </a>
+            <a
+              href="https://t.me/maniagroup_ua"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-ink"
+            >
+              Telegram
+            </a>
             {facebook && (
               <a href={facebook} target="_blank" rel="noopener noreferrer" className="hover:text-ink">
                 Facebook

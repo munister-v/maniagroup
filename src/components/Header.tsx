@@ -1,11 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MEGA_MENU, type MegaMenu } from "@/lib/catalog";
+import { formatPrice } from "@/lib/catalog";
 import { CartDrawer } from "./CartDrawer";
 import { Grain } from "./Grain";
+
+const SOCIAL = {
+  instagram: "https://instagram.com/maniagroup.ua",
+  telegram: "https://t.me/maniagroup_ua",
+};
+
+type SearchHit = {
+  id: string;
+  slug: string;
+  name: string;
+  brand: string;
+  price: number;
+  oldPrice?: number;
+  image?: string;
+  tone: string;
+  inStock?: boolean;
+};
 
 function Icon({ d }: { d: string }) {
   return (
@@ -32,6 +51,13 @@ const ICONS = {
   close: "M6 6l12 12M18 6 6 18",
 };
 
+const SOCIAL_ICONS = {
+  instagram:
+    "M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm10 2H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3Zm-5 3.2a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6Zm0 2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6ZM17.3 5.9a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z",
+  telegram:
+    "M21.05 3.07 17.6 19.65c-.26 1.16-.94 1.44-1.9.9l-5.26-3.88-2.54 2.45c-.28.28-.52.52-1.06.52l.38-5.4L17.4 5.6c.46-.4-.1-.62-.62-.22L7.1 11.8l-5.26-1.64c-1.14-.36-1.16-1.14.24-1.69L19.66 1.6c.95-.36 1.78.22 1.4 1.47Z",
+};
+
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -39,7 +65,26 @@ export function Header() {
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchHit[]>([]);
+  const [searching, setSearching] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d: { products: SearchHit[] }) => setResults(d.products))
+        .finally(() => setSearching(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 48);
@@ -107,6 +152,24 @@ export function Header() {
             className="flex items-center justify-end gap-5"
             onMouseEnter={() => setActive(null)}
           >
+            <a
+              href={SOCIAL.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+              className="hidden hover:opacity-60 lg:block"
+            >
+              <Icon d={SOCIAL_ICONS.instagram} />
+            </a>
+            <a
+              href={SOCIAL.telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Telegram"
+              className="hidden hover:opacity-60 lg:block"
+            >
+              <Icon d={SOCIAL_ICONS.telegram} />
+            </a>
             <button aria-label="Акаунт" className="hidden hover:opacity-60 md:block">
               <Icon d={ICONS.user} />
             </button>
@@ -147,7 +210,7 @@ export function Header() {
               </button>
             ))}
             <a
-              href="#delivery"
+              href="/delivery"
               onMouseEnter={() => setActive(null)}
               className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe opacity-75 hover:opacity-100"
             >
@@ -179,14 +242,31 @@ export function Header() {
             ))}
             <li>
               <a
-                href="#delivery"
+                href="/delivery"
                 onClick={() => setMobileOpen(false)}
                 className="block py-3 text-[12px] uppercase tracking-luxe opacity-80"
               >
                 Доставка
               </a>
             </li>
+            <li>
+              <a
+                href="/contacts"
+                onClick={() => setMobileOpen(false)}
+                className="block py-3 text-[12px] uppercase tracking-luxe opacity-80"
+              >
+                Контакти
+              </a>
+            </li>
           </ul>
+          <div className="wrap flex items-center gap-5 border-t border-line py-4">
+            <a href={SOCIAL.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:opacity-60">
+              <Icon d={SOCIAL_ICONS.instagram} />
+            </a>
+            <a href={SOCIAL.telegram} target="_blank" rel="noopener noreferrer" aria-label="Telegram" className="hover:opacity-60">
+              <Icon d={SOCIAL_ICONS.telegram} />
+            </a>
+          </div>
         </nav>
       )}
 
@@ -202,7 +282,7 @@ export function Header() {
           }`}
         />
         <div
-          className={`absolute inset-x-0 top-0 bg-paper transition-transform duration-400 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${
+          className={`absolute inset-x-0 top-0 max-h-[85vh] overflow-y-auto bg-paper transition-transform duration-400 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${
             searchOpen ? "translate-y-0" : "-translate-y-full"
           }`}
         >
@@ -225,13 +305,86 @@ export function Header() {
             />
             <button
               type="button"
-              onClick={() => setSearchOpen(false)}
+              onClick={() => {
+                setSearchOpen(false);
+                setQuery("");
+              }}
               aria-label="Закрити"
               className="text-ink hover:opacity-60"
             >
               <Icon d={ICONS.close} />
             </button>
           </form>
+
+          {query.trim().length >= 2 && (
+            <div className="wrap pb-8">
+              {searching && results.length === 0 && (
+                <p className="py-4 text-sm text-muted">Пошук…</p>
+              )}
+              {!searching && results.length === 0 && (
+                <p className="py-4 text-sm text-muted">Нічого не знайдено за «{query.trim()}»</p>
+              )}
+              {results.length > 0 && (
+                <ul className="divide-y divide-line border-t border-line">
+                  {results.map((p) => (
+                    <li key={p.id}>
+                      <Link
+                        href={`/product/${p.slug}`}
+                        onClick={() => {
+                          setSearchOpen(false);
+                          setQuery("");
+                        }}
+                        className="flex items-center gap-4 py-3 hover:opacity-70"
+                      >
+                        <div
+                          className="relative h-14 w-11 flex-none overflow-hidden bg-line"
+                          style={{ backgroundColor: p.tone }}
+                        >
+                          {p.image && (
+                            <Image
+                              src={p.image}
+                              alt={p.name}
+                              fill
+                              sizes="44px"
+                              className="object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[11px] uppercase tracking-luxe text-muted">
+                            {p.brand}
+                          </p>
+                          <p className="truncate text-sm text-ink">{p.name}</p>
+                          {p.inStock === false && (
+                            <p className="text-[10px] uppercase tracking-luxe text-muted">
+                              Немає в наявності
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex-none text-right text-sm">
+                          {p.oldPrice && (
+                            <p className="text-xs text-muted line-through">{formatPrice(p.oldPrice)}</p>
+                          )}
+                          <p className="text-ink">{formatPrice(p.price)}</p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {results.length > 0 && (
+                <button
+                  onClick={() => {
+                    setSearchOpen(false);
+                    router.push(`/catalog?q=${encodeURIComponent(query.trim())}`);
+                  }}
+                  className="mt-2 w-full border-t border-line py-3 text-center text-[11px] uppercase tracking-luxe text-ink hover:opacity-60"
+                >
+                  Усі результати →
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -301,8 +454,21 @@ function MegaPanel({ item }: { item: MegaMenu }) {
         >
           <div
             className="absolute inset-0 transition-transform duration-[1200ms] ease-out group-hover:scale-105"
+            style={{ backgroundColor: item.featured.tone }}
+          >
+            {item.featured.image && (
+              <Image
+                src={item.featured.image}
+                alt={item.featured.title}
+                fill
+                sizes="50vw"
+                className="object-cover"
+              />
+            )}
+          </div>
+          <div
+            className="absolute inset-0"
             style={{
-              backgroundColor: item.featured.tone,
               backgroundImage:
                 "linear-gradient(180deg, rgba(255,255,255,0) 35%, rgba(23,19,15,0.45) 100%)",
             }}
