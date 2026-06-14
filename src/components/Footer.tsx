@@ -1,21 +1,40 @@
 import Link from "next/link";
+import { getSiteContent } from "@/lib/siteContent";
 
-const COLUMNS: { title: string; links: string[] }[] = [
+const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Магазин",
-    links: ["Жінкам", "Чоловікам", "Аромати для дому", "Бренди", "Новинки", "Sale"],
+    links: [
+      { label: "Жінкам", href: "/catalog?category=women" },
+      { label: "Чоловікам", href: "/catalog?category=men" },
+      { label: "Бренди", href: "/catalog" },
+      { label: "Новинки", href: "/catalog?sort=newest" },
+      { label: "Sale", href: "/catalog?sort=price_asc" },
+    ],
   },
   {
     title: "Допомога",
-    links: ["Доставка та оплата", "Обмін і повернення", "Таблиця розмірів", "Контакти"],
+    links: [
+      { label: "Доставка та оплата", href: "#" },
+      { label: "Обмін і повернення", href: "#" },
+      { label: "Таблиця розмірів", href: "#" },
+      { label: "Контакти", href: "#" },
+    ],
   },
   {
     title: "Компанія",
-    links: ["Про Mania Group", "Гарантія оригіналу", "Політика конфіденційності"],
+    links: [
+      { label: "Про Mania Group", href: "#" },
+      { label: "Гарантія оригіналу", href: "#" },
+      { label: "Політика конфіденційності", href: "#" },
+    ],
   },
 ];
 
-export function Footer() {
+export async function Footer() {
+  const content = await getSiteContent();
+  const { phone, email, instagram, facebook } = content.contacts;
+
   return (
     <footer className="mt-24 border-t border-line">
       <div className="wrap grid gap-12 py-16 md:grid-cols-[1.4fr_repeat(3,1fr)]">
@@ -27,12 +46,22 @@ export function Footer() {
             Інтернет-магазин брендового одягу, взуття та аксесуарів. Оригінал,
             дбайливо відібраний у європейських домів моди.
           </p>
-          <a
-            href="tel:+380963436035"
-            className="mt-5 inline-block text-sm tracking-wide text-ink hover:opacity-60"
-          >
-            +38 (096) 343-60-35
-          </a>
+          {phone && (
+            <a
+              href={`tel:${phone.replace(/\s/g, "")}`}
+              className="mt-5 inline-block text-sm tracking-wide text-ink hover:opacity-60"
+            >
+              {phone}
+            </a>
+          )}
+          {email && (
+            <a
+              href={`mailto:${email}`}
+              className="mt-2 block text-sm text-muted hover:text-ink"
+            >
+              {email}
+            </a>
+          )}
         </div>
 
         {COLUMNS.map((col) => (
@@ -42,12 +71,12 @@ export function Footer() {
             </h4>
             <ul className="mt-4 space-y-2.5">
               {col.links.map((l) => (
-                <li key={l}>
+                <li key={l.label}>
                   <Link
-                    href="#"
+                    href={l.href}
                     className="text-sm text-muted transition-colors hover:text-ink"
                   >
-                    {l}
+                    {l.label}
                   </Link>
                 </li>
               ))}
@@ -60,12 +89,18 @@ export function Footer() {
         <div className="wrap flex flex-col items-center justify-between gap-3 py-6 text-[11px] uppercase tracking-luxe text-muted sm:flex-row">
           <p>© {new Date().getFullYear()} Mania Group · Усі права захищені</p>
           <div className="flex items-center gap-5">
-            <a href="#" className="hover:text-ink">
-              Instagram
-            </a>
-            <a href="#" className="hover:text-ink">
-              Facebook
-            </a>
+            {instagram && (
+              <a href={instagram} target="_blank" rel="noopener noreferrer" className="hover:text-ink">
+                Instagram
+              </a>
+            )}
+            {!instagram && <span>Instagram</span>}
+            {facebook && (
+              <a href={facebook} target="_blank" rel="noopener noreferrer" className="hover:text-ink">
+                Facebook
+              </a>
+            )}
+            {!facebook && <span>Facebook</span>}
           </div>
         </div>
       </div>
