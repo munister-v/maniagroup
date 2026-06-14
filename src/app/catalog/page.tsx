@@ -3,6 +3,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
 import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands } from "@/lib/productSource";
+import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
 export const metadata = {
   title: "Каталог — Mania Group",
@@ -35,7 +36,10 @@ export default async function CatalogPage({
   }>;
 }) {
   const sp = await searchParams;
-  const { category: categorySlug, brand: brandSlugParam, gender, q, size, min, max } = sp;
+  // Map legacy WooCommerce nav/URL slugs to the store's own DB slugs so the
+  // mega-menu links and old bookmarked URLs don't land on an empty catalog.
+  const { category: categorySlug, gender } = resolveCatalogCategory(sp.category, sp.gender);
+  const { brand: brandSlugParam, q, size, min, max } = sp;
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
   const { orderby, order } = SORTS[sortKey];
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
