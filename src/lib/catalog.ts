@@ -280,7 +280,7 @@ export const JOURNAL: {
 export type MegaMenu = {
   label: string;
   href: string;
-  columns: { title: string; links: { label: string; slug: string }[] }[];
+  columns: { title: string; links: { label: string; slug: string; logo?: string }[] }[];
   featured: { title: string; caption: string; tone: string; slug: string; image?: string };
 };
 
@@ -293,17 +293,17 @@ export const MEGA_MENU: MegaMenu[] = [
       {
         title: "Популярні",
         links: [
-          { label: "EA7 Emporio Armani", slug: "ea7" },
-          { label: "Moschino", slug: "love-moschino" },
-          { label: "Antony Morato", slug: "antony-morato-uomo" },
-          { label: "Harmont & Blaine", slug: "harmontblaine" },
+          { label: "EA7 Emporio Armani", slug: "ea7", logo: "/images/brands/ea7-emporio-armani.png" },
+          { label: "Moschino", slug: "love-moschino", logo: "/images/brands/moschino.png" },
+          { label: "Antony Morato", slug: "antony-morato-uomo", logo: "/images/brands/antony-morato.png" },
+          { label: "Harmont & Blaine", slug: "harmontblaine", logo: "/images/brands/harmont-blaine.png" },
         ],
       },
       {
         title: "Ще бренди",
         links: [
-          { label: "MC2 Saint Barth", slug: "mc2-saint-barth" },
-          { label: "Fred Mello", slug: "fred-mello" },
+          { label: "MC2 Saint Barth", slug: "mc2-saint-barth", logo: "/images/brands/mc2-saint-barth.png" },
+          { label: "Fred Mello", slug: "fred-mello", logo: "/images/brands/fred-mello.png" },
           { label: "J.B4", slug: "j-b4-just-before" },
           { label: "Kocca", slug: "kocca" },
         ],

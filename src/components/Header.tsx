@@ -438,9 +438,19 @@ function MegaPanel({ item }: { item: MegaMenu }) {
                 <li key={l.slug}>
                   <Link
                     href={`/catalog?category=${l.slug}`}
-                    className="text-sm text-ink/80 transition-colors hover:text-ink"
+                    className="flex items-center text-sm text-ink/80 transition-colors hover:text-ink"
                   >
-                    {l.label}
+                    {l.logo ? (
+                      <Image
+                        src={l.logo}
+                        alt={l.label}
+                        width={110}
+                        height={28}
+                        className="h-7 w-auto max-w-[110px] object-contain object-left opacity-80 transition-opacity hover:opacity-100"
+                      />
+                    ) : (
+                      l.label
+                    )}
                   </Link>
                 </li>
               ))}
