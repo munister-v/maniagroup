@@ -235,7 +235,7 @@ function Editorial() {
               пакетом гарантій, дбайливою упаковкою та доставкою Новою Поштою.
             </p>
             <Link
-              href="#"
+              href="/about"
               className="mt-8 inline-flex h-12 items-center border border-paper/40 px-8 text-[12px] uppercase tracking-luxe text-paper transition-colors hover:bg-paper hover:text-ink"
             >
               Про нас

@@ -15,18 +15,16 @@ const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: "Допомога",
     links: [
-      { label: "Доставка та оплата", href: "#" },
-      { label: "Обмін і повернення", href: "#" },
-      { label: "Таблиця розмірів", href: "#" },
-      { label: "Контакти", href: "#" },
+      { label: "Доставка та оплата", href: "/delivery" },
+      { label: "Обмін і повернення", href: "/returns" },
+      { label: "Контакти", href: "/contacts" },
     ],
   },
   {
     title: "Компанія",
     links: [
-      { label: "Про Mania Group", href: "#" },
-      { label: "Гарантія оригіналу", href: "#" },
-      { label: "Політика конфіденційності", href: "#" },
+      { label: "Про Mania Group", href: "/about" },
+      { label: "Гарантія оригіналу", href: "/about" },
     ],
   },
 ];

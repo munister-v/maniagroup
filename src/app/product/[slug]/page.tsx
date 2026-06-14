@@ -1,11 +1,38 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { Reveal } from "@/components/Reveal";
 import { fromWcProduct, formatPrice } from "@/lib/catalog";
 import { fetchCategories, fetchProductById, fetchProducts } from "@/lib/wc";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductGallery } from "@/components/ProductGallery";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const wcProduct = await fetchProductById(slug).catch(() => null);
+  if (!wcProduct) return {};
+
+  const product = fromWcProduct(wcProduct);
+  const title = `${product.name} — ${product.brand} | Mania Group`;
+  const description =
+    wcProduct.short_description?.replace(/<[^>]+>/g, "").trim().slice(0, 160) ||
+    `${product.name} від ${product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: wcProduct.images[0]?.src ? [wcProduct.images[0].src] : [],
+    },
+  };
+}
 
 export default async function ProductPage({
   params,
