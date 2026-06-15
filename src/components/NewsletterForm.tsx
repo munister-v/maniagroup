@@ -35,19 +35,19 @@ export function NewsletterForm({ source = "home" }: { source?: string }) {
 
   return (
     <div className="w-full max-w-md">
-      <form onSubmit={submit} className="flex w-full items-center gap-2">
+      <form onSubmit={submit} className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="email"
           required
           value={email}
           onChange={(e) => { setEmail(e.target.value); if (status !== "idle") setStatus("idle"); }}
           placeholder="Ваш e-mail"
-          className="h-12 flex-1 border border-line bg-white px-4 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
+          className="h-12 w-full border border-line bg-white px-4 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none sm:flex-1"
         />
         <button
           type="submit"
           disabled={status === "saving" || status === "done"}
-          className="h-12 bg-ink px-6 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-50"
+          className="h-12 shrink-0 bg-ink px-6 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-50"
         >
           {status === "saving" ? "…" : status === "done" ? "✓" : "Підписатись"}
         </button>

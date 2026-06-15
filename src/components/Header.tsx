@@ -49,6 +49,7 @@ const ICONS = {
   bag: "M6 8h12l1 13H5L6 8Zm3 0V6a3 3 0 0 1 6 0v2",
   menu: "M3 6h18M3 12h18M3 18h18",
   close: "M6 6l12 12M18 6 6 18",
+  grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
 };
 
 const SOCIAL_ICONS = {
@@ -62,6 +63,7 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -126,7 +128,7 @@ export function Header() {
         <div className="wrap grid h-16 grid-cols-[1fr_auto_1fr] items-center md:h-[72px]">
           <div className="flex items-center">
             <button
-              onClick={() => setMobileOpen((v) => !v)}
+              onClick={() => setMobileOpen((v) => { if (v) setMobileExpanded(null); return !v; })}
               className="-ml-1 flex h-9 w-9 items-center justify-center md:hidden"
               aria-label="Меню"
               aria-expanded={mobileOpen}
@@ -236,19 +238,87 @@ export function Header() {
 
       {/* mobile menu */}
       {mobileOpen && (
-        <nav className="border-b border-line bg-paper text-ink md:hidden">
-          <ul className="wrap flex flex-col py-2">
-            {MEGA_MENU.map((item) => (
-              <li key={item.label}>
-                <a
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="block py-3 text-[12px] uppercase tracking-luxe opacity-80"
-                >
+        <nav className="max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-line bg-paper text-ink md:hidden">
+          {/* gender tiles */}
+          <div className="wrap grid grid-cols-2 gap-3 pt-4">
+            {MEGA_MENU.filter((m) => m.label === "Жінкам" || m.label === "Чоловікам").map((item) => (
+              <Link
+                key={item.label}
+                href={item.featured.href ?? item.href}
+                onClick={() => setMobileOpen(false)}
+                className="group relative block aspect-[3/4] overflow-hidden"
+                style={{ backgroundColor: item.featured.tone }}
+              >
+                {item.featured.image && (
+                  <Image
+                    src={item.featured.image}
+                    alt={item.label}
+                    fill
+                    sizes="50vw"
+                    className="object-cover transition-transform duration-700 group-active:scale-105"
+                  />
+                )}
+                <div
+                  className="absolute inset-0"
+                  style={{ backgroundImage: "linear-gradient(180deg, rgba(23,19,15,0) 45%, rgba(23,19,15,0.55) 100%)" }}
+                />
+                <span className="absolute bottom-3 left-3 font-display text-lg text-paper">
                   {item.label}
-                </a>
-              </li>
+                </span>
+              </Link>
             ))}
+          </div>
+
+          {/* expandable groups */}
+          <ul className="wrap flex flex-col py-2">
+            {MEGA_MENU.filter((m) => m.label !== "Жінкам" && m.label !== "Чоловікам").map((item) => {
+              const open = mobileExpanded === item.label;
+              return (
+                <li key={item.label} className="border-b border-line">
+                  <button
+                    onClick={() => setMobileExpanded(open ? null : item.label)}
+                    aria-expanded={open}
+                    className="flex w-full items-center justify-between py-3 text-[12px] uppercase tracking-luxe opacity-80"
+                  >
+                    {item.label}
+                    <span className={`transition-transform ${open ? "rotate-45" : ""}`}>
+                      <Icon d="M12 5v14M5 12h14" />
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="grid grid-cols-2 gap-x-4 pb-4">
+                      {item.columns.flatMap((col) => col.links).map((l) => (
+                        <Link
+                          key={l.slug}
+                          href={l.href ?? `/catalog?category=${l.slug}`}
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center py-1.5"
+                        >
+                          {l.logo ? (
+                            <Image
+                              src={l.logo}
+                              alt={l.label}
+                              width={90}
+                              height={24}
+                              className="h-5 w-auto max-w-[90px] object-contain object-left opacity-80"
+                            />
+                          ) : (
+                            <span className="text-sm text-ink/80">{l.label}</span>
+                          )}
+                        </Link>
+                      ))}
+                      <Link
+                        href={item.href}
+                        onClick={() => setMobileOpen(false)}
+                        className="col-span-2 mt-1 link-underline text-[11px] uppercase tracking-luxe text-ink"
+                      >
+                        Усе в «{item.label}» →
+                      </Link>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
             <li>
               <a
                 href="/delivery"
@@ -400,7 +470,7 @@ export function Header() {
       {/* mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-paper/95 backdrop-blur-md md:hidden">
         <Link href="/catalog" className="flex flex-col items-center gap-1 py-2.5 text-ink">
-          <Icon d={ICONS.menu} />
+          <Icon d={ICONS.grid} />
           <span className="text-[9px] uppercase tracking-luxe">Каталог</span>
         </Link>
         <button

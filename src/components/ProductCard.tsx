@@ -45,7 +45,7 @@ export function ProductCard({ product }: { product: Product }) {
               </svg>
             </span>
 
-            <div className="absolute inset-x-0 bottom-0 z-20 translate-y-full bg-ink/95 py-3 text-center text-[10px] uppercase tracking-luxe text-paper backdrop-blur-sm transition-transform duration-300 ease-out group-hover:translate-y-0">
+            <div className="absolute inset-x-0 bottom-0 z-20 hidden translate-y-full bg-ink/95 py-3 text-center text-[10px] uppercase tracking-luxe text-paper backdrop-blur-sm transition-transform duration-300 ease-out group-hover:translate-y-0 md:block">
               Переглянути товар
             </div>
           </>

@@ -57,7 +57,7 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
       />
       <Grain variant="strong" />
 
-      <div className="wrap relative flex min-h-[88vh] flex-col justify-center py-28">
+      <div className="wrap relative flex min-h-[88vh] flex-col justify-center py-20 md:py-28">
         <p
           className="hero-rise text-[11px] uppercase tracking-luxe text-paper/55"
           style={{ animationDelay: "0ms" }}
@@ -94,9 +94,24 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
             Усі бренди →
           </Link>
         </div>
+        <dl
+          className="hero-rise mt-10 grid max-w-md grid-cols-3 gap-4 border-t border-paper/15 pt-6 md:mt-12 md:gap-6"
+          style={{ animationDelay: "340ms" }}
+        >
+          {[
+            { value: "6+", label: "брендів" },
+            { value: "100%", label: "оригінал" },
+            { value: "1–3 дні", label: "доставка" },
+          ].map((s) => (
+            <div key={s.label}>
+              <dt className="font-display text-2xl text-paper md:text-3xl">{s.value}</dt>
+              <dd className="mt-1 whitespace-nowrap text-[10px] uppercase tracking-luxe text-paper/55">{s.label}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-6 flex justify-center">
+      <div className="pointer-events-none absolute inset-x-0 bottom-6 hidden justify-center md:flex">
         <span className="text-[10px] uppercase tracking-luxe text-paper/45">
           Гортайте ↓
         </span>
