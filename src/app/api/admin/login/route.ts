@@ -3,7 +3,7 @@ import { checkPassword, setAdminSession } from "@/lib/adminAuth";
 
 export async function POST(req: Request) {
   const { password } = (await req.json()) as { password: string };
-  if (!checkPassword(password)) {
+  if (!(await checkPassword(password))) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   await setAdminSession();

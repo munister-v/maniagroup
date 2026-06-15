@@ -7,7 +7,7 @@ import { Pool } from "pg";
  * the single source of truth.
  */
 
-const CONNECTION_STRING =
+export const CONNECTION_STRING =
   process.env.DATABASE_URL ??
   `postgresql://${process.env.PGUSER ?? process.env.USER ?? "postgres"}@${
     process.env.PGHOST ?? "localhost"
@@ -84,6 +84,20 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   key TEXT PRIMARY KEY,
   val TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS store_settings (
+  key TEXT PRIMARY KEY,
+  val TEXT NOT NULL DEFAULT ''
+);
+
+-- ── Newsletter subscribers ──
+CREATE TABLE IF NOT EXISTS subscribers (
+  id         BIGSERIAL PRIMARY KEY,
+  email      TEXT NOT NULL UNIQUE,
+  source     TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_subscribers_created ON subscribers(created_at DESC);
 
 -- ── Accounts ──
 CREATE TABLE IF NOT EXISTS accounts (

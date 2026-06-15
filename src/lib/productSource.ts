@@ -66,6 +66,7 @@ export type CatalogQuery = {
   categorySlug?: string;
   brandName?: string;
   gender?: string;
+  color?: string;
   q?: string;
   size?: string;
   minPrice?: number;
@@ -96,6 +97,7 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
   if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
   if (params.gender)        conds.push(`gender = ${p(params.gender)}`);
+  if (params.color)         conds.push(`color = ${p(params.color)}`);
   if (params.size)          conds.push(`attributes::text LIKE ${p('%"slug":"' + params.size + '"%')}`);
   if (params.minPrice)      conds.push(`price >= ${p(params.minPrice)}`);
   if (params.maxPrice)      conds.push(`price <= ${p(params.maxPrice)}`);
@@ -156,6 +158,7 @@ export async function getCatalogCategories(): Promise<WcCategory[]> {
 
 export type DbProductDetail = {
   product: Product;
+  images: { src: string }[];
   sizes: string[];
   composition?: string;
   color?: string;
@@ -171,8 +174,10 @@ export async function dbProductById(id: string): Promise<DbProductDetail | null>
   if (!row) return null;
   const sizes = (asAttrs(row.attributes).find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? [])
     .map((t: { name: string }) => t.name);
+  const images = asImages(row.images).filter((i) => i?.src);
   return {
     product: rowToProduct(row),
+    images,
     sizes,
     composition: row.composition || undefined,
     color: row.color || undefined,
@@ -195,6 +200,21 @@ export async function dbBrands(filters?: { categorySlug?: string; gender?: strin
     bind,
   );
   return rows.map((r) => ({ name: r.brand, slug: brandSlug(r.brand) }));
+}
+
+// ── Color facets ───────────────────────────────────────────────────────────
+
+export async function dbColorFacets(filters?: { categorySlug?: string; gender?: string }): Promise<{ name: string }[]> {
+  const conds = ["is_in_stock = TRUE", "color <> ''", "status = 'publish'"];
+  const bind: unknown[] = [];
+  if (filters?.categorySlug) { bind.push(filters.categorySlug); conds.push(`category_slug = $${bind.length}`); }
+  if (filters?.gender === "women" || filters?.gender === "men") { bind.push(filters.gender); conds.push(`gender = $${bind.length}`); }
+
+  const rows = await q<{ color: string }>(
+    `SELECT color, COUNT(*) n FROM products WHERE ${conds.join(" AND ")} GROUP BY color ORDER BY n DESC LIMIT 20`,
+    bind,
+  );
+  return rows.map((r) => ({ name: r.color }));
 }
 
 /** Stable slug for a brand name, reversible via the facet map on the page. */

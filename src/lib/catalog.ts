@@ -35,6 +35,22 @@ export const BRANDS = [
   "Kocca",
 ];
 
+/** Brand name → transparent PNG logo in /public/images/brands. Missing = render text. */
+export const BRAND_LOGOS: Record<string, string> = {
+  "EA7 Emporio Armani": "/images/brands/ea7-emporio-armani.png",
+  Moschino: "/images/brands/moschino.png",
+  "Antony Morato": "/images/brands/antony-morato.png",
+  "Harmont & Blaine": "/images/brands/harmont-blaine.png",
+  "MC2 Saint Barth": "/images/brands/mc2-saint-barth.png",
+  "Fred Mello": "/images/brands/fred-mello.png",
+};
+
+/** Catalog href filtered to a single brand (mirrors brandSlug in productSource). */
+export function brandHref(name: string): string {
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `/catalog?brand=${slug}`;
+}
+
 export const NAV: { label: string; href: string }[] = [
   { label: "Бренди", href: "#brands" },
   { label: "Жінкам", href: "#women" },
@@ -378,61 +394,6 @@ export const MEGA_MENU: MegaMenu[] = [
     featured: { title: "Аромати для дому", caption: "Новинки", tone: "#cbb8a4", slug: "aromatizatory", image: "/images/04_dropdown-aromaty-dlya-domu.webp" },
   },
 ];
-
-// ── Live catalog (WooCommerce) ──────────────────────────────────────────
-
-import type { WcProduct } from "./wc";
-import { priceToUah } from "./wc";
-
-const TONE_PALETTE = ["#c9bdab", "#cbbfbd", "#e3ddd1", "#c4c2ac", "#dccfb6", "#cbb8a4", "#c4bcb0", "#d6d3cc"];
-
-function toneFor(seed: string): string {
-  const s = String(seed ?? "");
-  let hash = 0;
-  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) % TONE_PALETTE.length;
-  return TONE_PALETTE[hash];
-}
-
-const MEN_HINTS = ["чолов", "муж"];
-const HOME_HINTS = ["арома", "дому", "interyer"];
-
-function genderFromCategories(categories: { name: string; slug: string }[]): Gender {
-  const text = categories.map((c) => `${c.name} ${c.slug}`.toLowerCase()).join(" ");
-  if (HOME_HINTS.some((h) => text.includes(h))) return "home";
-  if (MEN_HINTS.some((h) => text.includes(h))) return "men";
-  return "women";
-}
-
-/** Map a WooCommerce Store API product to our display Product shape. */
-export function fromWcProduct(p: WcProduct): Product {
-  const price = priceToUah(p.prices);
-  const regular = priceToUah({ price: p.prices.regular_price, currency_minor_unit: p.prices.currency_minor_unit });
-  const onSale = p.prices.sale_price && p.prices.sale_price !== p.prices.regular_price;
-
-  // Store API can return non-array images/categories on some products.
-  const cats = Array.isArray(p.categories) ? p.categories : [];
-  const imgs = Array.isArray(p.images) ? p.images : [];
-  const brand = cats.find((c) => /^[A-Z0-9 .&']+$/.test(c.name))?.name ?? "Mania Group";
-  const categoryEntry = cats.find((c) => c.name !== brand);
-  const category = categoryEntry?.name ?? "Одяг";
-
-  return {
-    id: String(p.id),
-    // WooCommerce Store API on this install does NOT return `slug` and ignores
-    // ?slug= filtering, so we route by the always-present numeric id instead.
-    slug: p.slug ?? String(p.id),
-    name: p.name.replace(/\s*\([^)]*\)\s*$/, ""),
-    brand,
-    price: onSale ? price : regular,
-    oldPrice: onSale ? regular : undefined,
-    gender: genderFromCategories(cats),
-    category,
-    tone: toneFor(p.slug),
-    tag: onSale ? "sale" : undefined,
-    image: imgs[0]?.src,
-    categorySlug: categoryEntry?.slug,
-  };
-}
 
 export type CartLine = { product: Product; size: string; qty: number };
 

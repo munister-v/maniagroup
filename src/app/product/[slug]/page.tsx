@@ -6,6 +6,8 @@ import { formatPrice } from "@/lib/catalog";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductMedia } from "@/components/ProductMedia";
+import { ProductGallery } from "@/components/ProductGallery";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { dbProductById, getCatalogProducts, type DbProductDetail } from "@/lib/productSource";
 
 export async function generateMetadata({
@@ -52,7 +54,13 @@ function ProductView({
   detail: DbProductDetail;
   related: DbProductDetail["product"][];
 }) {
-  const { product, sizes, composition, color, season, country, inStock } = detail;
+  const { product, images, sizes, composition, color, season, country, inStock } = detail;
+  const gallery = images.map((img, i) => ({
+    id: i,
+    src: img.src,
+    thumbnail: img.src,
+    alt: `${product.name} — ${product.brand}`,
+  }));
   const specs: { label: string; value: string }[] = [
     { label: "Бренд", value: product.brand },
     { label: "Колір", value: color ?? "" },
@@ -73,9 +81,13 @@ function ProductView({
 
       <div className="mt-6 grid gap-10 md:grid-cols-2 md:gap-14">
         <Reveal>
-          <div className="group">
-            <ProductMedia tone={product.tone} brand={product.brand} category={product.category} image={product.image} />
-          </div>
+          {gallery.length > 0 ? (
+            <ProductGallery images={gallery} name={product.name} />
+          ) : (
+            <div className="group">
+              <ProductMedia tone={product.tone} brand={product.brand} category={product.category} image={product.image} />
+            </div>
+          )}
         </Reveal>
 
         <Reveal delay={100}>
@@ -127,6 +139,8 @@ function ProductView({
           </div>
         </Reveal>
       )}
+
+      <RecentlyViewed currentId={product.id} />
     </section>
   );
 }

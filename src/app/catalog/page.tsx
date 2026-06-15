@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
-import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands } from "@/lib/productSource";
+import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets } from "@/lib/productSource";
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
 export const metadata = {
@@ -27,6 +27,7 @@ export default async function CatalogPage({
     category?: string;
     brand?: string;
     gender?: string;
+    color?: string;
     q?: string;
     sort?: string;
     size?: string;
@@ -39,7 +40,7 @@ export default async function CatalogPage({
   // Map legacy WooCommerce nav/URL slugs to the store's own DB slugs so the
   // mega-menu links and old bookmarked URLs don't land on an empty catalog.
   const { category: categorySlug, gender } = resolveCatalogCategory(sp.category, sp.gender);
-  const { brand: brandSlugParam, q, size, min, max } = sp;
+  const { brand: brandSlugParam, color, q, size, min, max } = sp;
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
   const { orderby, order } = SORTS[sortKey];
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
@@ -56,6 +57,7 @@ export default async function CatalogPage({
     categorySlug,
     brandName,
     gender: gender === "women" || gender === "men" ? gender : undefined,
+    color,
     q,
     size,
     minPrice: min ? Number(min) : undefined,
@@ -66,8 +68,9 @@ export default async function CatalogPage({
     perPage,
   });
 
-  // ── Size facets ───────────────────────────────────────────────────────
+  // ── Size + color facets ─────────────────────────────────────────────────
   const sizes = await dbSizeFacets({ categorySlug, q });
+  const colors = await dbColorFacets({ categorySlug, gender });
 
   // ── Pagination ────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -77,7 +80,7 @@ export default async function CatalogPage({
     .slice(0, 20)
     .map((c) => ({ name: c.name, slug: c.slug }));
 
-  const facets: Facets = { brands, categories: categoryFacets, sizes };
+  const facets: Facets = { brands, categories: categoryFacets, sizes, colors };
   const title =
     brandName ??
     categories.find((c) => c.slug === categorySlug)?.name ??
@@ -89,6 +92,7 @@ export default async function CatalogPage({
     if (categorySlug) p.category = categorySlug;
     if (brandSlugParam) p.brand = brandSlugParam;
     if (gender) p.gender = gender;
+    if (color) p.color = color;
     if (q) p.q = q;
     if (size) p.size = size;
     if (min) p.min = min;
@@ -119,7 +123,7 @@ export default async function CatalogPage({
         <div className="lg:pt-1">
           <CatalogFilters
             facets={facets}
-            active={{ category: categorySlug, brand: brandSlugParam, gender, q, sort: sortKey, size, min, max }}
+            active={{ category: categorySlug, brand: brandSlugParam, gender, color, q, sort: sortKey, size, min, max }}
           />
         </div>
 

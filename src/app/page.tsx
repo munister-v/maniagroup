@@ -3,7 +3,8 @@ import Image from "next/image";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
-import { BRANDS, CATEGORIES, type Product } from "@/lib/catalog";
+import { NewsletterForm } from "@/components/NewsletterForm";
+import { BRANDS, BRAND_LOGOS, brandHref, CATEGORIES, type Product } from "@/lib/catalog";
 import { getProducts } from "@/lib/productSource";
 import { getSiteContent } from "@/lib/siteContent";
 
@@ -106,15 +107,32 @@ function BrandMarquee() {
   return (
     <section id="brands" className="border-y border-line py-7">
       <div className="relative overflow-hidden">
-        <div className="flex w-max animate-marquee">
-          {row.map((brand, i) => (
-            <span
-              key={i}
-              className="mx-9 whitespace-nowrap font-display text-xl tracking-wide text-ink/70 md:text-2xl"
-            >
-              {brand}
-            </span>
-          ))}
+        <div className="flex w-max items-center animate-marquee">
+          {row.map((brand, i) => {
+            const logo = BRAND_LOGOS[brand];
+            return (
+              <Link
+                key={i}
+                href={brandHref(brand)}
+                aria-label={brand}
+                className="mx-9 flex shrink-0 items-center"
+              >
+                {logo ? (
+                  <Image
+                    src={logo}
+                    alt={brand}
+                    width={150}
+                    height={40}
+                    className="h-7 w-auto max-w-[150px] object-contain opacity-55 transition-opacity hover:opacity-100 md:h-9"
+                  />
+                ) : (
+                  <span className="whitespace-nowrap font-display text-xl tracking-wide text-ink/55 transition-colors hover:text-ink md:text-2xl">
+                    {brand}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </div>
         <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-paper to-transparent" />
         <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-paper to-transparent" />
@@ -281,23 +299,9 @@ function Newsletter() {
           <h2 className="mt-3 max-w-xl font-display text-3xl text-ink md:text-4xl">
             Першими дізнавайтесь про нові надходження
           </h2>
-          <form className="mt-8 flex w-full max-w-md items-center gap-2">
-            <input
-              type="email"
-              required
-              placeholder="Ваш e-mail"
-              className="h-12 flex-1 border border-line bg-white px-4 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
-            />
-            <button
-              type="submit"
-              className="h-12 bg-ink px-6 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85"
-            >
-              Підписатись
-            </button>
-          </form>
-          <p className="mt-3 text-xs text-muted">
-            Підписуючись, ви погоджуєтесь з політикою конфіденційності.
-          </p>
+          <div className="mt-8 flex w-full justify-center">
+            <NewsletterForm source="home" />
+          </div>
         </div>
       </Reveal>
     </section>

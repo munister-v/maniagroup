@@ -2,32 +2,41 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import type { SiteContent } from "@/lib/siteContent";
-import { formatPrice } from "@/lib/catalog";
 import { AdminProducts } from "./AdminProducts";
+import { AdminOrders } from "./AdminOrders";
+import { AdminCustomers } from "./AdminCustomers";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "catalog" | "products" | "orders" | "backup" | "settings";
+type Section = "overview" | "content" | "catalog" | "products" | "orders" | "customers" | "subscribers" | "backup" | "settings";
 
-type WcOrder = {
+type RecentOrder = {
   id: number;
   number: string;
   status: string;
   date_created: string;
   billing: { first_name: string; last_name: string; phone: string; email: string };
-  line_items: { id: number; name: string; quantity: number; total: string }[];
   total: string;
   currency_symbol: string;
 };
 
 type Stats = {
   products_total: number;
-  has_wc_creds: boolean;
-  processing?: number;
-  pending?: number;
-  on_hold?: number;
+  in_stock: number;
+  out_of_stock: number;
+  orders_total: number;
+  pending: number;
+  processing: number;
+  on_hold: number;
+  completed: number;
+  new_orders_7d: number;
+  revenue_30d: number;
+  revenue_7d: number;
+  avg_order: number;
+  new_customers_30d: number;
+  revenue_series: { day: string; total: number }[];
+  top_products: { product_id: string; name: string; brand: string; qty: number; revenue: number }[];
 };
 
 type SyncState = {
@@ -35,7 +44,6 @@ type SyncState = {
   last_sync: string;
   total_products: number;
   error: string;
-  has_wc_creds: boolean;
 };
 
 
@@ -66,6 +74,16 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "orders",
     label: "Замовлення",
     d: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01",
+  },
+  {
+    id: "customers",
+    label: "Клієнти",
+    d: "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 100-6",
+  },
+  {
+    id: "subscribers",
+    label: "Підписники",
+    d: "M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
   },
   {
     id: "backup",
@@ -101,91 +119,38 @@ function SvgIcon({ d }: { d: string }) {
 
 export function AdminDashboard({
   initial,
-  hasWcCreds,
 }: {
   initial: SiteContent;
-  hasWcCreds: boolean;
+  hasWcCreds?: boolean;
 }) {
   const [section, setSection] = useState<Section>("overview");
   const [content, setContent] = useState<SiteContent>(initial);
   const [contentStatus, setContentStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [unsaved, setUnsaved] = useState(false);
 
-  const [orders, setOrders] = useState<WcOrder[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [orderStatusFilter, setOrderStatusFilter] = useState("");
-  const [ordersPage, setOrdersPage] = useState(1);
-  const [orderNoCreds, setOrderNoCreds] = useState(!hasWcCreds);
-
   const [stats, setStats] = useState<Stats | null>(null);
-  const [recentOrders, setRecentOrders] = useState<WcOrder[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [sync, setSync] = useState<SyncState | null>(null);
-  const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
+  const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const router = useRouter();
 
-  // Load stats + sync state on mount
+  function showToast(msg: string) {
+    setToast(msg);
+    if (toastRef.current) clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setToast(null), 2600);
+  }
+
+  // Load stats + recent orders + sync state on mount
   useEffect(() => {
-    fetch("/api/admin/stats")
+    fetch("/api/admin/stats").then((r) => r.json()).then((data: Stats) => setStats(data));
+    fetch("/api/admin/orders?per_page=6")
       .then((r) => r.json())
-      .then((data: Stats) => {
-        setStats(data);
-        if (data.has_wc_creds) {
-          fetch("/api/admin/orders?per_page=5")
-            .then((r) => r.json())
-            .then((o: WcOrder[]) => Array.isArray(o) && setRecentOrders(o));
-        }
-      });
-    fetch("/api/admin/sync")
-      .then((r) => r.json())
-      .then((s: SyncState) => setSync(s));
+      .then((d: { orders?: RecentOrder[] }) => setRecentOrders(d.orders ?? []));
+    fetch("/api/admin/sync").then((r) => r.json()).then((s: SyncState) => setSync(s));
   }, []);
-
-  async function triggerSync() {
-    const res = await fetch("/api/admin/sync", { method: "POST" });
-    const data = await res.json() as { ok?: boolean; error?: string };
-    if (!res.ok || !data.ok) {
-      setSync((s) => s ? { ...s, status: "error", error: data.error ?? "Помилка" } : s);
-      return;
-    }
-    setSync((s) => s ? { ...s, status: "syncing" } : s);
-    // Poll every 2 s until done
-    if (syncPollRef.current) clearInterval(syncPollRef.current);
-    syncPollRef.current = setInterval(async () => {
-      const r = await fetch("/api/admin/sync").then((x) => x.json()) as SyncState;
-      setSync(r);
-      if (r.status !== "syncing") {
-        clearInterval(syncPollRef.current!);
-        syncPollRef.current = null;
-        // Refresh stats count
-        fetch("/api/admin/stats").then((x) => x.json()).then((d: Stats) => setStats(d));
-      }
-    }, 2000);
-  }
-
-  // Load orders when navigating to that section or filter changes
-  useEffect(() => {
-    if (section === "orders") loadOrders(orderStatusFilter, 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, orderStatusFilter]);
-
-  async function loadOrders(status: string, page: number) {
-    setOrdersLoading(true);
-    setOrderNoCreds(false);
-    try {
-      const params = new URLSearchParams({ page: String(page) });
-      if (status) params.set("status", status);
-      const res = await fetch(`/api/admin/orders?${params}`);
-      if (res.status === 503) { setOrderNoCreds(true); return; }
-      if (res.ok) {
-        const data = await res.json();
-        setOrders(Array.isArray(data) ? data : []);
-        setOrdersPage(page);
-      }
-    } finally {
-      setOrdersLoading(false);
-    }
-  }
 
   function update(fn: (c: SiteContent) => SiteContent) {
     setContent(fn);
@@ -219,18 +184,21 @@ export function AdminDashboard({
 
   return (
     <div className="fixed inset-0 z-[60] flex overflow-hidden bg-[#f7f5f2] font-sans text-[#17130f]">
+      {/* Mobile backdrop */}
+      {navOpen && <div onClick={() => setNavOpen(false)} className="fixed inset-0 z-[65] bg-black/40 md:hidden" />}
+
       {/* Sidebar */}
-      <aside className="flex w-56 shrink-0 flex-col bg-[#17130f] text-white">
+      <aside className={`fixed inset-y-0 left-0 z-[70] flex w-60 flex-col bg-[#17130f] text-white transition-transform duration-300 md:static md:z-auto md:w-56 md:shrink-0 md:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="border-b border-white/10 px-5 py-5">
           <p className="font-display text-lg tracking-[0.14em]">MANIA GROUP</p>
           <p className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-white/35">Адмін-панель</p>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-2 py-4">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-4">
           {NAV.map((item) => (
             <button
               key={item.id}
-              onClick={() => setSection(item.id)}
+              onClick={() => { setSection(item.id); setNavOpen(false); }}
               className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] transition-colors ${
                 section === item.id
                   ? "bg-white/12 text-white"
@@ -239,9 +207,9 @@ export function AdminDashboard({
             >
               <SvgIcon d={item.d} />
               {item.label}
-              {item.id === "orders" && stats?.has_wc_creds && (stats.processing ?? 0) + (stats.pending ?? 0) > 0 && (
+              {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
                 <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c0392b] px-1 text-[9px] tabular-nums text-white">
-                  {(stats.processing ?? 0) + (stats.pending ?? 0)}
+                  {stats.pending + stats.processing}
                 </span>
               )}
             </button>
@@ -270,8 +238,11 @@ export function AdminDashboard({
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e8e4de] bg-white px-8">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e8e4de] bg-white px-4 sm:px-8">
           <div className="flex items-center gap-3">
+            <button onClick={() => setNavOpen(true)} aria-label="Меню" className="-ml-1 text-[#17130f] md:hidden">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" /></svg>
+            </button>
             <h1 className="text-sm font-medium">{navLabel}</h1>
             {unsaved && section === "content" && (
               <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-600">
@@ -308,283 +279,349 @@ export function AdminDashboard({
         </header>
 
         {/* Body */}
-        <main className="flex-1 overflow-y-auto px-8 py-7">
+        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-7">
           {section === "overview" && (
             <OverviewSection
               stats={stats}
               recentOrders={recentOrders}
               sync={sync}
               onNavigate={setSection}
-              onSync={triggerSync}
             />
           )}
           {section === "content" && (
             <ContentSection content={content} update={update} />
           )}
           {section === "catalog" && <CatalogImportSection />}
-          {section === "products" && <AdminProducts />}
-          {section === "orders" && (
-            <OrdersSection
-              orders={orders}
-              loading={ordersLoading}
-              statusFilter={orderStatusFilter}
-              page={ordersPage}
-              noCreds={orderNoCreds}
-              onStatusChange={(s) => { setOrderStatusFilter(s); setOrdersPage(1); }}
-              onPageChange={(p) => loadOrders(orderStatusFilter, p)}
-            />
-          )}
+          {section === "products" && <AdminProducts onToast={showToast} />}
+          {section === "orders" && <AdminOrders onToast={showToast} />}
+          {section === "customers" && <AdminCustomers />}
+          {section === "subscribers" && <SubscribersSection />}
           {section === "backup" && <BackupSection />}
           {section === "settings" && <SettingsSection />}
         </main>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-[4px] bg-[#17130f] px-5 py-3 text-[12px] tracking-wide text-white shadow-lg">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
 
 /* ─── Overview ─── */
 
+function fmtUah(n: number) {
+  return n.toLocaleString("uk-UA") + " ₴";
+}
+
 function OverviewSection({
   stats,
   recentOrders,
   sync,
   onNavigate,
-  onSync,
 }: {
   stats: Stats | null;
-  recentOrders: WcOrder[];
+  recentOrders: RecentOrder[];
   sync: SyncState | null;
   onNavigate: (s: Section) => void;
-  onSync: () => void;
 }) {
   const loading = stats === null;
+  const maxRev = stats ? Math.max(1, ...stats.revenue_series.map((d) => d.total)) : 1;
 
   return (
     <div className="space-y-7">
-      {/* Stat cards */}
+      {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          label="Товари в каталозі"
-          value={loading ? "…" : String(stats!.products_total || "—")}
-          icon="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-          onClick={() => onNavigate("products")}
-        />
-        <StatCard
-          label="В обробці"
-          value={loading ? "…" : stats!.has_wc_creds ? String(stats!.processing ?? 0) : "—"}
-          icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-          accent={(stats?.processing ?? 0) > 0}
-          onClick={() => onNavigate("orders")}
-        />
-        <StatCard
-          label="Очікують оплати"
-          value={loading ? "…" : stats!.has_wc_creds ? String(stats!.pending ?? 0) : "—"}
-          icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          onClick={() => onNavigate("orders")}
-        />
-        <StatCard
-          label="На утриманні"
-          value={loading ? "…" : stats!.has_wc_creds ? String(stats!.on_hold ?? 0) : "—"}
-          icon="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-          onClick={() => onNavigate("orders")}
-        />
+        <KpiCard label="Виручка · 30 днів" value={loading ? "…" : fmtUah(stats!.revenue_30d)} sub={loading ? "" : `за 7 днів ${fmtUah(stats!.revenue_7d)}`} accent />
+        <KpiCard label="Замовлень всього" value={loading ? "…" : String(stats!.orders_total)} sub={loading ? "" : `+${stats!.new_orders_7d} за тиждень`} onClick={() => onNavigate("orders")} />
+        <KpiCard label="Середній чек" value={loading ? "…" : fmtUah(stats!.avg_order)} sub={loading ? "" : `${stats!.completed} виконано`} />
+        <KpiCard label="Очікують дій" value={loading ? "…" : String(stats!.pending + stats!.processing)} sub={loading ? "" : `${stats!.pending} нових · ${stats!.processing} в обробці`} warn={!loading && stats!.pending + stats!.processing > 0} onClick={() => onNavigate("orders")} />
       </div>
 
-      {/* No WC creds hint */}
-      {stats && !stats.has_wc_creds && (
-        <div className="rounded-[3px] border border-amber-200 bg-amber-50 px-5 py-4">
-          <p className="text-[12px] text-amber-700">
-            <strong>Без WooCommerce API ключів</strong> — статистика замовлень недоступна. Додайте{" "}
-            <code className="rounded bg-amber-100 px-1 font-mono text-[11px]">WOOCOMMERCE_KEY</code> та{" "}
-            <code className="rounded bg-amber-100 px-1 font-mono text-[11px]">WOOCOMMERCE_SECRET</code>{" "}
-            у .env.local і перезапустіть сервер.
-          </p>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Revenue chart */}
+        <div className="lg:col-span-2 rounded-[4px] border border-[#e8e4de] bg-white p-5">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Виручка · 7 днів</h2>
+            <span className="text-[13px] font-medium text-[#17130f]">{loading ? "" : fmtUah(stats!.revenue_7d)}</span>
+          </div>
+          <div className="flex h-40 items-end gap-2">
+            {(stats?.revenue_series ?? []).map((d) => {
+              const h = Math.round((d.total / maxRev) * 100);
+              const label = new Date(d.day).toLocaleDateString("uk-UA", { weekday: "short" });
+              return (
+                <div key={d.day} className="group flex flex-1 flex-col items-center gap-1.5">
+                  <span className="text-[10px] tabular-nums text-[#b9ae9b] opacity-0 group-hover:opacity-100">{d.total > 0 ? Math.round(d.total / 1000) + "k" : ""}</span>
+                  <div className="flex w-full flex-1 items-end">
+                    <div className="w-full rounded-t-[2px] bg-[#17130f] transition-all" style={{ height: `${Math.max(2, h)}%` }} title={fmtUah(d.total)} />
+                  </div>
+                  <span className="text-[10px] uppercase text-[#b9ae9b]">{label}</span>
+                </div>
+              );
+            })}
+            {loading && <div className="flex-1 animate-pulse rounded bg-[#ede9e3]" />}
+          </div>
         </div>
-      )}
 
-      {/* Quick links */}
-      <div className="flex flex-wrap gap-3">
-        {(
-          [
-            { label: "Редагувати контент", section: "content" as Section },
-            { label: "Товари та ціни", section: "products" as Section },
-            { label: "Замовлення", section: "orders" as Section },
-            { label: "Резервна копія", section: "backup" as Section },
-          ] as { label: string; section: Section }[]
-        ).map(({ label, section }) => (
-          <button
-            key={section}
-            onClick={() => onNavigate(section)}
-            className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:border-[#17130f]"
-          >
-            {label}
+        {/* Catalog health */}
+        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Каталог</h2>
+          <button onClick={() => onNavigate("products")} className="mb-3 flex w-full items-baseline justify-between text-left">
+            <span className="text-3xl font-light tabular-nums text-[#17130f]">{loading ? "…" : stats!.products_total.toLocaleString("uk-UA")}</span>
+            <span className="text-[11px] uppercase tracking-wider text-[#9c8f7d]">товарів</span>
           </button>
-        ))}
-        <a
-          href="https://maniagroup.com.ua/wp-admin"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex h-9 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d] transition-colors hover:border-[#17130f] hover:text-[#17130f]"
-        >
-          WordPress Admin
-          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </a>
+          <div className="space-y-2 text-[12px]">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-[#9c8f7d]"><span className="h-2 w-2 rounded-full bg-emerald-500" />В наявності</span>
+              <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.in_stock.toLocaleString("uk-UA")}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-2 text-[#9c8f7d]"><span className="h-2 w-2 rounded-full bg-[#d0c8be]" />Немає в наявності</span>
+              <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.out_of_stock.toLocaleString("uk-UA")}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-[#f0ece6] pt-2">
+              <span className="text-[#9c8f7d]">Нових клієнтів · 30 днів</span>
+              <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.new_customers_30d}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Sync card */}
-      <SyncCard sync={sync} onSync={onSync} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Top products */}
+        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Топ товарів</h2>
+          {stats && stats.top_products.length > 0 ? (
+            <div className="space-y-2.5">
+              {stats.top_products.map((p, i) => (
+                <div key={p.product_id} className="flex items-center gap-3">
+                  <span className="w-4 text-[12px] tabular-nums text-[#b9ae9b]">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] text-[#17130f]">{p.name}</p>
+                    <p className="text-[11px] text-[#9c8f7d]">{p.brand}</p>
+                  </div>
+                  <span className="text-[12px] tabular-nums text-[#9c8f7d]">{p.qty} шт</span>
+                  <span className="w-20 text-right text-[12px] font-medium tabular-nums text-[#17130f]">{fmtUah(p.revenue)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-[12px] text-[#9c8f7d]">{loading ? "Завантаження…" : "Поки немає продажів"}</p>
+          )}
+        </div>
 
-      {/* Recent orders */}
-      {recentOrders.length > 0 && (
-        <div>
+        {/* Recent orders */}
+        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Останні замовлення</h2>
-            <button onClick={() => onNavigate("orders")} className="text-[11px] uppercase tracking-wider text-[#9c8f7d] underline underline-offset-2 hover:text-[#17130f]">
-              Всі
-            </button>
+            <button onClick={() => onNavigate("orders")} className="text-[11px] uppercase tracking-wider text-[#9c8f7d] underline underline-offset-2 hover:text-[#17130f]">Всі</button>
           </div>
-          <div className="overflow-hidden rounded-[3px] border border-[#e8e4de] bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
-                  <th className="px-4 py-3 text-left">№</th>
-                  <th className="px-4 py-3 text-left">Покупець</th>
-                  <th className="px-4 py-3 text-left hidden sm:table-cell">Товари</th>
-                  <th className="px-4 py-3 text-right">Сума</th>
-                  <th className="px-4 py-3 text-center">Статус</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f7f4f0]">
-                {recentOrders.map((o) => {
-                  const st = STATUS[o.status] ?? { label: o.status, bg: "#f5f5f5", color: "#555" };
-                  return (
-                    <tr key={o.id} className="hover:bg-[#fdfcfb]">
-                      <td className="px-4 py-3 font-mono text-[12px] text-[#9c8f7d]">#{o.number}</td>
-                      <td className="px-4 py-3">
-                        <p className="text-[13px] font-medium">{o.billing.first_name} {o.billing.last_name}</p>
-                        {o.billing.phone && <p className="text-[11px] text-[#9c8f7d]">{o.billing.phone}</p>}
-                      </td>
-                      <td className="hidden px-4 py-3 text-[12px] text-[#9c8f7d] sm:table-cell">
-                        {o.line_items.slice(0, 2).map((li) => (
-                          <p key={li.id} className="truncate max-w-[200px]">{li.name} ×{li.quantity}</p>
-                        ))}
-                        {o.line_items.length > 2 && <p>+{o.line_items.length - 2} ще</p>}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium tabular-nums">
-                        {Number(o.total).toLocaleString("uk-UA")} {o.currency_symbol}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-block rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider" style={{ background: st.bg, color: st.color }}>
-                          {st.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          {recentOrders.length > 0 ? (
+            <div className="space-y-2.5">
+              {recentOrders.map((o) => {
+                const st = STATUS[o.status] ?? { label: o.status, bg: "#f5f5f5", color: "#555" };
+                return (
+                  <div key={o.id} className="flex items-center gap-3">
+                    <span className="font-mono text-[12px] text-[#9c8f7d]">{o.number}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#17130f]">{o.billing.first_name} {o.billing.last_name}</span>
+                    <span className="text-[12px] font-medium tabular-nums text-[#17130f]">{Number(o.total).toLocaleString("uk-UA")} ₴</span>
+                    <span className="inline-block rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider" style={{ background: st.bg, color: st.color }}>{st.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-[12px] text-[#9c8f7d]">{loading ? "Завантаження…" : "Замовлень ще немає"}</p>
+          )}
+        </div>
+      </div>
+
+      {/* Windowed revenue analytics */}
+      <AnalyticsCard />
+
+      {/* Catalog source status (Postgres, fed by the XLS import) */}
+      <SyncCard sync={sync} onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+type Analytics = {
+  days: number;
+  revenue: number;
+  orders: number;
+  avg: number;
+  series: { day: string; total: number }[];
+  by_brand: { name: string; qty: number; revenue: number }[];
+  by_category: { name: string; qty: number; revenue: number }[];
+};
+
+const RANGES = [7, 30, 90] as const;
+
+function AnalyticsCard() {
+  const [days, setDays] = useState<number>(30);
+  const [data, setData] = useState<Analytics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/stats/analytics?days=${days}`)
+      .then((r) => r.json())
+      .then((d: Analytics) => setData(d))
+      .finally(() => setLoading(false));
+  }, [days]);
+
+  const maxRev = data ? Math.max(1, ...data.series.map((d) => d.total)) : 1;
+  const maxBrand = data ? Math.max(1, ...data.by_brand.map((b) => b.revenue)) : 1;
+  const maxCat = data ? Math.max(1, ...data.by_category.map((c) => c.revenue)) : 1;
+
+  return (
+    <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Аналітика продажів</h2>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 rounded-[3px] border border-[#e8e4de] p-0.5">
+            {RANGES.map((r) => (
+              <button key={r} onClick={() => setDays(r)}
+                className={`rounded-[2px] px-3 py-1 text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                  days === r ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+                }`}>
+                {r} дн
+              </button>
+            ))}
           </div>
+          <a href="/api/admin/orders/export" download
+            className="flex h-7 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] hover:border-[#17130f]">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            CSV
+          </a>
+        </div>
+      </div>
+
+      {/* Windowed KPIs */}
+      <div className="mb-5 grid grid-cols-3 gap-4">
+        <div>
+          <p className="text-[20px] font-light tabular-nums text-[#17130f]">{loading ? "…" : fmtUah(data!.revenue)}</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Виручка</p>
+        </div>
+        <div>
+          <p className="text-[20px] font-light tabular-nums text-[#17130f]">{loading ? "…" : data!.orders}</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Замовлень</p>
+        </div>
+        <div>
+          <p className="text-[20px] font-light tabular-nums text-[#17130f]">{loading ? "…" : fmtUah(data!.avg)}</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Середній чек</p>
+        </div>
+      </div>
+
+      {data && data.revenue === 0 ? (
+        <p className="py-6 text-center text-[12px] text-[#9c8f7d]">За обраний період продажів не було</p>
+      ) : (
+        <>
+          {/* Sparkline */}
+          <div className="mb-5 flex h-24 items-end gap-px">
+            {(data?.series ?? []).map((d) => (
+              <div key={d.day} className="flex-1 rounded-t-[1px] bg-[#d8c7a8] transition-all hover:bg-[#17130f]"
+                style={{ height: `${Math.max(2, Math.round((d.total / maxRev) * 100))}%` }}
+                title={`${new Date(d.day).toLocaleDateString("uk-UA")}: ${fmtUah(d.total)}`} />
+            ))}
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            <Breakdown title="За брендами" rows={data?.by_brand ?? []} max={maxBrand} loading={loading} />
+            <Breakdown title="За категоріями" rows={data?.by_category ?? []} max={maxCat} loading={loading} />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Breakdown({ title, rows, max, loading }: {
+  title: string; rows: { name: string; qty: number; revenue: number }[]; max: number; loading: boolean;
+}) {
+  return (
+    <div>
+      <h3 className="mb-3 text-[10px] uppercase tracking-[0.14em] text-[#b9ae9b]">{title}</h3>
+      {loading ? (
+        <p className="text-[12px] text-[#9c8f7d]">Завантаження…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-[12px] text-[#9c8f7d]">Немає даних</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map((r) => (
+            <div key={r.name}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[#17130f]">{r.name}</span>
+                <span className="text-[12px] tabular-nums text-[#9c8f7d]">{fmtUah(r.revenue)}</span>
+              </div>
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#f0ece6]">
+                <div className="h-full rounded-full bg-[#17130f]" style={{ width: `${Math.max(3, Math.round((r.revenue / max) * 100))}%` }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function SyncCard({ sync, onSync }: { sync: SyncState | null; onSync: () => void }) {
-  const isSyncing = sync?.status === "syncing";
+function KpiCard({ label, value, sub, accent, warn, onClick }: {
+  label: string; value: string; sub?: string; accent?: boolean; warn?: boolean; onClick?: () => void;
+}) {
+  if (onClick) {
+    return (
+      <button onClick={onClick} className={`flex flex-col gap-1 rounded-[4px] border bg-white p-5 text-left transition-shadow hover:shadow-sm ${accent ? "border-[#17130f]" : "border-[#e8e4de]"}`}>
+        <span className={`text-[26px] font-light leading-none tabular-nums ${warn ? "text-[#c0392b]" : "text-[#17130f]"}`}>{value}</span>
+        <span className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">{label}</span>
+        {sub && <span className="text-[11px] text-[#b9ae9b]">{sub}</span>}
+      </button>
+    );
+  }
+  return (
+    <div className={`flex flex-col gap-1 rounded-[4px] border bg-white p-5 ${accent ? "border-[#17130f]" : "border-[#e8e4de]"}`}>
+      <span className={`text-[26px] font-light leading-none tabular-nums ${warn ? "text-[#c0392b]" : "text-[#17130f]"}`}>{value}</span>
+      <span className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">{label}</span>
+      {sub && <span className="text-[11px] text-[#b9ae9b]">{sub}</span>}
+    </div>
+  );
+}
+
+function SyncCard({ sync, onNavigate }: { sync: SyncState | null; onNavigate: (s: Section) => void }) {
   const lastSync = sync?.last_sync
     ? new Date(sync.last_sync).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : null;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-[3px] border border-[#e8e4de] bg-white px-6 py-4">
-      <div className="flex items-center gap-4">
-        {/* Source indicator */}
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                sync?.total_products ? "bg-emerald-500" : "bg-[#d0c8be]"
-              }`}
-            />
-            <span className="text-[11px] uppercase tracking-[0.12em] text-[#17130f]">
-              {sync?.total_products
-                ? `SQLite · ${sync.total_products.toLocaleString("uk-UA")} товарів`
-                : "SQLite порожній — джерело: WooCommerce API"}
-            </span>
-          </div>
-          <p className="ml-4 text-[11px] text-[#9c8f7d]">
-            {isSyncing
-              ? "Синхронізація…"
-              : lastSync
-              ? `Останнє оновлення: ${lastSync}`
-              : "Ніколи не синхронізовано"}
-            {sync?.status === "error" && (
-              <span className="ml-2 text-red-600">{sync.error}</span>
-            )}
-          </p>
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${sync?.total_products ? "bg-emerald-500" : "bg-[#d0c8be]"}`} />
+          <span className="text-[11px] uppercase tracking-[0.12em] text-[#17130f]">
+            {sync?.total_products
+              ? `PostgreSQL · ${sync.total_products.toLocaleString("uk-UA")} товарів`
+              : "Каталог порожній"}
+          </span>
         </div>
+        <p className="ml-4 text-[11px] text-[#9c8f7d]">
+          {lastSync ? `Останній імпорт: ${lastSync}` : "Каталог ще не імпортувався"}
+        </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        {sync?.status === "done" && (
-          <span className="text-[11px] text-emerald-600">✓ Готово</span>
-        )}
-        <button
-          onClick={onSync}
-          disabled={isSyncing || !sync?.has_wc_creds}
-          title={!sync?.has_wc_creds ? "Потрібні WC API ключі" : undefined}
-          className="flex h-8 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:border-[#17130f] disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M23 4v6h-6M1 20v-6h6" />
-            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-          </svg>
-          {isSyncing ? "Синхронізація…" : "Синхронізувати"}
-        </button>
-      </div>
+      <button
+        onClick={() => onNavigate("catalog")}
+        className="flex h-8 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:border-[#17130f]"
+      >
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 4h16v4H4V4zm0 6h16v10H4V10zm4 3h8" />
+        </svg>
+        Оновити каталог
+      </button>
     </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  icon,
-  accent,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  icon: string;
-  accent?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="group flex flex-col gap-3 rounded-[3px] border border-[#e8e4de] bg-white p-5 text-left transition-shadow hover:shadow-sm"
-    >
-      <div className="flex items-start justify-between">
-        <span className={`text-3xl font-light tabular-nums ${accent ? "text-[#c0392b]" : "text-[#17130f]"}`}>
-          {value}
-        </span>
-        <span className="text-[#d5cfc6] transition-colors group-hover:text-[#9c8f7d]">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-            <path d={icon} />
-          </svg>
-        </span>
-      </div>
-      <span className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">{label}</span>
-    </button>
   );
 }
 
@@ -878,161 +915,81 @@ function ContentSection({
 }
 
 
-/* ─── Orders ─── */
+/* ─── Subscribers ─── */
 
-const ORDER_STATUSES = [
-  { value: "", label: "Всі" },
-  { value: "pending", label: "Очікує оплати" },
-  { value: "processing", label: "В обробці" },
-  { value: "on-hold", label: "На утриманні" },
-  { value: "completed", label: "Виконано" },
-  { value: "cancelled", label: "Скасовано" },
-];
+type Subscriber = { id: string; email: string; source: string; created_at: string };
 
-function OrdersSection({
-  orders,
-  loading,
-  statusFilter,
-  page,
-  noCreds,
-  onStatusChange,
-  onPageChange,
-}: {
-  orders: WcOrder[];
-  loading: boolean;
-  statusFilter: string;
-  page: number;
-  noCreds: boolean;
-  onStatusChange: (s: string) => void;
-  onPageChange: (p: number) => void;
-}) {
-  if (noCreds) {
-    return (
-      <div className="rounded-[3px] border border-amber-200 bg-amber-50 px-6 py-8 text-center">
-        <p className="text-sm font-medium text-amber-800">Потрібні WooCommerce API ключі</p>
-        <p className="mt-2 text-[12px] text-amber-600">
-          Додайте <code className="rounded bg-amber-100 px-1 font-mono">WOOCOMMERCE_KEY</code> і{" "}
-          <code className="rounded bg-amber-100 px-1 font-mono">WOOCOMMERCE_SECRET</code> у .env.local
-        </p>
-      </div>
-    );
+function SubscribersSection() {
+  const [rows, setRows] = useState<Subscriber[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function load(q: string) {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      const res = await fetch(`/api/admin/subscribers?${params}`);
+      const data = await res.json();
+      setRows(data.subscribers ?? []);
+      setTotal(data.total ?? 0);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(""); }, []);
+
+  function onSearch(v: string) {
+    setSearch(v);
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => load(v), 350);
   }
 
   return (
-    <div className="space-y-5">
-      {/* Status filter tabs */}
-      <div className="flex flex-wrap gap-1.5">
-        {ORDER_STATUSES.map((s) => (
-          <button
-            key={s.value}
-            onClick={() => onStatusChange(s.value)}
-            className={`h-8 rounded-[3px] px-4 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-              statusFilter === s.value
-                ? "bg-[#17130f] text-white"
-                : "border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
+    <div className="max-w-3xl">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-[#17130f]">Підписники</h2>
+          <p className="text-[12px] text-[#9c8f7d]">{total.toLocaleString("uk-UA")} email у розсилці</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Пошук email…"
+            className="h-10 w-56 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+          <a href="/api/admin/subscribers?format=csv" download
+            className="flex h-10 items-center gap-2 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            CSV
+          </a>
+        </div>
       </div>
 
       {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-[3px] bg-[#ede9e3]" />
-          ))}
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="rounded-[3px] border border-[#e8e4de] bg-white px-4 py-12 text-center text-sm text-[#9c8f7d]">
-          Замовлень немає
-        </div>
+        <div className="space-y-2">{[1,2,3,4,5].map((i) => <div key={i} className="h-12 animate-pulse bg-[#f3efe8]" />)}</div>
+      ) : rows.length === 0 ? (
+        <p className="py-10 text-center text-sm text-[#9c8f7d]">{search ? "Нічого не знайдено" : "Поки немає підписників"}</p>
       ) : (
-        <div className="overflow-x-auto rounded-[3px] border border-[#e8e4de] bg-white">
-          <table className="w-full min-w-[680px] text-sm">
-            <thead>
-              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
-                <th className="px-4 py-3 text-left">№ Замовлення</th>
-                <th className="px-4 py-3 text-left">Дата</th>
-                <th className="px-4 py-3 text-left">Покупець</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">Товари</th>
-                <th className="px-4 py-3 text-right">Сума</th>
-                <th className="px-4 py-3 text-center">Статус</th>
-                <th className="px-4 py-3 w-10" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#f7f4f0]">
-              {orders.map((o) => {
-                const st = STATUS[o.status] ?? { label: o.status, bg: "#f5f5f5", color: "#555" };
-                const date = new Date(o.date_created).toLocaleDateString("uk-UA", {
-                  day: "2-digit", month: "2-digit", year: "2-digit",
-                });
-                return (
-                  <tr key={o.id} className="hover:bg-[#fdfcfb]">
-                    <td className="px-4 py-3 font-mono text-[12px] font-medium text-[#17130f]">#{o.number}</td>
-                    <td className="px-4 py-3 text-[12px] tabular-nums text-[#9c8f7d]">{date}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-[13px] font-medium">{o.billing.first_name} {o.billing.last_name}</p>
-                      {o.billing.phone && <p className="text-[11px] text-[#9c8f7d]">{o.billing.phone}</p>}
-                    </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      {o.line_items.slice(0, 2).map((li) => (
-                        <p key={li.id} className="max-w-[180px] truncate text-[12px] text-[#9c8f7d]">
-                          {li.name} ×{li.quantity}
-                        </p>
-                      ))}
-                      {o.line_items.length > 2 && (
-                        <p className="text-[11px] text-[#b9ae9b]">+{o.line_items.length - 2} ще</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">
-                      {Number(o.total).toLocaleString("uk-UA")} {o.currency_symbol}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className="inline-block rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-wider"
-                        style={{ background: st.bg, color: st.color }}
-                      >
-                        {st.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <a
-                        href={`https://maniagroup.com.ua/wp-admin/post.php?post=${o.id}&action=edit`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Відкрити в WP"
-                        className="flex h-7 w-7 items-center justify-center rounded-[3px] text-[#b9ae9b] transition-colors hover:bg-[#f0ece6] hover:text-[#17130f]"
-                      >
-                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </a>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Pagination */}
-      {!loading && orders.length > 0 && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onPageChange(page - 1)}
-            disabled={page <= 1}
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] bg-white text-[#9c8f7d] transition-colors hover:border-[#17130f] hover:text-[#17130f] disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
-          <span className="min-w-12 text-center text-[12px] text-[#9c8f7d]">Стор. {page}</span>
-          <button
-            onClick={() => onPageChange(page + 1)}
-            disabled={orders.length < 20}
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] bg-white text-[#9c8f7d] transition-colors hover:border-[#17130f] hover:text-[#17130f] disabled:cursor-not-allowed disabled:opacity-30"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
+        <div className="border border-[#eee7db]">
+          <div className="flex items-center gap-3 border-b border-[#eee7db] bg-[#faf8f5] px-4 py-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <span className="flex-1">Email</span>
+            <span className="w-24">Джерело</span>
+            <span className="w-28 text-right">Дата</span>
+          </div>
+          <div className="divide-y divide-[#eee7db]">
+            {rows.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
+                <span className="min-w-0 flex-1 truncate text-[#17130f]">{s.email}</span>
+                <span className="w-24 truncate text-[12px] text-[#9c8f7d]">{s.source || "—"}</span>
+                <span className="w-28 text-right text-[12px] tabular-nums text-[#9c8f7d]">
+                  {new Date(s.created_at).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1076,6 +1033,25 @@ function BackupSection() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      <Card title="Повна копія бази даних" subtitle="Дамп PostgreSQL: товари, замовлення, клієнти, підписники, налаштування">
+        <div className="flex flex-wrap items-center gap-4">
+          <a
+            href="/api/admin/backup"
+            download
+            className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0L8 12m4 4V4" />
+            </svg>
+            Завантажити дамп .sql
+          </a>
+          <span className="text-[12px] text-[#9c8f7d]">maniagroup-db-YYYY-MM-DD.sql</span>
+        </div>
+        <p className="mt-4 text-[11px] text-[#b9ae9b]">
+          Відновлення на сервері: <code className="rounded bg-[#f3efe8] px-1.5 py-0.5 text-[#6b6052]">psql &quot;$DATABASE_URL&quot; &lt; файл.sql</code>
+        </p>
+      </Card>
+
       <Card title="Резервна копія контенту" subtitle="JSON-файл з усім редагованим вмістом сайту">
         <div className="flex items-center gap-4">
           <a
@@ -1106,13 +1082,14 @@ function BackupSection() {
         </div>
       </Card>
 
-      <Card title="Що входить до резервної копії">
+      <Card title="Що входить до JSON-копії контенту">
         <ul className="space-y-2 text-[12px] text-[#9c8f7d]">
           {[
             "Рядок оголошень",
             "Hero-блок (заголовки, підзаголовок)",
             "Блоки переваг (4 плашки)",
             "Контакти (телефон, email, посилання)",
+            "Тексти сторінок: Про нас, Доставка, Повернення",
           ].map((item) => (
             <li key={item} className="flex items-center gap-2">
               <span className="h-1 w-1 rounded-full bg-[#b9ae9b]" />
@@ -1121,7 +1098,7 @@ function BackupSection() {
           ))}
         </ul>
         <p className="mt-4 text-[11px] text-[#b9ae9b]">
-          Ціни і товари зберігаються у WooCommerce і не входять до резервної копії.
+          Товари, замовлення та клієнти зберігаються в PostgreSQL — для них використовуйте повний дамп бази даних вище.
         </p>
       </Card>
     </div>
@@ -1256,45 +1233,81 @@ function CatalogImportSection() {
 /* ─── Settings ─── */
 
 function SettingsSection() {
+  const [store, setStore] = useState({ free_ship_threshold: "", store_phone: "", store_email: "" });
+  const [storeStatus, setStoreStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [pwd, setPwd] = useState({ current: "", next: "", next2: "" });
+  const [pwdStatus, setPwdStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [pwdError, setPwdError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/admin/settings").then((r) => r.json()).then((d) =>
+      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "" }),
+    );
+  }, []);
+
+  async function saveStore() {
+    setStoreStatus("saving");
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(store) });
+    setStoreStatus("saved");
+    setTimeout(() => setStoreStatus("idle"), 2500);
+  }
+
+  async function savePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwdError("");
+    if (pwd.next !== pwd.next2) { setPwdError("Паролі не співпадають"); return; }
+    if (pwd.next.length < 6) { setPwdError("Мінімум 6 символів"); return; }
+    setPwdStatus("saving");
+    const res = await fetch("/api/admin/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ current: pwd.current, next: pwd.next }) });
+    const data = await res.json();
+    setPwdStatus("idle");
+    if (!res.ok) { setPwdError(data.error ?? "Помилка"); return; }
+    setPwd({ current: "", next: "", next2: "" });
+    setPwdStatus("saved");
+    setTimeout(() => setPwdStatus("idle"), 2500);
+  }
+
+  const inp = "mt-1.5 h-10 w-full rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] text-[#17130f] focus:border-[#17130f] focus:outline-none";
+  const lbl = "text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]";
+  const btn = "h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50";
+
   return (
     <div className="max-w-2xl space-y-6">
-      <Card title="Сервер та API">
+      <Card title="Магазин" subtitle="Базові параметри вітрини">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block"><span className={lbl}>Безкоштовна доставка від, ₴</span>
+            <input type="number" className={inp} value={store.free_ship_threshold} onChange={(e) => setStore({ ...store, free_ship_threshold: e.target.value })} /></label>
+          <label className="block"><span className={lbl}>Телефон магазину</span>
+            <input className={inp} value={store.store_phone} onChange={(e) => setStore({ ...store, store_phone: e.target.value })} /></label>
+          <label className="block sm:col-span-2"><span className={lbl}>Email магазину</span>
+            <input type="email" className={inp} value={store.store_email} onChange={(e) => setStore({ ...store, store_email: e.target.value })} placeholder="hello@maniagroup.com.ua" /></label>
+        </div>
+        <button onClick={saveStore} disabled={storeStatus === "saving"} className={`mt-5 ${btn}`}>
+          {storeStatus === "saving" ? "Зберігаємо…" : storeStatus === "saved" ? "✓ Збережено" : "Зберегти"}
+        </button>
+      </Card>
+
+      <Card title="Безпека" subtitle="Зміна пароля адмін-панелі">
+        <form onSubmit={savePassword} className="max-w-sm space-y-4">
+          <label className="block"><span className={lbl}>Поточний пароль</span>
+            <input type="password" required className={inp} value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} /></label>
+          <label className="block"><span className={lbl}>Новий пароль</span>
+            <input type="password" required className={inp} value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} placeholder="мінімум 6 символів" /></label>
+          <label className="block"><span className={lbl}>Повторіть новий пароль</span>
+            <input type="password" required className={inp} value={pwd.next2} onChange={(e) => setPwd({ ...pwd, next2: e.target.value })} /></label>
+          {pwdError && <p className="text-[13px] text-[#b3392c]">{pwdError}</p>}
+          <button type="submit" disabled={pwdStatus === "saving"} className={btn}>
+            {pwdStatus === "saving" ? "Зберігаємо…" : pwdStatus === "saved" ? "✓ Пароль змінено" : "Змінити пароль"}
+          </button>
+        </form>
+      </Card>
+
+      <Card title="Інфраструктура">
         <div className="space-y-3">
-          <InfoRow label="Сайт" value="maniagroup.com.ua" />
-          <InfoRow label="WC Store API" value="maniagroup.com.ua/wp-json/wc/store" />
-          <InfoRow label="VPS" value="173.242.49.73 · pm2 maniagroup · :3020" />
+          <InfoRow label="Сайт" value="maniagroup.munister.com.ua" />
+          <InfoRow label="База даних" value="PostgreSQL · maniagroup" />
+          <InfoRow label="Сервер" value="173.242.49.73 · pm2 maniagroup" />
         </div>
-      </Card>
-
-      <Card title="WooCommerce REST API" subtitle="Потрібно для редагування цін товарів та перегляду замовлень">
-        <div className="space-y-3">
-          <p className="text-[12px] text-[#9c8f7d]">
-            Згенеруйте ключі у WP Admin → WooCommerce → Налаштування → Додатково → REST API → «Додати ключ» (доступ: читання/запис).
-          </p>
-          <div className="rounded-[3px] border border-[#e8e4de] bg-[#f7f5f2] px-4 py-3 font-mono text-[12px] leading-relaxed text-[#9c8f7d]">
-            WOOCOMMERCE_KEY=ck_xxxxxxxxxx<br />
-            WOOCOMMERCE_SECRET=cs_xxxxxxxxxx
-          </div>
-          <p className="text-[11px] text-[#b9ae9b]">
-            Додайте у файл .env.local на сервері і запустіть ./deploy.sh
-          </p>
-        </div>
-      </Card>
-
-      <Card title="Пароль адміна">
-        <div className="rounded-[3px] border border-[#e8e4de] bg-[#f7f5f2] px-4 py-3 font-mono text-[12px] text-[#9c8f7d]">
-          ADMIN_PASSWORD=ваш_новий_пароль
-        </div>
-        <p className="mt-2 text-[11px] text-[#b9ae9b]">Після зміни: ./deploy.sh</p>
-      </Card>
-
-      <Card title="Деплой">
-        <div className="rounded-[3px] border border-[#e8e4de] bg-[#f7f5f2] px-4 py-3 font-mono text-[12px] text-[#9c8f7d]">
-          ./deploy.sh
-        </div>
-        <p className="mt-2 text-[12px] text-[#b9ae9b]">
-          rsync → npm build → pm2 restart — запускається з локального комп'ютера.
-        </p>
       </Card>
     </div>
   );

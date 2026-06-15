@@ -1,6 +1,39 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { listOrders, updateOrderStatus } from "@/lib/orders";
+import { listOrders, updateOrderStatus, type Order } from "@/lib/orders";
+
+export function serializeOrder(o: Order) {
+  return {
+    id: o.id,
+    number: o.number,
+    status: o.status,
+    date_created: o.created_at,
+    payment_method: o.payment_method,
+    billing: {
+      first_name: o.first_name,
+      last_name: o.last_name,
+      phone: o.phone,
+      email: o.email,
+    },
+    shipping_city: o.shipping_city,
+    shipping_branch: o.shipping_branch,
+    comment: o.comment,
+    subtotal: String(o.subtotal),
+    shipping_cost: String(o.shipping_cost),
+    line_items: o.items.map((it) => ({
+      id: it.id,
+      product_id: it.product_id,
+      name: it.variation ? `${it.name} (${it.variation})` : it.name,
+      brand: it.brand,
+      image_src: it.image_src,
+      quantity: it.quantity,
+      price: String(it.price),
+      total: String(it.line_total),
+    })),
+    total: String(o.total),
+    currency_symbol: "₴",
+  };
+}
 
 export async function GET(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
@@ -9,34 +42,19 @@ export async function GET(req: Request) {
   const page = Number(searchParams.get("page") ?? "1");
   const status = searchParams.get("status") ?? "";
   const perPage = Number(searchParams.get("per_page") ?? "20");
+  const qParam = searchParams.get("q") ?? "";
+  const from = searchParams.get("from") ?? "";
+  const to = searchParams.get("to") ?? "";
 
-  const { orders } = await listOrders({ page, perPage, status: status || undefined });
+  const { orders, total } = await listOrders({
+    page, perPage,
+    status: status || undefined,
+    q: qParam || undefined,
+    from: from || undefined,
+    to: to || undefined,
+  });
 
-  return NextResponse.json(
-    orders.map((o) => ({
-      id: o.id,
-      number: o.number,
-      status: o.status,
-      date_created: o.created_at,
-      billing: {
-        first_name: o.first_name,
-        last_name: o.last_name,
-        phone: o.phone,
-        email: o.email,
-      },
-      shipping_city: o.shipping_city,
-      shipping_branch: o.shipping_branch,
-      comment: o.comment,
-      line_items: o.items.map((it) => ({
-        id: it.id,
-        name: it.variation ? `${it.name} (${it.variation})` : it.name,
-        quantity: it.quantity,
-        total: String(it.line_total),
-      })),
-      total: String(o.total),
-      currency_symbol: "₴",
-    })),
-  );
+  return NextResponse.json({ total, orders: orders.map(serializeOrder) });
 }
 
 export async function PATCH(req: Request) {

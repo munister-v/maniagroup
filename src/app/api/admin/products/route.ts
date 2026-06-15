@@ -7,7 +7,9 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q") ?? undefined;
   const page = Number(searchParams.get("page") ?? "1");
-  const { products, total } = await listAdminProducts({ q, page });
+  const stockParam = searchParams.get("stock");
+  const stock = stockParam === "in" || stockParam === "out" ? stockParam : undefined;
+  const { products, total } = await listAdminProducts({ q, page, stock });
   return NextResponse.json({ products, total });
 }
 

@@ -7,12 +7,14 @@ export type Facets = {
   brands: { name: string; slug: string }[];
   categories?: { name: string; slug: string }[];
   sizes: { slug: string; name: string }[];
+  colors?: { name: string }[];
 };
 
 export type ActiveFilters = {
   category?: string;
   brand?: string;
   gender?: string;
+  color?: string;
   q?: string;
   sort?: string;
   size?: string;
@@ -38,6 +40,7 @@ export function CatalogFilters({
     if (next.category) params.set("category", next.category);
     if (next.brand) params.set("brand", next.brand);
     if (next.gender) params.set("gender", next.gender);
+    if (next.color) params.set("color", next.color);
     if (next.q) params.set("q", next.q);
     if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
     if (next.size) params.set("size", next.size);
@@ -52,8 +55,8 @@ export function CatalogFilters({
     setOpen(false);
   }
 
-  const hasActive = active.size || active.min || active.max || active.brand || active.category || active.gender;
-  const activeCount = [active.category, active.brand, active.gender, active.size, active.min || active.max].filter(Boolean).length;
+  const hasActive = active.size || active.min || active.max || active.brand || active.category || active.gender || active.color;
+  const activeCount = [active.category, active.brand, active.gender, active.color, active.size, active.min || active.max].filter(Boolean).length;
 
   const renderBody = () => (
     <div className="space-y-8">
@@ -119,6 +122,26 @@ export function CatalogFilters({
         </div>
       )}
 
+      {facets.colors && facets.colors.length > 0 && (
+        <div>
+          <h3 className="text-[11px] uppercase tracking-luxe text-muted">Колір</h3>
+          <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+            {facets.colors.map((c) => (
+              <li key={c.name}>
+                <button
+                  onClick={() => go({ color: active.color === c.name ? undefined : c.name })}
+                  className={`text-sm transition-colors hover:text-ink ${
+                    active.color === c.name ? "text-ink underline underline-offset-4" : "text-muted"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div>
         <h3 className="text-[11px] uppercase tracking-luxe text-muted">Ціна, ₴</h3>
         <form
@@ -160,7 +183,7 @@ export function CatalogFilters({
           onClick={() => {
             setMin("");
             setMax("");
-            go({ size: undefined, min: undefined, max: undefined, brand: undefined, category: undefined, gender: undefined });
+            go({ size: undefined, min: undefined, max: undefined, brand: undefined, category: undefined, gender: undefined, color: undefined });
           }}
           className="link-underline text-[11px] uppercase tracking-luxe text-ink"
         >
