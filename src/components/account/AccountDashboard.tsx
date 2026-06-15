@@ -86,14 +86,29 @@ export function AccountDashboard({
           <p className="mt-1 text-sm text-muted">{account.email}</p>
         </div>
         <button onClick={logout}
-          className="hidden text-[11px] uppercase tracking-luxe text-muted transition-colors hover:text-ink md:block">
+          className="shrink-0 text-[11px] uppercase tracking-luxe text-muted transition-colors hover:text-ink">
           Вийти →
         </button>
       </div>
 
+      {/* Mobile tab strip */}
+      <div className="mb-6 -mx-5 flex gap-1 overflow-x-auto border-b border-line px-5 lg:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`shrink-0 border-b-2 px-4 py-3 text-[11px] uppercase tracking-luxe transition-colors ${
+              tab === t.id ? "border-ink text-ink" : "border-transparent text-muted"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-[220px_1fr]">
-        {/* Sidebar nav */}
-        <aside>
+        {/* Sidebar nav (desktop) */}
+        <aside className="hidden lg:block">
           <nav className="space-y-0.5 border border-line">
             {TABS.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
@@ -104,11 +119,6 @@ export function AccountDashboard({
                 {t.label}
               </button>
             ))}
-            <button onClick={logout}
-              className="flex w-full items-center gap-3 px-5 py-3.5 text-left text-[11px] uppercase tracking-luxe text-muted transition-colors hover:text-ink md:hidden">
-              <Icon d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-              Вийти
-            </button>
           </nav>
 
           <div className="mt-4 border border-line p-5">
