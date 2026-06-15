@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
+import { CatalogSort } from "@/components/CatalogSort";
 import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets } from "@/lib/productSource";
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
@@ -12,10 +13,10 @@ export const metadata = {
   alternates: { canonical: "/catalog" },
 };
 
-const SORTS: Record<string, { orderby: "date" | "price"; order: "asc" | "desc"; label: string }> = {
-  newest:     { orderby: "date",  order: "desc", label: "Спочатку нові" },
-  price_asc:  { orderby: "price", order: "asc",  label: "Дешевші спочатку" },
-  price_desc: { orderby: "price", order: "desc",  label: "Дорожчі спочатку" },
+const SORTS: Record<string, { orderby: "date" | "price"; order: "asc" | "desc"; label: string; short: string }> = {
+  newest:     { orderby: "date",  order: "desc", label: "Спочатку нові",    short: "Новинки" },
+  price_asc:  { orderby: "price", order: "asc",  label: "Дешевші спочатку", short: "Дешевші" },
+  price_desc: { orderby: "price", order: "desc",  label: "Дорожчі спочатку", short: "Дорожчі" },
 };
 
 const GENDERS: { slug: string; label: string }[] = [
@@ -122,7 +123,7 @@ export default async function CatalogPage({
         </div>
       </Reveal>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[220px_1fr] lg:gap-12">
+      <div className="mt-6 grid gap-4 md:mt-8 lg:grid-cols-[220px_1fr] lg:gap-12">
         <div className="lg:pt-1">
           <CatalogFilters
             facets={facets}
@@ -131,27 +132,40 @@ export default async function CatalogPage({
         </div>
 
         <div className="min-w-0">
-          {/* Gender toggle */}
-          <div className="mb-4 flex gap-2">
-            {GENDERS.map((g) => {
-              const active = gender === g.slug;
-              return (
-                <Link
-                  key={g.slug}
-                  href={buildHref({ gender: active ? undefined : g.slug, page: undefined })}
-                  className={`border px-5 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
-                    active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
-                  }`}
-                >
-                  {g.label}
-                </Link>
-              );
-            })}
+          {/* Gender toggle + mobile sort */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex gap-2">
+              {GENDERS.map((g) => {
+                const active = gender === g.slug;
+                return (
+                  <Link
+                    key={g.slug}
+                    href={buildHref({ gender: active ? undefined : g.slug, page: undefined })}
+                    className={`border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors sm:px-5 ${
+                      active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
+                    }`}
+                  >
+                    {g.label}
+                  </Link>
+                );
+              })}
+            </div>
+            {/* mobile sort dropdown — desktop uses the inline link row below */}
+            <div className="md:hidden">
+              <CatalogSort
+                value={sortKey}
+                options={Object.entries(SORTS).map(([key, s]) => ({
+                  key,
+                  label: s.short,
+                  href: buildHref({ sort: key === "newest" ? undefined : key, page: undefined }),
+                }))}
+              />
+            </div>
           </div>
 
-          {/* Brand chips — horizontal scroll */}
+          {/* Brand chips — horizontal scroll (tablet/desktop only; mobile uses Фільтри) */}
           {brands.length > 0 && (
-            <div className="mb-6 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mb-6 hidden gap-2 overflow-x-auto pb-1 md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {brands.map((b) => {
                 const active = brandSlugParam === b.slug;
                 return (
@@ -176,8 +190,8 @@ export default async function CatalogPage({
                 ? `${((page - 1) * perPage + 1)}–${Math.min(page * perPage, total)} з ${total.toLocaleString("uk-UA")}`
                 : "Товарів не знайдено"}
             </p>
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-luxe">
-              <span className="hidden text-muted sm:inline">Сортування:</span>
+            <div className="hidden items-center gap-3 text-[11px] uppercase tracking-luxe md:flex">
+              <span className="text-muted">Сортування:</span>
               {Object.entries(SORTS).map(([key, s]) => (
                 <Link
                   key={key}
