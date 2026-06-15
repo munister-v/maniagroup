@@ -8,6 +8,7 @@ export type SiteContent = {
     titleLine1: string;
     titleAccent: string;
     subtitle: string;
+    stats: { value: string; label: string }[];
   };
   services: { title: string; text: string }[];
   contacts: {
@@ -52,6 +53,11 @@ export const DEFAULT_CONTENT: SiteContent = {
     titleAccent: "говорить тихо",
     subtitle:
       "EA7, Moschino, Antony Morato, MC2 Saint Barth та інші — оригінальні речі, дбайливо відібрані у європейських домів моди.",
+    stats: [
+      { value: "6+", label: "брендів" },
+      { value: "100%", label: "оригінал" },
+      { value: "1–3 дні", label: "доставка" },
+    ],
   },
   services: [
     { title: "Тільки оригінал", text: "Прямі поставки від брендів та офіційних дистриб'юторів" },

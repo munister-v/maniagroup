@@ -37,7 +37,7 @@ export default async function Home() {
 }
 
 /* ─────────────────────────────────────────────────────────── Hero */
-function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string } }) {
+function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string; stats: { value: string; label: string }[] } }) {
   return (
     <section className="relative isolate -mt-16 overflow-hidden bg-ink text-paper md:-mt-[120px]">
       <Image
@@ -98,11 +98,7 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           className="hero-rise mt-10 grid max-w-md grid-cols-3 gap-4 border-t border-paper/15 pt-6 md:mt-12 md:gap-6"
           style={{ animationDelay: "340ms" }}
         >
-          {[
-            { value: "6+", label: "брендів" },
-            { value: "100%", label: "оригінал" },
-            { value: "1–3 дні", label: "доставка" },
-          ].map((s) => (
+          {hero.stats.map((s) => (
             <div key={s.label}>
               <dt className="font-display text-2xl text-paper md:text-3xl">{s.value}</dt>
               <dd className="mt-1 whitespace-nowrap text-[10px] uppercase tracking-luxe text-paper/55">{s.label}</dd>

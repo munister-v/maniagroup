@@ -649,7 +649,7 @@ function ContentSection({
   function set<K extends keyof SiteContent>(key: K, val: SiteContent[K]) {
     update((c) => ({ ...c, [key]: val }));
   }
-  function hero(field: keyof SiteContent["hero"], v: string) {
+  function hero<K extends keyof SiteContent["hero"]>(field: K, v: SiteContent["hero"][K]) {
     update((c) => ({ ...c, hero: { ...c.hero, [field]: v } }));
   }
   function contact(field: keyof SiteContent["contacts"], v: string) {
@@ -698,6 +698,20 @@ function ContentSection({
                 <Field label="Заголовок рядок 1" value={content.hero.titleLine1} onChange={(v) => hero("titleLine1", v)} />
                 <Field label="Акцент (курсив)" value={content.hero.titleAccent} onChange={(v) => hero("titleAccent", v)} />
                 <Field label="Підзаголовок" value={content.hero.subtitle} onChange={(v) => hero("subtitle", v)} textarea />
+              </div>
+            </Card>
+
+            <Card title="Статистика в hero" subtitle="3 цифри під кнопками">
+              <div className="grid grid-cols-3 gap-4">
+                {content.hero.stats.map((s, i) => (
+                  <div key={i} className="space-y-3 rounded-[3px] border border-[#eceae6] p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Цифра {i + 1}</p>
+                    <Field label="Значення" value={s.value}
+                      onChange={(v) => hero("stats", content.hero.stats.map((x, j) => j === i ? { ...x, value: v } : x))} />
+                    <Field label="Підпис" value={s.label}
+                      onChange={(v) => hero("stats", content.hero.stats.map((x, j) => j === i ? { ...x, label: v } : x))} />
+                  </div>
+                ))}
               </div>
             </Card>
 
