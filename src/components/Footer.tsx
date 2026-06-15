@@ -34,7 +34,7 @@ export async function Footer() {
   const { phone, email, instagram, facebook } = content.contacts;
 
   return (
-    <footer className="mt-24 border-t border-line">
+    <footer className="mt-24 border-t border-line pb-20 md:pb-0">
       <div className="wrap grid gap-12 py-16 md:grid-cols-[1.4fr_repeat(3,1fr)]">
         <div>
           <p className="font-display text-2xl tracking-wordmark text-ink">

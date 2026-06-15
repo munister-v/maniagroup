@@ -8,6 +8,10 @@ import { BRANDS, BRAND_LOGOS, brandHref, CATEGORIES, type Product } from "@/lib/
 import { getProducts } from "@/lib/productSource";
 import { getSiteContent } from "@/lib/siteContent";
 
+export const metadata = {
+  alternates: { canonical: "/" },
+};
+
 export default async function Home() {
   let products: Product[] = [];
   try {

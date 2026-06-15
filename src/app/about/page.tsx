@@ -5,7 +5,8 @@ import { Grain } from "@/components/Grain";
 import { getSiteContent } from "@/lib/siteContent";
 
 export const metadata = {
-  title: "Про Mania Group — Оригінальний брендовий одяг",
+  title: "Про нас",
+  alternates: { canonical: "/about" },
   description: "Mania Group — офіційний імпортер EA7, Moschino, Antony Morato, Harmont & Blaine, MC2 Saint Barth та інших брендів в Україні.",
 };
 

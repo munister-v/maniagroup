@@ -19,11 +19,14 @@ export async function generateMetadata({
   const detail = await dbProductById(slug);
   if (!detail) return {};
   const t = `${detail.product.name} — ${detail.product.brand} | Mania Group`;
+  const description = `${detail.product.name} від ${detail.product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`;
   return {
     title: t,
-    description: `${detail.product.name} від ${detail.product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`,
+    description,
+    alternates: { canonical: `/product/${slug}` },
     openGraph: {
       title: t,
+      description,
       images: detail.product.image ? [detail.product.image] : [],
     },
   };
@@ -69,8 +72,47 @@ function ProductView({
     { label: "Країна", value: country ?? "" },
   ].filter((s) => s.value);
 
+  const BASE = "https://maniagroup.munister.com.ua";
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: `${product.name} від ${product.brand}. Оригінал.`,
+    brand: { "@type": "Brand", name: product.brand },
+    category: product.category,
+    image: gallery.length > 0 ? gallery.map((g) => g.src) : product.image ? [product.image] : undefined,
+    sku: product.id,
+    color: color || undefined,
+    offers: {
+      "@type": "Offer",
+      url: `${BASE}/product/${product.id}`,
+      priceCurrency: "UAH",
+      price: product.price,
+      availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+      itemCondition: "https://schema.org/NewCondition",
+    },
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Головна", item: BASE },
+      { "@type": "ListItem", position: 2, name: "Каталог", item: `${BASE}/catalog` },
+      product.categorySlug && {
+        "@type": "ListItem",
+        position: 3,
+        name: product.category,
+        item: `${BASE}/catalog?category=${product.categorySlug}`,
+      },
+      { "@type": "ListItem", position: product.categorySlug ? 4 : 3, name: product.name, item: `${BASE}/product/${product.id}` },
+    ].filter(Boolean),
+  };
+
   return (
     <section className="wrap py-12 md:py-16">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <p className="text-[11px] uppercase tracking-luxe text-muted">
         <Link href="/" className="link-underline">Головна</Link>{" "}
         / <Link href="/catalog" className="link-underline">Каталог</Link> /{" "}

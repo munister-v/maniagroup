@@ -3,7 +3,8 @@ import { Reveal } from "@/components/Reveal";
 import { getSiteContent } from "@/lib/siteContent";
 
 export const metadata = {
-  title: "Обмін і повернення — Mania Group",
+  title: "Обмін і повернення",
+  alternates: { canonical: "/returns" },
   description: "14 днів на обмін або повернення. Умови та порядок оформлення в Mania Group.",
 };
 

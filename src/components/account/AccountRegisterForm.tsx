@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { PasswordIcon } from "./AccountLoginForm";
 
 export function AccountRegisterForm() {
   const [form, setForm] = useState({ first_name: "", last_name: "", email: "", phone: "", password: "", password2: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -56,11 +58,18 @@ export function AccountRegisterForm() {
       </label>
       <label className="block">
         <span className={lbl}>Пароль *</span>
-        <input type="password" required value={form.password} onChange={(e) => set("password", e.target.value)} className={inp} placeholder="Мінімум 6 символів" />
+        <div className="relative mt-1.5">
+          <input type={showPassword ? "text" : "password"} required value={form.password} onChange={(e) => set("password", e.target.value)} className={`${inp} mt-0 pr-11`} placeholder="Мінімум 6 символів" />
+          <button type="button" onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Сховати пароль" : "Показати пароль"}
+            className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted hover:text-ink">
+            <PasswordIcon visible={showPassword} />
+          </button>
+        </div>
       </label>
       <label className="block">
         <span className={lbl}>Повторіть пароль *</span>
-        <input type="password" required value={form.password2} onChange={(e) => set("password2", e.target.value)} className={inp} placeholder="••••••" />
+        <input type={showPassword ? "text" : "password"} required value={form.password2} onChange={(e) => set("password2", e.target.value)} className={inp} placeholder="••••••" />
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={loading}

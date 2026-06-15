@@ -3,7 +3,8 @@ import { Reveal } from "@/components/Reveal";
 import { getSiteContent } from "@/lib/siteContent";
 
 export const metadata = {
-  title: "Контакти — Mania Group",
+  title: "Контакти",
+  alternates: { canonical: "/contacts" },
   description: "Телефон, Instagram та e-mail Mania Group. Відповідаємо щодня з 9:00 до 20:00.",
 };
 

@@ -3,7 +3,8 @@ import { Reveal } from "@/components/Reveal";
 import { getSiteContent } from "@/lib/siteContent";
 
 export const metadata = {
-  title: "Доставка та оплата — Mania Group",
+  title: "Доставка та оплата",
+  alternates: { canonical: "/delivery" },
   description: "Безкоштовна доставка Новою Поштою від 3 000 ₴. Оплата при отриманні по всій Україні.",
 };
 

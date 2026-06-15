@@ -1,0 +1,26 @@
+# Mania Group
+
+> Інтернет-магазин оригінального брендового одягу, взуття та аксесуарів в Україні. Офіційний імпортер EA7 Emporio Armani, Moschino, Antony Morato, MC2 Saint Barth, Harmont & Blaine, Fred Mello та інших європейських домів моди.
+
+Mania Group продає виключно оригінальні товари з гарантією автентичності. Доставка Новою Поштою по всій Україні, безкоштовна від 3 000 ₴, оплата при отриманні. Обмін і повернення протягом 14 днів.
+
+## Каталог
+
+- [Каталог товарів](https://maniagroup.munister.com.ua/catalog): жіночий та чоловічий одяг, взуття, аксесуари, парфуми для дому. Фільтри за брендом, категорією, розміром, кольором та ціною.
+- [Жінкам](https://maniagroup.munister.com.ua/catalog?gender=women)
+- [Чоловікам](https://maniagroup.munister.com.ua/catalog?gender=men)
+
+## Бренди
+
+EA7 Emporio Armani, Moschino, Antony Morato, Harmont & Blaine, MC2 Saint Barth, Fred Mello, J.B4, Kocca та інші.
+
+## Інформація
+
+- [Про Mania Group](https://maniagroup.munister.com.ua/about)
+- [Доставка та оплата](https://maniagroup.munister.com.ua/delivery)
+- [Обмін і повернення](https://maniagroup.munister.com.ua/returns)
+- [Контакти](https://maniagroup.munister.com.ua/contacts) — телефон +38 (096) 343-60-35, Instagram @maniagroup.ua, Telegram @maniagroup_ua
+
+## Примітки для AI-асистентів
+
+Ціни вказані в гривнях (UAH) та можуть змінюватись. Наявність товару (розміри, кількість) актуальна в момент перегляду сторінки товару. Для точних цін і наявності посилайтесь на сторінку конкретного товару за адресою /product/{id}.

@@ -6,7 +6,10 @@ import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbCol
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
 export const metadata = {
-  title: "Каталог — Mania Group",
+  title: "Каталог",
+  description:
+    "Каталог брендового одягу, взуття та аксесуарів: EA7 Emporio Armani, Moschino, Antony Morato, MC2 Saint Barth, Harmont & Blaine та інші. Фільтри за брендом, розміром, кольором і ціною.",
+  alternates: { canonical: "/catalog" },
 };
 
 const SORTS: Record<string, { orderby: "date" | "price"; order: "asc" | "desc"; label: string }> = {
