@@ -15,6 +15,8 @@ export type AdminOrder = {
   ttn?: string;
   tracking_url?: string;
   source?: string;
+  coupon_code?: string;
+  discount?: string;
   subtotal: string;
   shipping_cost: string;
   line_items: {
@@ -526,6 +528,9 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
 
           <section className="rounded-[3px] bg-[#faf8f5] px-4 py-3 text-[13px]">
             <div className="flex justify-between py-0.5 text-[#9c8f7d]"><span>Сума товарів</span><span className="tabular-nums">{uah(order.subtotal)}</span></div>
+            {Number(order.discount) > 0 && (
+              <div className="flex justify-between py-0.5 text-[#2e7d32]"><span>Знижка{order.coupon_code ? ` · ${order.coupon_code}` : ""}</span><span className="tabular-nums">−{uah(order.discount as string)}</span></div>
+            )}
             <div className="flex justify-between py-0.5 text-[#9c8f7d]"><span>Доставка</span><span className="tabular-nums">{Number(order.shipping_cost) > 0 ? uah(order.shipping_cost) : "за тарифами НП"}</span></div>
             <div className="mt-1 flex justify-between border-t border-[#eee7db] pt-2 text-[15px] font-medium text-[#17130f]"><span>Разом</span><span className="tabular-nums">{uah(order.total)}</span></div>
           </section>

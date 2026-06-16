@@ -10,7 +10,7 @@ import { AdminCustomers } from "./AdminCustomers";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "orders" | "customers" | "subscribers" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "orders" | "customers" | "coupons" | "subscribers" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -85,6 +85,11 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "customers",
     label: "Клієнти",
     d: "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 100-6",
+  },
+  {
+    id: "coupons",
+    label: "Промокоди",
+    d: "M9 5H4a1 1 0 00-1 1v3a2 2 0 010 4v3a1 1 0 001 1h5m0-16h11a1 1 0 011 1v3a2 2 0 000 4v3a1 1 0 01-1 1H9m0-16v16",
   },
   {
     id: "subscribers",
@@ -302,6 +307,7 @@ export function AdminDashboard({
           {section === "products" && <AdminProducts onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}
+          {section === "coupons" && <CouponsSection onToast={showToast} />}
           {section === "subscribers" && <SubscribersSection />}
           {section === "backup" && <BackupSection />}
           {section === "settings" && <SettingsSection />}
@@ -1114,6 +1120,126 @@ function ContentSection({
 /* ─── Subscribers ─── */
 
 type Subscriber = { id: string; email: string; source: string; created_at: string };
+
+/* ─── Coupons ─── */
+
+type Coupon = {
+  id: string; code: string; type: "percent" | "fixed"; value: number;
+  min_subtotal: number; expires_at: string | null; usage_limit: number | null;
+  used_count: number; active: boolean;
+};
+
+function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ code: "", type: "percent" as "percent" | "fixed", value: "", min_subtotal: "", expires_at: "", usage_limit: "" });
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/coupons");
+      setCoupons((await res.json()).coupons ?? []);
+    } finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function create() {
+    if (!form.code.trim() || !Number(form.value)) { onToast?.("Вкажіть код і розмір знижки"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/coupons", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: form.code, type: form.type, value: Number(form.value),
+          min_subtotal: Number(form.min_subtotal) || 0,
+          expires_at: form.expires_at || null,
+          usage_limit: form.usage_limit ? Number(form.usage_limit) : null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) { setForm({ code: "", type: "percent", value: "", min_subtotal: "", expires_at: "", usage_limit: "" }); onToast?.("Промокод створено"); load(); }
+      else onToast?.(data.error ?? "Помилка");
+    } finally { setSaving(false); }
+  }
+
+  async function toggle(c: Coupon) {
+    setCoupons((cs) => cs.map((x) => x.id === c.id ? { ...x, active: !x.active } : x));
+    await fetch(`/api/admin/coupons/${c.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: !c.active }) });
+  }
+  async function remove(c: Coupon) {
+    if (!confirm(`Видалити промокод «${c.code}»?`)) return;
+    await fetch(`/api/admin/coupons/${c.id}`, { method: "DELETE" });
+    setCoupons((cs) => cs.filter((x) => x.id !== c.id));
+    onToast?.("Видалено");
+  }
+
+  const inp = "h-9 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+  const uah = (v: number) => Number(v).toLocaleString("uk-UA") + " ₴";
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <Card title="Новий промокод" subtitle="Знижка застосовується до суми товарів у кошику">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="КОД" className={`${inp} font-mono uppercase`} />
+          <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as "percent" | "fixed" })} className={inp}>
+            <option value="percent">Відсоток %</option>
+            <option value="fixed">Сума ₴</option>
+          </select>
+          <input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} type="number" placeholder={form.type === "percent" ? "10" : "200"} className={inp} />
+          <input value={form.min_subtotal} onChange={(e) => setForm({ ...form, min_subtotal: e.target.value })} type="number" placeholder="мін. сума" className={inp} />
+          <input value={form.usage_limit} onChange={(e) => setForm({ ...form, usage_limit: e.target.value })} type="number" placeholder="ліміт" className={inp} />
+          <input value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} type="date" className={inp} />
+        </div>
+        <button onClick={create} disabled={saving}
+          className="mt-4 h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+          {saving ? "Створюємо…" : "Створити промокод"}
+        </button>
+      </Card>
+
+      {loading ? (
+        <div className="space-y-2">{[1,2,3].map((i) => <div key={i} className="h-12 animate-pulse rounded-[3px] bg-[#ede9e3]" />)}</div>
+      ) : coupons.length === 0 ? (
+        <p className="rounded-[3px] border border-[#e8e4de] bg-white px-4 py-12 text-center text-sm text-[#9c8f7d]">Промокодів ще немає</p>
+      ) : (
+        <div className="overflow-x-auto rounded-[3px] border border-[#e8e4de] bg-white">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+                <th className="px-4 py-3 text-left">Код</th>
+                <th className="px-4 py-3 text-left">Знижка</th>
+                <th className="px-4 py-3 text-right">Мін. сума</th>
+                <th className="px-4 py-3 text-right">Використано</th>
+                <th className="px-4 py-3 text-left">Діє до</th>
+                <th className="px-4 py-3 text-center">Активний</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f7f4f0]">
+              {coupons.map((c) => (
+                <tr key={c.id} className={c.active ? "" : "opacity-50"}>
+                  <td className="px-4 py-3 font-mono text-[13px] font-medium text-[#17130f]">{c.code}</td>
+                  <td className="px-4 py-3 text-[13px]">{c.type === "percent" ? `${c.value}%` : uah(c.value)}</td>
+                  <td className="px-4 py-3 text-right text-[12px] tabular-nums text-[#9c8f7d]">{c.min_subtotal ? uah(c.min_subtotal) : "—"}</td>
+                  <td className="px-4 py-3 text-right text-[12px] tabular-nums text-[#9c8f7d]">{c.used_count}{c.usage_limit ? ` / ${c.usage_limit}` : ""}</td>
+                  <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{c.expires_at ? new Date(c.expires_at).toLocaleDateString("uk-UA") : "—"}</td>
+                  <td className="px-4 py-3 text-center">
+                    <button onClick={() => toggle(c)} className={`relative mx-auto block h-5 w-9 rounded-full transition-colors ${c.active ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}>
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${c.active ? "left-[18px]" : "left-0.5"}`} />
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => remove(c)} className="text-[#c62828] hover:opacity-70" aria-label="Видалити">✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─── Media library ─── */
 

@@ -217,6 +217,24 @@ CREATE TABLE IF NOT EXISTS customer_tags (
   tag        TEXT NOT NULL,
   PRIMARY KEY (account_id, tag)
 );
+
+-- ── Marketing: discount coupons ──
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS coupons (
+  id           BIGSERIAL PRIMARY KEY,
+  code         TEXT NOT NULL UNIQUE,
+  type         TEXT NOT NULL DEFAULT 'percent',  -- 'percent' | 'fixed'
+  value        NUMERIC NOT NULL DEFAULT 0,
+  min_subtotal NUMERIC NOT NULL DEFAULT 0,
+  expires_at   DATE,
+  usage_limit  INTEGER,
+  used_count   INTEGER NOT NULL DEFAULT 0,
+  active       BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(lower(code));
 `;
 
 /** Idempotent schema creation. Awaited by every data-layer call via withDb(). */

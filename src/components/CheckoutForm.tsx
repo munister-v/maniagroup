@@ -33,6 +33,10 @@ export function CheckoutForm() {
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<string | number | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; discount: number } | null>(null);
+  const [couponMsg, setCouponMsg] = useState("");
+  const [applying, setApplying] = useState(false);
 
   const refresh = useCallback(async () => {
     const res = await fetch("/api/cart");
@@ -57,6 +61,29 @@ export function CheckoutForm() {
 
   const deliveryReady = Boolean(form.city && form.branch);
 
+  async function applyCoupon() {
+    if (!couponInput.trim()) return;
+    setApplying(true);
+    setCouponMsg("");
+    try {
+      const res = await fetch("/api/coupon", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponInput.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setCoupon({ code: data.code, discount: data.discount });
+        setCouponMsg(`Знижка −${formatPrice(data.discount)} застосована`);
+      } else {
+        setCoupon(null);
+        setCouponMsg(data.error ?? "Код не застосовано");
+      }
+    } finally { setApplying(false); }
+  }
+  function removeCoupon() {
+    setCoupon(null); setCouponInput(""); setCouponMsg("");
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
@@ -73,6 +100,7 @@ export function CheckoutForm() {
         branch: form.branch,
         note: form.note,
         payment_method: "cod",
+        coupon_code: coupon?.code ?? "",
       }),
     });
     const data = await res.json();
@@ -198,9 +226,46 @@ export function CheckoutForm() {
                 </div>
               ))}
             </div>
-            <div className="mt-6 flex items-baseline justify-between border-t border-line pt-5">
-              <span className="text-[12px] uppercase tracking-luxe text-muted">Разом</span>
-              <span className="font-display text-2xl text-ink">{formatPrice(subtotal)}</span>
+            {/* Promo code */}
+            <div className="mt-6 border-t border-line pt-5">
+              {coupon ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted">Промокод <span className="font-medium text-ink">{coupon.code}</span></span>
+                  <button onClick={removeCoupon} className="text-[11px] uppercase tracking-luxe text-muted underline-offset-2 hover:text-ink hover:underline">Прибрати</button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    value={couponInput}
+                    onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon(); } }}
+                    placeholder="Промокод"
+                    className="h-10 flex-1 border border-line bg-white px-3 text-sm uppercase tracking-wide text-ink placeholder:normal-case placeholder:tracking-normal placeholder:text-muted focus:border-ink focus:outline-none"
+                  />
+                  <button onClick={applyCoupon} disabled={applying || !couponInput.trim()}
+                    className="h-10 shrink-0 border border-ink px-4 text-[11px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-40">
+                    {applying ? "…" : "Застосувати"}
+                  </button>
+                </div>
+              )}
+              {couponMsg && <p className={`mt-2 text-xs ${coupon ? "text-emerald-700" : "text-[#b3392c]"}`}>{couponMsg}</p>}
+            </div>
+
+            <div className="mt-5 space-y-1.5 border-t border-line pt-5">
+              <div className="flex items-baseline justify-between text-sm text-muted">
+                <span>Сума товарів</span>
+                <span className="tabular-nums">{formatPrice(subtotal)}</span>
+              </div>
+              {coupon && (
+                <div className="flex items-baseline justify-between text-sm text-emerald-700">
+                  <span>Знижка</span>
+                  <span className="tabular-nums">−{formatPrice(coupon.discount)}</span>
+                </div>
+              )}
+              <div className="flex items-baseline justify-between pt-2">
+                <span className="text-[12px] uppercase tracking-luxe text-muted">Разом</span>
+                <span className="font-display text-2xl text-ink">{formatPrice(Math.max(0, subtotal - (coupon?.discount ?? 0)))}</span>
+              </div>
             </div>
           </div>
         </aside>

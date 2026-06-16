@@ -22,6 +22,8 @@ export function serializeOrder(o: Order) {
     ttn: o.ttn,
     tracking_url: o.tracking_url,
     source: o.source,
+    coupon_code: o.coupon_code,
+    discount: String(o.discount),
     subtotal: String(o.subtotal),
     shipping_cost: String(o.shipping_cost),
     line_items: o.items.map((it) => ({

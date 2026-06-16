@@ -13,6 +13,7 @@ type CheckoutBody = {
   branch: string;
   note?: string;
   payment_method?: "cod" | "prepay";
+  coupon_code?: string;
 };
 
 export async function POST(req: Request) {
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
       shippingBranch: body.branch,
       comment: body.note,
       paymentMethod: body.payment_method ?? "cod",
+      couponCode: body.coupon_code,
     });
     const order = await getOrder(id);
     if (order) await notifyNewOrder(order);

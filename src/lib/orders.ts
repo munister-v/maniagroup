@@ -1,5 +1,6 @@
 import { pool, q, q1 } from "./pg";
 import { getCart, clearCart } from "./cart";
+import { validateCoupon, incrementCouponUsage } from "./coupons";
 
 export type OrderInput = {
   cartToken: string;
@@ -12,6 +13,7 @@ export type OrderInput = {
   shippingBranch: string;
   comment?: string;
   paymentMethod?: "cod" | "prepay";
+  couponCode?: string;
 };
 
 export type OrderItem = {
@@ -44,6 +46,8 @@ export type Order = {
   ttn: string;
   tracking_url: string;
   source: string;
+  coupon_code: string;
+  discount: number;
   subtotal: number;
   shipping_cost: number;
   total: number;
@@ -129,14 +133,24 @@ export async function createOrder(input: OrderInput): Promise<{ id: number; numb
   const cart = await getCart(input.cartToken);
   if (cart.items.length === 0) throw new Error("Кошик порожній");
 
+  // Apply a coupon if one was supplied and still valid for this subtotal.
+  let discount = 0;
+  let couponCode = "";
+  if (input.couponCode?.trim()) {
+    const v = await validateCoupon(input.couponCode, cart.subtotal);
+    if (v.ok) { discount = v.discount; couponCode = v.code; }
+  }
+  const total = Math.max(0, cart.subtotal - discount);
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const ins = await client.query(
       `INSERT INTO orders
          (account_id, email, phone, first_name, last_name, status, payment_method,
-          shipping_method, shipping_city, shipping_branch, comment, subtotal, shipping_cost, total)
-       VALUES ($1,$2,$3,$4,$5,'pending',$6,'novaposhta',$7,$8,$9,$10,0,$10)
+          shipping_method, shipping_city, shipping_branch, comment, coupon_code, discount,
+          subtotal, shipping_cost, total)
+       VALUES ($1,$2,$3,$4,$5,'pending',$6,'novaposhta',$7,$8,$9,$10,$11,$12,0,$13)
        RETURNING id`,
       [
         input.accountId ?? null,
@@ -148,7 +162,10 @@ export async function createOrder(input: OrderInput): Promise<{ id: number; numb
         input.shippingCity,
         input.shippingBranch,
         input.comment ?? "",
+        couponCode,
+        discount,
         cart.subtotal,
+        total,
       ],
     );
     const id = ins.rows[0].id as number;
@@ -167,12 +184,15 @@ export async function createOrder(input: OrderInput): Promise<{ id: number; numb
     // Reserve inventory and mark the order so a later cancellation can release it.
     await adjustStock(client, cart.items, -1);
     await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
+    const createdMsg = `Замовлення ${number} створено · ${total.toLocaleString("uk-UA")} ₴`
+      + (discount > 0 ? ` (знижка ${discount.toLocaleString("uk-UA")} ₴, код ${couponCode})` : "");
     await client.query(
       "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'created',$2,'system')",
-      [id, `Замовлення ${number} створено · ${cart.subtotal.toLocaleString("uk-UA")} ₴`],
+      [id, createdMsg],
     );
     await client.query("COMMIT");
 
+    if (couponCode) await incrementCouponUsage(couponCode);
     await clearCart(input.cartToken);
     return { id, number };
   } catch (e) {
@@ -282,6 +302,7 @@ async function hydrate(orders: Record<string, unknown>[]): Promise<Order[]> {
     ...(o as unknown as Omit<Order, "items">),
     subtotal: Number(o.subtotal),
     shipping_cost: Number(o.shipping_cost),
+    discount: Number(o.discount ?? 0),
     total: Number(o.total),
     items: byOrder.get(o.id as number) ?? [],
   }));
@@ -289,7 +310,7 @@ async function hydrate(orders: Record<string, unknown>[]): Promise<Order[]> {
 
 const ORDER_SELECT = `id, number, account_id, email, phone, first_name, last_name, status,
   payment_method, shipping_method, shipping_city, shipping_branch, comment,
-  ttn, tracking_url, source,
+  ttn, tracking_url, source, coupon_code, discount,
   subtotal, shipping_cost, total, created_at`;
 
 /** Orders for a customer (by account id or, as fallback, email). */
