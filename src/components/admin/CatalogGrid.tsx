@@ -53,6 +53,13 @@ const COLS: Col[] = [
 
 const PER_PAGE_OPTIONS = [50, 100, 200];
 
+// Export column names — must match the server's localized headers (export route).
+const EXPORT_COLUMNS = [
+  "ID", "Артикул", "Назва", "Бренд", "Категорія", "Стать", "Ціна", "Акційна",
+  "Підсумкова", "В наявності", "Статус", "Колір", "Сезон", "Склад", "Країна",
+  "Розміри", "Slug", "Фото",
+];
+
 export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => void; onImport?: () => void }) {
   const [mode, setMode] = useState<"grid" | "cards">("grid");
   const [rows, setRows] = useState<Row[]>([]);
@@ -74,22 +81,57 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
   const [helpOpen, setHelpOpen] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Extended filters + facets
+  const [category, setCategory] = useState("");
+  const [gender, setGender] = useState("");
+  const [color, setColor] = useState("");
+  const [season, setSeason] = useState("");
+  const [statusF, setStatusF] = useState("");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [facets, setFacets] = useState<{
+    categories: { slug: string; name: string; count: number }[];
+    colors: string[]; seasons: string[];
+  }>({ categories: [], colors: [], seasons: [] });
+
+  // Export dialog state
+  const [exportScope, setExportScope] = useState<"all" | "filtered" | "selected" | "page">("filtered");
+  const [exportFormat, setExportFormat] = useState("xlsx");
+  const [exportCols, setExportCols] = useState<Set<string>>(new Set(EXPORT_COLUMNS));
+
+  /** Shared filter params (everything except pagination/sort). */
+  const filterParams = useCallback(() => {
+    const p = new URLSearchParams();
+    if (search) p.set("q", search);
+    if (stock) p.set("stock", stock);
+    if (brand) p.set("brand", brand);
+    if (category) p.set("category", category);
+    if (gender) p.set("gender", gender);
+    if (color) p.set("color", color);
+    if (season) p.set("season", season);
+    if (statusF) p.set("status", statusF);
+    if (minPrice) p.set("minPrice", minPrice);
+    if (maxPrice) p.set("maxPrice", maxPrice);
+    return p;
+  }, [search, stock, brand, category, gender, color, season, statusF, minPrice, maxPrice]);
+
+  const activeFilters = [stock, brand, category, gender, color, season, statusF, minPrice, maxPrice].filter(Boolean).length;
+  function resetFilters() {
+    setStock(""); setBrand(""); setCategory(""); setGender(""); setColor("");
+    setSeason(""); setStatusF(""); setMinPrice(""); setMaxPrice(""); setPage(1);
+  }
+
   function openFullNew() { setCardsInitial({ kind: "new" }); setMode("cards"); }
   function openFullCard(id: string) { setCardsInitial({ kind: "edit", id }); setMode("cards"); }
 
   const dirtyCount = Object.keys(edits).length;
 
   const load = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({
-      page: String(page),
-      perPage: String(perPage),
-      sortBy,
-      sortDir,
-    });
-    if (search) params.set("q", search);
-    if (stock) params.set("stock", stock);
-    if (brand) params.set("brand", brand);
+    const params = filterParams();
+    params.set("page", String(page));
+    params.set("perPage", String(perPage));
+    params.set("sortBy", sortBy);
+    params.set("sortDir", sortDir);
     const res = await fetch(`/api/admin/products?${params}`);
     const data = await res.json();
     setRows(data.products ?? []);
@@ -97,7 +139,7 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
     setSelected(new Set());
     setEdits({});
     setLoading(false);
-  }, [page, perPage, sortBy, sortDir, search, stock, brand]);
+  }, [page, perPage, sortBy, sortDir, filterParams]);
 
   useEffect(() => { if (mode === "grid") load(); }, [load, mode]);
 
@@ -105,6 +147,10 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
     fetch("/api/admin/products/price-rule")
       .then((r) => r.json())
       .then((d) => setBrands(d.brands ?? []))
+      .catch(() => {});
+    fetch("/api/admin/products/facets")
+      .then((r) => r.json())
+      .then((d) => setFacets({ categories: d.categories ?? [], colors: d.colors ?? [], seasons: d.seasons ?? [] }))
       .catch(() => {});
   }, []);
 
@@ -181,26 +227,43 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
   }
 
   // ── Export ───────────────────────────────────────────────────────────────
-  function exportUrl(format: string) {
-    const params = new URLSearchParams({ format });
-    if (search) params.set("q", search);
-    if (stock) params.set("stock", stock);
-    if (brand) params.set("brand", brand);
-    if (selected.size) params.set("ids", [...selected].join(","));
-    return `/api/admin/products/export?${params}`;
+  // Build export params for the chosen scope + selected columns.
+  function buildExportParams(format: string): URLSearchParams {
+    let params: URLSearchParams;
+    if (exportScope === "filtered") params = filterParams();
+    else params = new URLSearchParams();
+    params.set("format", format);
+    if (exportScope === "selected" && selected.size) params.set("ids", [...selected].join(","));
+    if (exportScope === "page") params.set("ids", rows.map((r) => r.id).join(","));
+    if (exportCols.size && exportCols.size < EXPORT_COLUMNS.length) {
+      params.set("cols", EXPORT_COLUMNS.filter((c) => exportCols.has(c)).join(","));
+    }
+    return params;
   }
-  function download(format: string) {
-    const a = document.createElement("a");
-    a.href = exportUrl(format);
-    a.click();
+
+  async function doExport() {
+    const format = exportFormat;
+    const params = buildExportParams(format);
+    if (format === "pdf") {
+      // PDF prints the full scope: fetch the json rows, then build a print view.
+      params.set("format", "json");
+      const res = await fetch(`/api/admin/products/export?${params}`);
+      const data: Record<string, string | number>[] = await res.json();
+      printRows(data);
+    } else {
+      const a = document.createElement("a");
+      a.href = `/api/admin/products/export?${params}`;
+      a.click();
+    }
     setExportOpen(false);
   }
-  function printPdf() {
-    const subset = selected.size ? rows.filter((r) => selected.has(r.id)) : rows;
+
+  function printRows(data: Record<string, string | number>[]) {
+    const cols = EXPORT_COLUMNS.filter((c) => !exportCols.size || exportCols.has(c));
     const esc = (s: unknown) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
-    const head = ["Артикул", "Назва", "Бренд", "Категорія", "Ціна", "Акція", "Колір", "Розміри", "Наявн."];
-    const body = subset
-      .map((r) => `<tr><td>${esc(r.sku)}</td><td>${esc(r.name)}</td><td>${esc(r.brand)}</td><td>${esc(r.category)}</td><td>${esc(r.regular_price)}</td><td>${esc(r.sale_price ?? "")}</td><td>${esc(r.color)}</td><td>${esc(r.sizes)}</td><td>${r.is_in_stock ? "Так" : "Ні"}</td></tr>`)
+    const head = cols.map((h) => `<th>${esc(h)}</th>`).join("");
+    const body = data
+      .map((r) => `<tr>${cols.map((c) => `<td>${esc(r[c])}</td>`).join("")}</tr>`)
       .join("");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Каталог Mania Group</title>
       <style>
@@ -212,13 +275,12 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
         tr:nth-child(even){background:#faf8f5}
       </style></head><body>
       <h1>Каталог Mania Group</h1>
-      <p>${subset.length} позицій · ${new Date().toLocaleString("uk-UA")}</p>
-      <table><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>
+      <p>${data.length} позицій · ${new Date().toLocaleString("uk-UA")}</p>
+      <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
       <script>window.onload=function(){window.print()}</script>
       </body></html>`;
     const w = window.open("", "_blank");
     if (w) { w.document.write(html); w.document.close(); }
-    setExportOpen(false);
   }
 
   if (mode === "cards") {
@@ -274,43 +336,71 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
           <option value="">Усі бренди</option>
           {brands.map((b) => <option key={b.brand} value={b.brand}>{b.brand} ({b.count})</option>)}
         </select>
+        <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+          className="h-9 max-w-44 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          <option value="">Усі категорії</option>
+          {facets.categories.map((c) => <option key={c.slug} value={c.slug}>{c.name} ({c.count})</option>)}
+        </select>
+        <select value={gender} onChange={(e) => { setGender(e.target.value); setPage(1); }}
+          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          <option value="">Стать</option>
+          <option value="women">Жіноче</option>
+          <option value="men">Чоловіче</option>
+        </select>
+        <select value={color} onChange={(e) => { setColor(e.target.value); setPage(1); }}
+          className="h-9 max-w-36 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          <option value="">Колір</option>
+          {facets.colors.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={season} onChange={(e) => { setSeason(e.target.value); setPage(1); }}
+          className="h-9 max-w-36 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          <option value="">Сезон</option>
+          {facets.seasons.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={statusF} onChange={(e) => { setStatusF(e.target.value); setPage(1); }}
+          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          <option value="">Статус</option>
+          <option value="publish">Опубліковані</option>
+          <option value="draft">Чернетки</option>
+        </select>
+        <input value={minPrice} onChange={(e) => { setMinPrice(e.target.value.replace(/\D/g, "")); setPage(1); }}
+          placeholder="₴ від" inputMode="numeric"
+          className="h-9 w-20 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none" />
+        <input value={maxPrice} onChange={(e) => { setMaxPrice(e.target.value.replace(/\D/g, "")); setPage(1); }}
+          placeholder="₴ до" inputMode="numeric"
+          className="h-9 w-20 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none" />
+        {activeFilters > 0 && (
+          <button onClick={resetFilters}
+            className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+            Скинути ({activeFilters})
+          </button>
+        )}
         <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
           className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
           {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}/стор.</option>)}
         </select>
 
-        {/* Export dropdown */}
-        <div className="relative ml-auto">
-          <button
-            onClick={() => setExportOpen((v) => !v)}
-            className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            Експорт{selected.size ? ` (${selected.size})` : ""}
-          </button>
-          {exportOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
-              <div className="absolute right-0 z-20 mt-1 w-44 rounded-[4px] border border-[#e8e4de] bg-white py-1 shadow-lg">
-                {[
-                  { fmt: "xlsx", label: "Excel (.xlsx)", fn: () => download("xlsx") },
-                  { fmt: "csv", label: "CSV (.csv)", fn: () => download("csv") },
-                  { fmt: "pdf", label: "PDF (друк)", fn: printPdf },
-                  { fmt: "json", label: "JSON (.json)", fn: () => download("json") },
-                ].map((o) => (
-                  <button key={o.fmt} onClick={o.fn}
-                    className="block w-full px-3 py-2 text-left text-[12px] text-[#17130f] hover:bg-[#f7f5f2]">
-                    {o.label}
-                  </button>
-                ))}
-                <p className="border-t border-[#f0ece6] px-3 pb-1 pt-1.5 text-[10px] text-[#9c8f7d]">
-                  {selected.size ? `${selected.size} обраних` : `усі за фільтром (${total})`}
-                </p>
-              </div>
-            </>
-          )}
-        </div>
+        {/* Export — opens settings dialog */}
+        <button
+          onClick={() => { setExportScope(selected.size ? "selected" : "filtered"); setExportOpen(true); }}
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          Експорт{selected.size ? ` (${selected.size})` : ""}
+        </button>
       </div>
+
+      {exportOpen && (
+        <ExportDialog
+          onClose={() => setExportOpen(false)}
+          scope={exportScope} setScope={setExportScope}
+          format={exportFormat} setFormat={setExportFormat}
+          cols={exportCols} setCols={setExportCols}
+          total={total} filteredHint={activeFilters > 0 || !!search}
+          selectedCount={selected.size} pageCount={rows.length}
+          onExport={doExport}
+        />
+      )}
 
       {/* Sticky save bar when dirty */}
       {dirtyCount > 0 && (
@@ -464,6 +554,98 @@ function ModeToggle({ mode, setMode, onImport, onNew }: { mode: "grid" | "cards"
             Імпорт XLS
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Export settings dialog ───────────────────────────────────────────────────
+function ExportDialog({
+  onClose, scope, setScope, format, setFormat, cols, setCols,
+  total, filteredHint, selectedCount, pageCount, onExport,
+}: {
+  onClose: () => void;
+  scope: "all" | "filtered" | "selected" | "page";
+  setScope: (s: "all" | "filtered" | "selected" | "page") => void;
+  format: string; setFormat: (f: string) => void;
+  cols: Set<string>; setCols: (s: Set<string>) => void;
+  total: number; filteredHint: boolean; selectedCount: number; pageCount: number;
+  onExport: () => void;
+}) {
+  const scopes: { id: typeof scope; label: string; hint: string; disabled?: boolean }[] = [
+    { id: "all", label: "Весь каталог", hint: "усі товари в базі" },
+    { id: "filtered", label: "Поточний фільтр", hint: filteredHint ? `${total} за фільтром` : `усі ${total}` },
+    { id: "selected", label: "Вибрані", hint: `${selectedCount} обрано`, disabled: selectedCount === 0 },
+    { id: "page", label: "Поточна сторінка", hint: `${pageCount} рядків` },
+  ];
+  const formats = [
+    { id: "xlsx", label: "Excel (.xlsx)" },
+    { id: "csv", label: "CSV (.csv)" },
+    { id: "json", label: "JSON (.json)" },
+    { id: "pdf", label: "PDF (друк)" },
+  ];
+  function toggleCol(c: string) {
+    const n = new Set(cols);
+    n.has(c) ? n.delete(c) : n.add(c);
+    setCols(n);
+  }
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
+      <div className="relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[6px] border border-[#e8e4de] bg-white p-5 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-base font-medium text-[#17130f]">Експорт каталогу</h3>
+          <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]" aria-label="Закрити">✕</button>
+        </div>
+
+        <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Що експортувати</p>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          {scopes.map((s) => (
+            <button key={s.id} disabled={s.disabled} onClick={() => setScope(s.id)}
+              className={`rounded-[4px] border px-3 py-2 text-left text-[12px] disabled:opacity-40 ${
+                scope === s.id ? "border-[#17130f] bg-[#faf8f5]" : "border-[#e8e4de] hover:border-[#c9bdab]"
+              }`}>
+              <span className="block font-medium text-[#17130f]">{s.label}</span>
+              <span className="text-[11px] text-[#9c8f7d]">{s.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Формат</p>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {formats.map((f) => (
+            <button key={f.id} onClick={() => setFormat(f.id)}
+              className={`rounded-[4px] border px-3 py-1.5 text-[12px] ${
+                format === f.id ? "border-[#17130f] bg-[#faf8f5] text-[#17130f]" : "border-[#e8e4de] text-[#6b6253] hover:border-[#c9bdab]"
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Стовпці ({cols.size})</p>
+          <div className="flex gap-2 text-[11px]">
+            <button onClick={() => setCols(new Set(EXPORT_COLUMNS))} className="text-[#17130f] hover:underline">Усі</button>
+            <button onClick={() => setCols(new Set())} className="text-[#9c8f7d] hover:underline">Зняти</button>
+          </div>
+        </div>
+        <div className="mb-5 grid max-h-44 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto sm:grid-cols-3">
+          {EXPORT_COLUMNS.map((c) => (
+            <label key={c} className="flex items-center gap-1.5 text-[12px] text-[#17130f]">
+              <input type="checkbox" checked={cols.has(c)} onChange={() => toggleCol(c)} />
+              {c}
+            </label>
+          ))}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+          <button onClick={onExport} disabled={cols.size === 0}
+            className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+            Експортувати
+          </button>
+        </div>
       </div>
     </div>
   );

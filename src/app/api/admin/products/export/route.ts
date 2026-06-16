@@ -1,52 +1,57 @@
 import { isAdmin } from "@/lib/adminAuth";
-import { exportAdminProducts } from "@/lib/products";
+import { exportAdminProducts, parseFilterParams } from "@/lib/products";
 import * as XLSX from "xlsx";
 
 /**
- * Multi-format catalog export. Respects the same filters as the grid (q,
- * stock, brand) or an explicit id list. Formats: xlsx | csv | json.
- * PDF is produced client-side via the print view (Cyrillic-safe, no fonts).
+ * Multi-format catalog export. Respects the grid filters (q, stock, brand,
+ * category, gender, color, season, price, status) or an explicit id list, and
+ * an optional `cols` whitelist. Formats: xlsx | csv | json. PDF is produced
+ * client-side from the json scope (Cyrillic-safe, no embedded fonts).
  */
 export async function GET(req: Request) {
   if (!(await isAdmin())) return new Response("Unauthorized", { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const format = (searchParams.get("format") ?? "xlsx").toLowerCase();
-  const q = searchParams.get("q") ?? undefined;
-  const brand = searchParams.get("brand") ?? undefined;
-  const stockParam = searchParams.get("stock");
-  const stock = stockParam === "in" || stockParam === "out" ? stockParam : undefined;
   const idsParam = searchParams.get("ids");
   const ids = idsParam ? idsParam.split(",").filter(Boolean) : undefined;
+  const colsParam = searchParams.get("cols");
+  const cols = colsParam ? colsParam.split(",").map((c) => c.trim()).filter(Boolean) : null;
 
-  const rows = await exportAdminProducts({ q, stock, brand, ids });
+  const rows = await exportAdminProducts({ ...parseFilterParams(searchParams), ids });
 
   // Flatten to localized, ordered columns for human-friendly spreadsheets.
-  const localized = rows.map((r) => ({
-    "ID": r.id,
-    "Артикул": r.sku ?? "",
-    "Назва": r.name ?? "",
-    "Бренд": r.brand ?? "",
-    "Категорія": r.category ?? "",
-    "Стать": r.gender === "men" ? "Чоловіче" : r.gender === "women" ? "Жіноче" : "",
-    "Ціна": r.regular_price ?? 0,
-    "Акційна": r.sale_price ?? "",
-    "Підсумкова": r.price ?? 0,
-    "В наявності": r.is_in_stock ? "Так" : "Ні",
-    "Статус": r.status === "publish" ? "Опубліковано" : "Чернетка",
-    "Колір": r.color ?? "",
-    "Сезон": r.season ?? "",
-    "Склад": r.composition ?? "",
-    "Країна": r.country ?? "",
-    "Розміри": r.sizes ?? "",
-    "Slug": r.slug ?? "",
-    "Фото": r.image_src ?? "",
-  }));
+  const ALL: Record<string, (r: typeof rows[number]) => string | number> = {
+    "ID": (r) => r.id,
+    "Артикул": (r) => r.sku ?? "",
+    "Назва": (r) => r.name ?? "",
+    "Бренд": (r) => r.brand ?? "",
+    "Категорія": (r) => r.category ?? "",
+    "Стать": (r) => (r.gender === "men" ? "Чоловіче" : r.gender === "women" ? "Жіноче" : ""),
+    "Ціна": (r) => r.regular_price ?? 0,
+    "Акційна": (r) => r.sale_price ?? "",
+    "Підсумкова": (r) => r.price ?? 0,
+    "В наявності": (r) => (r.is_in_stock ? "Так" : "Ні"),
+    "Статус": (r) => (r.status === "publish" ? "Опубліковано" : "Чернетка"),
+    "Колір": (r) => r.color ?? "",
+    "Сезон": (r) => r.season ?? "",
+    "Склад": (r) => r.composition ?? "",
+    "Країна": (r) => r.country ?? "",
+    "Розміри": (r) => r.sizes ?? "",
+    "Slug": (r) => r.slug ?? "",
+    "Фото": (r) => r.image_src ?? "",
+  };
+  const colNames = cols && cols.length ? cols.filter((c) => c in ALL) : Object.keys(ALL);
+  const localized = rows.map((r) => {
+    const o: Record<string, string | number> = {};
+    for (const c of colNames) o[c] = ALL[c](r);
+    return o;
+  });
 
   const stamp = new Date().toISOString().slice(0, 10);
 
   if (format === "json") {
-    return new Response(JSON.stringify(rows, null, 2), {
+    return new Response(JSON.stringify(localized, null, 2), {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Disposition": `attachment; filename="maniagroup-catalog-${stamp}.json"`,
@@ -66,12 +71,13 @@ export async function GET(req: Request) {
     });
   }
 
-  // Default: real .xlsx
-  ws["!cols"] = [
-    { wch: 10 }, { wch: 14 }, { wch: 40 }, { wch: 18 }, { wch: 18 }, { wch: 10 },
-    { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
-    { wch: 12 }, { wch: 24 }, { wch: 14 }, { wch: 16 }, { wch: 22 }, { wch: 40 },
-  ];
+  // Default: real .xlsx — width per selected column (name/photo wider).
+  const WIDTH: Record<string, number> = {
+    "ID": 10, "Артикул": 16, "Назва": 40, "Бренд": 18, "Категорія": 18, "Стать": 10,
+    "Ціна": 10, "Акційна": 10, "Підсумкова": 12, "В наявності": 12, "Статус": 14,
+    "Колір": 14, "Сезон": 12, "Склад": 24, "Країна": 14, "Розміри": 16, "Slug": 22, "Фото": 40,
+  };
+  ws["!cols"] = colNames.map((c) => ({ wch: WIDTH[c] ?? 16 }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Каталог");
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;

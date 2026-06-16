@@ -54,16 +54,57 @@ const SORTABLE: Record<string, string> = {
   season: "season",
 };
 
-function buildProductFilters(opts: { q?: string; stock?: "in" | "out"; brand?: string }) {
+export type ProductFilterOpts = {
+  q?: string;
+  stock?: "in" | "out";
+  brand?: string;
+  category?: string;   // category_slug
+  gender?: "men" | "women";
+  color?: string;
+  season?: string;     // matches season ILIKE %…%
+  minPrice?: number;
+  maxPrice?: number;
+  status?: "publish" | "draft"; // omit = any
+};
+
+/** Parse the shared catalog filter params from a URL query (list + export). */
+export function parseFilterParams(sp: URLSearchParams): ProductFilterOpts {
+  const stock = sp.get("stock");
+  const gender = sp.get("gender");
+  const status = sp.get("status");
+  const min = sp.get("minPrice");
+  const max = sp.get("maxPrice");
+  return {
+    q: sp.get("q") || undefined,
+    stock: stock === "in" || stock === "out" ? stock : undefined,
+    brand: sp.get("brand") || undefined,
+    category: sp.get("category") || undefined,
+    gender: gender === "men" || gender === "women" ? gender : undefined,
+    color: sp.get("color") || undefined,
+    season: sp.get("season") || undefined,
+    minPrice: min ? Number(min) : undefined,
+    maxPrice: max ? Number(max) : undefined,
+    status: status === "publish" || status === "draft" ? status : undefined,
+  };
+}
+
+function buildProductFilters(opts: ProductFilterOpts) {
   const conds: string[] = [];
   const bind: unknown[] = [];
   if (opts.q) {
     bind.push(`%${opts.q}%`);
-    conds.push(`(name ILIKE $${bind.length} OR brand ILIKE $${bind.length} OR sku ILIKE $${bind.length})`);
+    conds.push(`(name ILIKE $${bind.length} OR brand ILIKE $${bind.length} OR sku ILIKE $${bind.length} OR replace(replace(replace(replace(sku,' ',''),'-',''),'.',''),'_','') ILIKE $${bind.length})`);
   }
   if (opts.stock === "in") conds.push("is_in_stock = TRUE");
   if (opts.stock === "out") conds.push("is_in_stock = FALSE");
   if (opts.brand) { bind.push(opts.brand); conds.push(`brand = $${bind.length}`); }
+  if (opts.category) { bind.push(opts.category); conds.push(`category_slug = $${bind.length}`); }
+  if (opts.gender) { bind.push(opts.gender); conds.push(`gender = $${bind.length}`); }
+  if (opts.color) { bind.push(opts.color); conds.push(`color = $${bind.length}`); }
+  if (opts.season) { bind.push(`%${opts.season}%`); conds.push(`season ILIKE $${bind.length}`); }
+  if (opts.minPrice != null) { bind.push(opts.minPrice); conds.push(`price >= $${bind.length}`); }
+  if (opts.maxPrice != null) { bind.push(opts.maxPrice); conds.push(`price <= $${bind.length}`); }
+  if (opts.status) { bind.push(opts.status); conds.push(`status = $${bind.length}`); }
   return { where: conds.length ? `WHERE ${conds.join(" AND ")}` : "", bind };
 }
 
@@ -78,9 +119,8 @@ function sizesFromAttributes(attrs: any): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function safeParse(s: string): any { try { return JSON.parse(s); } catch { return []; } }
 
-export async function listAdminProducts(opts: {
-  q?: string; page?: number; perPage?: number; stock?: "in" | "out";
-  brand?: string; sortBy?: string; sortDir?: "asc" | "desc";
+export async function listAdminProducts(opts: ProductFilterOpts & {
+  page?: number; perPage?: number; sortBy?: string; sortDir?: "asc" | "desc";
 } = {}) {
   const perPage = Math.min(Math.max(opts.perPage ?? 30, 1), 300);
   const offset = ((opts.page ?? 1) - 1) * perPage;
@@ -111,7 +151,7 @@ export type ExportRow = {
 };
 
 /** All matching rows (no pagination) for export — flattened, export-ready. */
-export async function exportAdminProducts(opts: { q?: string; stock?: "in" | "out"; brand?: string; ids?: string[] } = {}): Promise<ExportRow[]> {
+export async function exportAdminProducts(opts: ProductFilterOpts & { ids?: string[] } = {}): Promise<ExportRow[]> {
   const { where, bind } = buildProductFilters(opts);
   let finalWhere = where;
   if (opts.ids && opts.ids.length) {
