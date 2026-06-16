@@ -617,6 +617,116 @@ function SyncCard({ sync, onNavigate }: { sync: SyncState | null; onNavigate: (s
   );
 }
 
+/* ─── Content helpers ──────────────────────────────────────────────────────── */
+
+function CharCounter({ value, max }: { value: string; max: number }) {
+  const n = value.length;
+  const over = n > max;
+  const warn = !over && n > max * 0.85;
+  return (
+    <span className={`text-[10px] tabular-nums ${over ? "text-red-500 font-medium" : warn ? "text-amber-500" : "text-[#b9ae9b]"}`}>
+      {n}/{max}
+    </span>
+  );
+}
+
+function AnnouncementPreview({ text, color }: { text: string; color?: string }) {
+  if (!text.trim()) return null;
+  return (
+    <div
+      className="mt-3 rounded-[3px] px-4 py-2.5 text-center text-[11px] tracking-[0.1em] text-white shadow-sm"
+      style={{ background: color || "#17130f" }}
+    >
+      {text}
+    </div>
+  );
+}
+
+function SeoGooglePreview({ title, desc, url = "maniagroup.munister.com.ua" }: { title: string; desc: string; url?: string }) {
+  return (
+    <div className="rounded-[4px] border border-[#e8e4de] bg-white p-4 shadow-sm">
+      <p className="mb-2.5 text-[10px] uppercase tracking-wider text-[#b9ae9b]">Вигляд у Google</p>
+      <div className="font-sans">
+        <p className="text-[14px] leading-snug text-[#1a0dab]">{title || "Заголовок сторінки"}</p>
+        <p className="mt-0.5 text-[12px] text-[#006621]">{url}</p>
+        <p className="mt-1 text-[12px] leading-snug text-[#545454] line-clamp-2">
+          {desc || "Опис сторінки у пошуковій видачі."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AiField({
+  label, value, onChange, textarea, placeholder, max, aiContext, hint,
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  textarea?: boolean; placeholder?: string; max?: number; aiContext?: string; hint?: string;
+}) {
+  const [improving, setImproving] = useState(false);
+
+  async function improve() {
+    if (!value.trim()) return;
+    setImproving(true);
+    try {
+      const r = await fetch("/api/admin/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "content-improve", field: label, text: value, context: aiContext }),
+      });
+      const d = await r.json();
+      if (d.text) onChange(d.text);
+    } catch {}
+    setImproving(false);
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+          {label}
+          {hint && <span className="ml-1.5 font-normal lowercase tracking-normal text-[#c8c0b4]">· {hint}</span>}
+        </span>
+        <div className="flex items-center gap-2">
+          {max !== undefined && <CharCounter value={value} max={max} />}
+          {value.trim() && (
+            <button
+              onClick={improve}
+              disabled={improving}
+              className="flex items-center gap-1 rounded-[2px] border border-[#e8e4de] px-2 py-0.5 text-[10px] text-[#9c8f7d] transition-colors hover:border-[#7c6f5e] hover:text-[#17130f] disabled:opacity-40"
+            >
+              {improving ? (
+                <span className="h-2.5 w-2.5 animate-spin rounded-full border border-[#9c8f7d] border-t-transparent" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-2.5 w-2.5">
+                  <path d="M12 2l2.4 7.4L22 12l-7.6 2.6L12 22l-2.4-7.4L2 12l7.6-2.6z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+              ИИ покращити
+            </button>
+          )}
+        </div>
+      </div>
+      {textarea ? (
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          rows={3}
+          className="w-full resize-none rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+        />
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+        />
+      )}
+    </div>
+  );
+}
+
 /* ─── Content ─── */
 
 type ContentTab = "home" | "seo" | "contacts" | "footer" | "about" | "delivery" | "returns";
@@ -789,9 +899,16 @@ function ContentSection({
         {tab === "home" && (
           <>
             <Card title="Рядок оголошень" subtitle="Темна смуга над меню на всіх сторінках">
-              <Field label="Текст" value={content.announcement}
+              <AiField
+                label="Текст оголошення"
+                value={content.announcement}
                 onChange={(v) => set("announcement", v)}
-                placeholder="Безкоштовна доставка від 3 000 ₴…" />
+                placeholder="Безкоштовна доставка від 3 000 ₴…"
+                max={120}
+                aiContext="рядок оголошень у шапці сайту магазину одягу, до 120 символів, стисло та привабливо"
+                hint="рядок у шапці"
+              />
+              <AnnouncementPreview text={content.announcement} />
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <label className="block">
                   <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Показувати з</span>
@@ -814,7 +931,13 @@ function ContentSection({
                 <Field label="Надпис над заголовком" value={content.hero.eyebrow} onChange={(v) => hero("eyebrow", v)} />
                 <Field label="Заголовок рядок 1" value={content.hero.titleLine1} onChange={(v) => hero("titleLine1", v)} />
                 <Field label="Акцент (курсив)" value={content.hero.titleAccent} onChange={(v) => hero("titleAccent", v)} />
-                <Field label="Підзаголовок" value={content.hero.subtitle} onChange={(v) => hero("subtitle", v)} textarea />
+                <AiField
+                  label="Підзаголовок"
+                  value={content.hero.subtitle}
+                  onChange={(v) => hero("subtitle", v)}
+                  textarea
+                  aiContext="підзаголовок hero-блоку на головній сторінці магазину брендового одягу Mania Group"
+                />
               </div>
             </Card>
 
@@ -859,25 +982,90 @@ function ContentSection({
         {tab === "seo" && (
           <>
             <Card title="Мета-теги сайту" subtitle="Заголовок та опис у пошуковій видачі Google і соцмережах">
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <Field label="Назва сайту" value={content.seo.siteName}
                   onChange={(v) => seoF("siteName", v)} placeholder="Mania Group" />
-                <Field label="Заголовок головної (title)" value={content.seo.defaultTitle}
-                  onChange={(v) => seoF("defaultTitle", v)} placeholder="Mania Group — брендовий одяг…" />
-                <Field label="Шаблон заголовка інших сторінок" value={content.seo.titleTemplate}
-                  onChange={(v) => seoF("titleTemplate", v)} placeholder="%s — Mania Group" />
-                <p className="-mt-2 text-[11px] text-[#9c8f7d]">%s замінюється назвою сторінки (напр. «Каталог»).</p>
-                <Field label="Опис (meta description)" value={content.seo.description}
-                  onChange={(v) => seoF("description", v)} textarea />
-                <Field label="OG-зображення (URL)" value={content.seo.ogImage}
-                  onChange={(v) => seoF("ogImage", v)} placeholder="/images/hero.webp" />
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+                      Заголовок головної (title)
+                      <span className="ml-1.5 font-normal lowercase tracking-normal text-[#c8c0b4]">· до 60 символів</span>
+                    </span>
+                    <CharCounter value={content.seo.defaultTitle} max={60} />
+                  </div>
+                  <input
+                    value={content.seo.defaultTitle}
+                    onChange={(e) => seoF("defaultTitle", e.target.value)}
+                    placeholder="Mania Group — брендовий одяг…"
+                    className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+                      Шаблон заголовка інших сторінок
+                    </span>
+                  </div>
+                  <input
+                    value={content.seo.titleTemplate}
+                    onChange={(e) => seoF("titleTemplate", e.target.value)}
+                    placeholder="%s — Mania Group"
+                    className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                  />
+                  <p className="mt-1 text-[11px] text-[#9c8f7d]">%s замінюється назвою сторінки (напр. «Каталог»).</p>
+                </div>
+
+                <AiField
+                  label="Опис (meta description)"
+                  value={content.seo.description}
+                  onChange={(v) => seoF("description", v)}
+                  textarea
+                  max={160}
+                  hint="до 160 символів"
+                  aiContext="meta description для головної сторінки магазину брендового одягу Mania Group, до 160 символів, ключові слова: брендовий одяг, EA7, Armani, Emporio Armani, інтернет-магазин"
+                />
+
+                <SeoGooglePreview
+                  title={content.seo.defaultTitle}
+                  desc={content.seo.description}
+                />
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">OG-зображення (URL)</span>
+                  </div>
+                  <input
+                    value={content.seo.ogImage}
+                    onChange={(e) => seoF("ogImage", e.target.value)}
+                    placeholder="/images/hero.webp"
+                    className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                  />
+                  {content.seo.ogImage && (
+                    <div className="mt-2 overflow-hidden rounded-[3px] border border-[#e8e4de]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={content.seo.ogImage}
+                        alt="OG preview"
+                        className="h-32 w-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </Card>
 
             <Card title="Ключові слова" subtitle="Через кому — використовуються в meta keywords">
-              <Field label="Ключові слова" value={content.seo.keywords.join(", ")}
+              <AiField
+                label="Ключові слова"
+                value={content.seo.keywords.join(", ")}
                 onChange={(v) => seoF("keywords", v.split(",").map((k) => k.trim()).filter(Boolean))}
-                textarea placeholder="брендовий одяг, інтернет-магазин, EA7…" />
+                textarea
+                placeholder="брендовий одяг, інтернет-магазин, EA7…"
+                aiContext="meta keywords для магазину брендового одягу Mania Group, через кому, релевантні пошуковим запитам покупців"
+              />
             </Card>
           </>
         )}
@@ -903,8 +1091,13 @@ function ContentSection({
         {tab === "footer" && (
           <>
             <Card title="Про магазин" subtitle="Короткий текст у лівій колонці футера">
-              <Field label="Текст" value={content.footer.about}
-                onChange={(v) => footerF("about", v)} textarea />
+              <AiField
+                label="Текст"
+                value={content.footer.about}
+                onChange={(v) => footerF("about", v)}
+                textarea
+                aiContext="короткий опис магазину брендового одягу Mania Group у футері сайту"
+              />
             </Card>
             <Card title="Колонки посилань" subtitle="Меню в футері — заголовки та посилання">
               <FooterColumnsEditor
@@ -922,17 +1115,32 @@ function ContentSection({
               <div className="space-y-4">
                 <Field label="Заголовок героя" value={content.about.heroTitle}
                   onChange={(v) => aboutF("heroTitle", v)} />
-                <Field label="Підзаголовок героя" value={content.about.heroSubtitle}
-                  onChange={(v) => aboutF("heroSubtitle", v)} textarea />
+                <AiField
+                  label="Підзаголовок героя"
+                  value={content.about.heroSubtitle}
+                  onChange={(v) => aboutF("heroSubtitle", v)}
+                  textarea
+                  aiContext="підзаголовок hero-секції сторінки 'Про нас' магазину брендового одягу Mania Group"
+                />
               </div>
             </Card>
 
             <Card title="Гарантія оригіналу" subtitle="Темна секція на сторінці">
               <div className="space-y-4">
-                <Field label="Основний текст" value={content.about.story}
-                  onChange={(v) => aboutF("story", v)} textarea />
-                <Field label="Другий абзац" value={content.about.guaranteeText}
-                  onChange={(v) => aboutF("guaranteeText", v)} textarea />
+                <AiField
+                  label="Основний текст"
+                  value={content.about.story}
+                  onChange={(v) => aboutF("story", v)}
+                  textarea
+                  aiContext="текст про гарантію оригінальних брендів в магазині Mania Group"
+                />
+                <AiField
+                  label="Другий абзац"
+                  value={content.about.guaranteeText}
+                  onChange={(v) => aboutF("guaranteeText", v)}
+                  textarea
+                  aiContext="другий абзац про гарантію якості та оригінальності товарів Mania Group"
+                />
               </div>
             </Card>
 
@@ -1531,7 +1739,7 @@ function BackupSection() {
 /* ─── Catalog import (XLS) ─── */
 
 type CatalogImportResult = {
-  inStock: number; archived: number; total: number; withImages: number; categories: number;
+  inStock: number; archived: number; total: number; withImages: number; categories: number; ms?: number;
 };
 
 type ImportHistoryEntry = {
@@ -1553,150 +1761,287 @@ function detectSlot(name: string): "mg" | "wp" | null {
   return null;
 }
 
+const IMPORT_STEPS = ["Файли", "MG.xls", "WP.xls", "Фото", "База даних", "Готово"];
+
+function msgToStep(msg: string): number | null {
+  if (/Парсинг MG|MG:/i.test(msg)) return 1;
+  if (/Парсинг WP|WP:/i.test(msg)) return 2;
+  if (/Store API|Завантаження фото/i.test(msg)) return 3;
+  if (/Запис у БД/i.test(msg)) return 4;
+  return null;
+}
+
 function CatalogImportSection() {
   const [mg, setMg] = useState<File | null>(null);
   const [wp, setWp] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "importing" | "done" | "error">("idle");
+  const [step, setStep] = useState(0);
+  const [progress, setProgress] = useState<string[]>([]);
   const [result, setResult] = useState<CatalogImportResult | null>(null);
   const [error, setError] = useState("");
   const [meta, setMeta] = useState<SyncMeta | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
 
   const loadMeta = () => fetch("/api/admin/sync").then((r) => r.json()).then(setMeta).catch(() => {});
   useEffect(() => { loadMeta(); }, []);
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [progress]);
 
   function assign(files: FileList | File[]) {
+    let curMg = mg, curWp = wp;
     for (const f of Array.from(files)) {
       if (!/\.xlsx?$/i.test(f.name)) continue;
       const slot = detectSlot(f.name);
-      if (slot === "mg") setMg(f);
-      else if (slot === "wp") setWp(f);
-      else if (!mg) setMg(f);
-      else setWp(f);
+      if (slot === "mg") curMg = f;
+      else if (slot === "wp") curWp = f;
+      else if (!curMg) curMg = f;
+      else curWp = f;
     }
+    setMg(curMg); setWp(curWp);
   }
 
   async function run() {
     if (!mg || !wp) return;
-    setStatus("importing"); setError(""); setResult(null);
+    setStatus("importing"); setProgress([]); setError(""); setResult(null); setStep(0);
     const fd = new FormData();
     fd.append("mg", mg); fd.append("wp", wp);
     try {
       const res = await fetch("/api/admin/import-catalog", { method: "POST", body: fd });
-      const data = await res.json();
-      if (res.ok && data.ok) { setStatus("done"); setResult(data); loadMeta(); }
-      else { setStatus("error"); setError(data.error ?? "Помилка імпорту"); }
+      if (!res.body) { setStatus("error"); setError("Немає відповіді від сервера"); return; }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const d = JSON.parse(line.slice(6));
+            if (d.type === "progress") {
+              setProgress((p) => [...p, d.message]);
+              const s = msgToStep(d.message);
+              if (s !== null) setStep((prev) => Math.max(prev, s));
+            } else if (d.type === "done") {
+              setStatus("done"); setResult(d); setStep(5); loadMeta();
+            } else if (d.type === "error") {
+              setStatus("error"); setError(d.message);
+            }
+          } catch {}
+        }
+      }
+      if (status === "importing") setStatus("error"), setError("З'єднання перервано");
     } catch {
-      setStatus("error"); setError("Не вдалося завантажити файли");
+      setStatus("error"); setError("Не вдалося з'єднатися з сервером");
     }
   }
 
-  const slot = (label: string, file: File | null, set: (f: File | null) => void, hint: string) => (
-    <div className={`flex-1 rounded-[4px] border p-3 transition-colors ${file ? "border-emerald-300 bg-emerald-50/40" : "border-[#e8e4de] bg-white"}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">{label}</span>
-        {file && <button onClick={() => set(null)} className="text-[11px] text-[#9c8f7d] hover:text-red-600">✕</button>}
-      </div>
-      {file ? (
-        <div className="mt-1.5">
-          <p className="truncate text-[13px] text-[#17130f]">{file.name}</p>
-          <p className="text-[11px] text-[#9c8f7d]">{fmtBytes(file.size)}</p>
+  const fileSlot = (label: string, file: File | null, onSet: (f: File | null) => void, hint: string) => (
+    <div className={`flex-1 rounded-[4px] border-2 p-4 transition-all ${file ? "border-emerald-400 bg-emerald-50/50" : "border-dashed border-[#ddd7ce] bg-white hover:border-[#b9ae9b]"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#9c8f7d]">{label}</span>
+          {file ? (
+            <div className="mt-1.5">
+              <p className="truncate text-[13px] font-medium text-[#17130f]">{file.name}</p>
+              <p className="text-[11px] text-[#9c8f7d]">{fmtBytes(file.size)}</p>
+            </div>
+          ) : (
+            <label className="mt-1.5 flex cursor-pointer items-center gap-1 text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
+              {hint}
+              <input type="file" accept=".xls,.xlsx" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) onSet(f); }} />
+            </label>
+          )}
         </div>
-      ) : (
-        <label className="mt-1.5 flex h-9 cursor-pointer items-center text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
-          {hint}
-          <input type="file" accept=".xls,.xlsx" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) set(f); }} />
-        </label>
-      )}
+        {file ? (
+          <button onClick={() => onSet(null)} className="mt-0.5 rounded-full p-0.5 text-[#9c8f7d] hover:bg-red-50 hover:text-red-500" aria-label="Прибрати">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
+          </button>
+        ) : (
+          <div className="rounded-full bg-[#f5f1ea] p-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5 text-[#b9ae9b]">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" />
+            </svg>
+          </div>
+        )}
+      </div>
     </div>
   );
 
+  const isRunning = status === "importing";
+  const canRun = !!mg && !!wp && !isRunning;
+
   return (
     <div className="max-w-3xl space-y-6">
-      <Card title="Імпорт каталогу з XLS" subtitle="Перетягніть обидві вигрузки магазину — MG (повний перелік) і WP (поточні залишки). Файли визначаються автоматично за назвою.">
-        <div className="space-y-4">
-          {/* Dropzone */}
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); assign(e.dataTransfer.files); }}
-            className={`rounded-[4px] border-2 border-dashed px-4 py-6 text-center transition-colors ${dragOver ? "border-[#17130f] bg-[#f7f5f2]" : "border-[#e0dacf]"}`}
-          >
-            <svg viewBox="0 0 24 24" className="mx-auto h-7 w-7 text-[#b9ae9b]" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <p className="mt-2 text-[13px] text-[#17130f]">Перетягніть сюди MG.xls та WP.xls</p>
-            <label className="mt-1 inline-block cursor-pointer text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
-              або оберіть файли
-              <input type="file" accept=".xls,.xlsx" multiple className="sr-only" onChange={(e) => e.target.files && assign(e.target.files)} />
-            </label>
-          </div>
+      <Card title="Імпорт каталогу з XLS" subtitle="Завантажте обидва файли-вигрузки — MG (повний перелік) і WP (поточні залишки WooCommerce). Автовизначення за назвою файлу.">
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            {slot("MG — повний перелік", mg, setMg, "обрати файл MG")}
-            {slot("WP — залишки", wp, setWp, "обрати файл WP")}
-          </div>
-
-          <button
-            onClick={run}
-            disabled={!mg || !wp || status === "importing"}
-            className="inline-flex h-10 items-center rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
-          >
-            {status === "importing" ? "Імпортуємо… (~1 хв)" : "Імпортувати каталог"}
-          </button>
-
-          {status === "importing" && (
-            <div className="flex items-center gap-2 text-[12px] text-[#9c8f7d]">
-              <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#d8d2c8] border-t-[#17130f]" />
-              Парсимо файли і підтягуємо фото зі Store API. Не закривайте сторінку.
+        {/* Step wizard */}
+        <div className="mb-6 flex items-center">
+          {IMPORT_STEPS.map((s, i) => (
+            <div key={i} className="flex items-center">
+              <div className="flex flex-col items-center gap-1">
+                <div className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold transition-all duration-300 ${
+                  i < step ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
+                  i === step && isRunning ? "animate-pulse bg-[#17130f] text-white" :
+                  i === step && status === "done" ? "bg-emerald-500 text-white" :
+                  "bg-[#f0ece5] text-[#b9ae9b]"
+                }`}>
+                  {i < step || status === "done" ? (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  ) : i + 1}
+                </div>
+                <span className={`text-[9px] whitespace-nowrap text-center ${i <= step ? "text-[#17130f]" : "text-[#c8c0b4]"}`}>{s}</span>
+              </div>
+              {i < IMPORT_STEPS.length - 1 && (
+                <div className={`mx-1 mb-4 h-px w-8 transition-all duration-500 ${i < step ? "bg-emerald-400" : "bg-[#e8e4de]"}`} />
+              )}
             </div>
-          )}
-          {status === "error" && <p className="text-[12px] text-red-600">✗ {error}</p>}
-          {status === "done" && result && (
-            <div className="rounded-[3px] border border-emerald-200 bg-emerald-50 p-4 text-[12px] text-emerald-800">
-              ✓ Готово: <b>{result.inStock}</b> у наявності, <b>{result.archived}</b> в архіві,
-              усього <b>{result.total}</b> · з фото {result.withImages} · категорій {result.categories}
-            </div>
-          )}
+          ))}
         </div>
+
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); assign(e.dataTransfer.files); }}
+          className={`mb-4 rounded-[4px] border-2 border-dashed px-4 py-5 text-center transition-all ${dragOver ? "border-[#17130f] bg-[#f7f5f2] scale-[0.99]" : "border-[#e0dacf] hover:border-[#b9ae9b]"}`}
+        >
+          <svg viewBox="0 0 24 24" className="mx-auto h-8 w-8 text-[#c8c0b4]" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="mt-2 text-[13px] text-[#17130f]">Перетягніть MG.xls і WP.xls сюди</p>
+          <label className="mt-1 inline-block cursor-pointer text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
+            або оберіть кілька файлів
+            <input type="file" accept=".xls,.xlsx" multiple className="sr-only" onChange={(e) => e.target.files && assign(e.target.files)} />
+          </label>
+        </div>
+
+        {/* File slots */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+          {fileSlot("MG — повний перелік", mg, setMg, "вибрати MG.xls")}
+          {fileSlot("WP — поточні залишки", wp, setWp, "вибрати WP.xls")}
+        </div>
+
+        {/* Run button */}
+        <button
+          onClick={run}
+          disabled={!canRun}
+          className="inline-flex h-11 items-center gap-2 rounded-[3px] bg-[#17130f] px-8 text-[11px] uppercase tracking-[0.14em] text-white transition-all hover:opacity-90 disabled:opacity-35"
+        >
+          {isRunning ? (
+            <>
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              Імпортується…
+            </>
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
+                <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Запустити імпорт
+            </>
+          )}
+        </button>
+
+        {/* Live progress log */}
+        {isRunning && progress.length > 0 && (
+          <div
+            ref={logRef}
+            className="mt-4 max-h-44 overflow-y-auto rounded-[3px] bg-[#17130f] px-4 py-3 font-mono text-[11px] leading-relaxed"
+          >
+            {progress.map((msg, i) => (
+              <p key={i} className="text-emerald-400">
+                <span className="mr-2 text-emerald-700">›</span>{msg}
+              </p>
+            ))}
+            <p className="text-emerald-700 animate-pulse">_</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {status === "error" && (
+          <div className="mt-4 flex items-start gap-3 rounded-[3px] border border-red-200 bg-red-50 px-4 py-3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mt-0.5 h-4 w-4 shrink-0 text-red-500"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" strokeLinecap="round" /></svg>
+            <p className="text-[12px] text-red-700">{error}</p>
+          </div>
+        )}
+
+        {/* Success result */}
+        {status === "done" && result && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-medium text-emerald-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M9 12l2 2 4-4M22 12A10 10 0 112 12a10 10 0 0120 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Імпорт завершено успішно
+              {result.ms && <span className="font-normal text-emerald-600">· {(result.ms / 1000).toFixed(1)} с</span>}
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { l: "У наявності", v: result.inStock.toLocaleString("uk-UA"), color: "text-emerald-700" },
+                { l: "В архіві", v: result.archived.toLocaleString("uk-UA"), color: "text-[#9c8f7d]" },
+                { l: "Усього", v: result.total.toLocaleString("uk-UA"), color: "text-[#17130f]" },
+                { l: "З фото", v: result.withImages.toLocaleString("uk-UA"), color: "text-[#17130f]" },
+                { l: "Категорій", v: result.categories.toLocaleString("uk-UA"), color: "text-[#17130f]" },
+              ].map((s) => (
+                <div key={s.l} className="rounded-[3px] border border-[#eae5dd] bg-[#faf8f5] p-3 text-center">
+                  <p className={`text-[18px] font-semibold tabular-nums ${s.color}`}>{s.v}</p>
+                  <p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#b9ae9b]">{s.l}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
+      {/* Current state */}
       <Card title="Поточний стан каталогу">
         <dl className="grid grid-cols-3 gap-3">
           {[
             { l: "Джерело", v: meta?.source === "xls" ? "XLS-імпорт" : meta?.source || "—" },
-            { l: "Товарів у БД", v: meta?.total_products?.toLocaleString("uk-UA") ?? "—" },
+            { l: "Товарів у БД", v: meta?.total_products != null ? Number(meta.total_products).toLocaleString("uk-UA") : "—" },
             { l: "Останній імпорт", v: meta?.last_sync ? new Date(meta.last_sync).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—" },
           ].map((s) => (
-            <div key={s.l} className="rounded-[3px] border border-[#eee7db] bg-[#faf8f5] px-3 py-3">
-              <p className="text-[15px] font-medium text-[#17130f]">{s.v}</p>
+            <div key={s.l} className="rounded-[3px] border border-[#eee7db] bg-[#faf8f5] px-4 py-3">
+              <p className="text-[16px] font-semibold text-[#17130f]">{s.v}</p>
               <p className="mt-0.5 text-[10px] uppercase tracking-wider text-[#9c8f7d]">{s.l}</p>
             </div>
           ))}
         </dl>
       </Card>
 
+      {/* Import history */}
       {meta?.history && meta.history.length > 0 && (
-        <Card title="Історія імпортів" subtitle="Останні завантаження каталогу">
+        <Card title="Журнал імпортів" subtitle={`Останні ${meta.history.length} завантаження`}>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-[12px]">
+            <table className="w-full min-w-[540px] text-[12px]">
               <thead>
                 <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
-                  <th className="py-2 pr-3 text-left">Дата</th>
-                  <th className="py-2 pr-3 text-left">Файли</th>
-                  <th className="py-2 pr-3 text-right">У наявності</th>
-                  <th className="py-2 pr-3 text-right">Архів</th>
-                  <th className="py-2 pr-3 text-right">З фото</th>
+                  <th className="py-2 pr-4 text-left">Дата</th>
+                  <th className="py-2 pr-4 text-left">Файли</th>
+                  <th className="py-2 pr-4 text-right">У наявн.</th>
+                  <th className="py-2 pr-4 text-right">Архів</th>
+                  <th className="py-2 pr-4 text-right">З фото</th>
                   <th className="py-2 text-right">Усього</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f7f4f0]">
                 {meta.history.map((h, i) => (
-                  <tr key={i}>
-                    <td className="py-2 pr-3 text-[#17130f]">{new Date(h.at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
-                    <td className="max-w-[180px] truncate py-2 pr-3 text-[#9c8f7d]" title={`${h.mg} · ${h.wp}`}>{h.mg} · {h.wp}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{h.inStock}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-[#9c8f7d]">{h.archived}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{h.withImages}</td>
-                    <td className="py-2 text-right font-medium tabular-nums">{h.total}</td>
+                  <tr key={i} className="group hover:bg-[#faf8f5]">
+                    <td className="py-2.5 pr-4 tabular-nums text-[#17130f]">
+                      {new Date(h.at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </td>
+                    <td className="max-w-[180px] truncate py-2.5 pr-4 text-[#9c8f7d]" title={`${h.mg} · ${h.wp}`}>
+                      {h.mg} · {h.wp}
+                    </td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums text-emerald-700">{h.inStock.toLocaleString("uk-UA")}</td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums text-[#9c8f7d]">{h.archived.toLocaleString("uk-UA")}</td>
+                    <td className="py-2.5 pr-4 text-right tabular-nums">{h.withImages.toLocaleString("uk-UA")}</td>
+                    <td className="py-2.5 text-right font-medium tabular-nums">{h.total.toLocaleString("uk-UA")}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1705,21 +2050,26 @@ function CatalogImportSection() {
         </Card>
       )}
 
+      {/* How it works */}
       <Card title="Як це працює">
-        <ul className="space-y-2 text-[12px] text-[#9c8f7d]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[
-            "MG.xls — бренд, стать, склад, колір, ціни, наявні розміри",
-            "WP.xls — категорії, поточні залишки і ціни",
-            "Фото та посилання підтягуються зі Store API за КОД (sku)",
-            "Розпродане показується в каталозі з позначкою «Немає в наявності»",
-            "Сайт працює під час імпорту — оновлення відбувається атомарно",
-          ].map((t) => (
-            <li key={t} className="flex items-center gap-2">
-              <span className="h-1 w-1 rounded-full bg-[#b9ae9b]" />
-              {t}
-            </li>
+            { icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v10a2 2 0 01-2 2z", t: "MG.xls", d: "Бренд, стать, склад, колір, ціни, розміри — основний перелік" },
+            { icon: "M3 10h11M9 21V3m12 7h-4m-4 10l4-4-4-4", t: "WP.xls", d: "Категорії, поточні залишки та ціни з WooCommerce" },
+            { icon: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14", t: "Фото", d: "Підтягуються зі Store API за кодом SKU автоматично" },
+            { icon: "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138", t: "Атомарне оновлення", d: "Сайт не гальмує під час імпорту — swap відбувається одразу" },
+          ].map((item) => (
+            <div key={item.t} className="flex gap-3 rounded-[3px] border border-[#f0ece5] p-3">
+              <div className="mt-0.5 rounded-[3px] bg-[#f5f1ea] p-1.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4 text-[#9c8f7d]"><path d={item.icon} strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#17130f]">{item.t}</p>
+                <p className="text-[11px] text-[#9c8f7d]">{item.d}</p>
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </Card>
     </div>
   );

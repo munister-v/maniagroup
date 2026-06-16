@@ -191,5 +191,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text });
   }
 
+  // ── Покращення контенту (SEO, hero, опис) ───────────────────────────
+  if (action === "content-improve") {
+    const { field, text, context } = body as { field?: string; text?: string; context?: string };
+    if (!text?.trim()) return NextResponse.json({ error: "empty text" }, { status: 400 });
+
+    const prompt = `Поле: "${field || "текст"}"
+Контекст: ${context || "контент сайту магазину брендового одягу Mania Group (Україна)"}
+Поточний текст:
+"""
+${text}
+"""
+
+Покращ або перефразуй цей текст: зроби його точнішим, живим, переконливим. Зберігай смисл та мову оригіналу (якщо українська — залишай українською). Відповідь — ТІЛЬКИ покращений текст, без пояснень і лапок.`;
+
+    const improved = await orChat([
+      { role: "system", content: "Ти копірайтер для магазину брендового одягу Mania Group. Пишеш чисто, лаконічно, природньою українською мовою." },
+      { role: "user", content: prompt },
+    ], { maxTokens: 400, temperature: 0.72 });
+
+    return NextResponse.json({ text: improved.trim() });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
