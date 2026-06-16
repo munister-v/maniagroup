@@ -475,11 +475,15 @@ function ImportTab() {
   );
 }
 
-// ── XLS Diff tab ─────────────────────────────────────────────────────────────
+// ── Sync tab (analyze + selective apply) ─────────────────────────────────────
 
 type DiffFilter = "all" | "new" | "price_up" | "price_down" | "now_in_stock" | "now_out";
 
-function DiffTab() {
+type ApplyOpts = { prices: boolean; stockIn: boolean; stockOut: boolean; newItems: boolean };
+type ApplyResult = { pricesUpdated: number; markedInStock: number; markedOutOfStock: number; newInserted: number };
+type SyncLogEntry = { at: string; type: string; applied: Partial<ApplyOpts>; result: ApplyResult; ms: number };
+
+function SyncTab() {
   const [mg, setMg] = useState<File | null>(null);
   const [wp, setWp] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -487,6 +491,16 @@ function DiffTab() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<DiffFilter>("all");
   const [dragOver, setDragOver] = useState(false);
+
+  // apply state
+  const [apply, setApply] = useState<ApplyOpts>({ prices: true, stockIn: true, stockOut: true, newItems: true });
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState<ApplyResult | null>(null);
+  const [confirmApply, setConfirmApply] = useState(false);
+  const [log, setLog] = useState<SyncLogEntry[]>([]);
+
+  const loadLog = () => fetch("/api/admin/catalog/sync").then((r) => r.json()).then((d) => setLog(d.log ?? [])).catch(() => {});
+  useEffect(() => { loadLog(); }, []);
 
   function assign(files: FileList | File[]) {
     let curMg = mg, curWp = wp;
@@ -503,7 +517,7 @@ function DiffTab() {
 
   async function analyze() {
     if (!mg || !wp) return;
-    setLoading(true); setError(""); setResult(null);
+    setLoading(true); setError(""); setResult(null); setApplied(null); setConfirmApply(false);
     const fd = new FormData();
     fd.append("mg", mg); fd.append("wp", wp);
     try {
@@ -515,7 +529,29 @@ function DiffTab() {
     setLoading(false);
   }
 
+  async function runApply() {
+    if (!mg || !wp) return;
+    setApplying(true); setError("");
+    const fd = new FormData();
+    fd.append("mg", mg); fd.append("wp", wp);
+    fd.append("apply", JSON.stringify(apply));
+    try {
+      const res = await fetch("/api/admin/catalog/sync", { method: "POST", body: fd });
+      const d = await res.json();
+      if (res.ok) { setApplied(d.result); setConfirmApply(false); loadLog(); }
+      else setError(d.error ?? "Помилка синхронізації");
+    } catch { setError("Помилка мережі"); }
+    setApplying(false);
+  }
+
   const filtered = result ? (filter === "all" ? result.items.filter((i) => i.change !== "unchanged") : result.items.filter((i) => i.change === filter)) : [];
+
+  const totalToApply = result ? (
+    (apply.prices ? result.counts.price_up + result.counts.price_down : 0) +
+    (apply.stockIn ? result.counts.now_in_stock : 0) +
+    (apply.stockOut ? result.counts.now_out : 0) +
+    (apply.newItems ? result.counts.new_products : 0)
+  ) : 0;
 
   const fileSlot2 = (label: string, file: File | null, onSet: (f: File | null) => void, hint: string) => (
     <div className={`flex-1 rounded-[4px] border-2 p-3 transition-all ${file ? "border-emerald-400 bg-emerald-50/40" : "border-dashed border-[#ddd7ce] hover:border-[#b9ae9b]"}`}>
@@ -543,8 +579,8 @@ function DiffTab() {
     <div className="max-w-5xl space-y-5">
       {/* Upload panel */}
       <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
-        <h2 className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Аналіз XLS vs База даних</h2>
-        <p className="mb-4 text-[12px] text-[#b9ae9b]">Завантажте нові файли, щоб побачити що зміниться ПЕРЕД імпортом. Дані в базі не змінюються.</p>
+        <h2 className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Розумна синхронізація з XLS</h2>
+        <p className="mb-4 text-[12px] text-[#b9ae9b]">Завантажте файли → побачте точні зміни → застосуйте лише потрібні. Швидко (без перезавантаження фото), без повного перезапису бази.</p>
 
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -570,6 +606,29 @@ function DiffTab() {
         </button>
         {error && <p className="mt-3 text-[12px] text-red-600">{error}</p>}
       </div>
+
+      {/* Apply success banner */}
+      {applied && (
+        <div className="rounded-[4px] border border-emerald-300 bg-emerald-50 p-5">
+          <div className="mb-3 flex items-center gap-2 text-[12px] font-medium text-emerald-800">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M9 12l2 2 4-4M22 12A10 10 0 112 12a10 10 0 0120 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Синхронізацію застосовано до бази
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { l: "Оновлено цін", v: applied.pricesUpdated },
+              { l: "Стало в наявн.", v: applied.markedInStock },
+              { l: "Стало немає", v: applied.markedOutOfStock },
+              { l: "Додано нових", v: applied.newInserted },
+            ].map((s) => (
+              <div key={s.l} className="rounded-[3px] border border-emerald-200 bg-white p-3 text-center">
+                <p className="text-[18px] font-semibold tabular-nums text-emerald-700">{N(s.v)}</p>
+                <p className="mt-0.5 text-[9px] uppercase tracking-wider text-emerald-600/70">{s.l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {result && (
@@ -601,6 +660,50 @@ function DiffTab() {
             <span>MG.xls: <b className="text-[#17130f]">{N(result.mgCount)}</b> рядків</span>
             <span>WP.xls: <b className="text-[#17130f]">{N(result.wpCount)}</b> рядків</span>
             <span>Поточна БД: <b className="text-[#17130f]">{N(result.counts.db_total)}</b> товарів</span>
+          </div>
+
+          {/* Apply panel */}
+          <div className="rounded-[4px] border border-[#17130f] bg-[#faf8f5] p-5">
+            <h3 className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#17130f]">Застосувати зміни до бази</h3>
+            <p className="mb-4 text-[11px] text-[#9c8f7d]">Оберіть, які типи змін записати. Працює напряму по SKU — швидко, без перезапису всього каталогу.</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              {([
+                { key: "prices",   label: "Оновити ціни",        desc: `${result.counts.price_up + result.counts.price_down} товарів`, color: "amber" },
+                { key: "stockIn",  label: "Позначити в наявності", desc: `${result.counts.now_in_stock} товарів`, color: "emerald" },
+                { key: "stockOut", label: "Позначити «немає»",    desc: `${result.counts.now_out} товарів`, color: "red" },
+                { key: "newItems", label: "Додати нові товари",   desc: `${result.counts.new_products} (без фото)`, color: "blue" },
+              ] as const).map((opt) => (
+                <label key={opt.key}
+                  className={`flex cursor-pointer items-start gap-3 rounded-[3px] border p-3 transition-all ${apply[opt.key] ? "border-[#17130f] bg-white" : "border-[#e8e4de] bg-white/40"}`}>
+                  <input type="checkbox" checked={apply[opt.key]}
+                    onChange={(e) => setApply((a) => ({ ...a, [opt.key]: e.target.checked }))}
+                    className="mt-0.5 h-4 w-4 accent-[#17130f]" />
+                  <div>
+                    <p className="text-[12px] font-medium text-[#17130f]">{opt.label}</p>
+                    <p className="text-[11px] text-[#9c8f7d]">{opt.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-4 flex items-center gap-3">
+              {!confirmApply ? (
+                <button onClick={() => setConfirmApply(true)} disabled={totalToApply === 0}
+                  className="inline-flex h-10 items-center gap-2 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.14em] text-white transition-all hover:opacity-90 disabled:opacity-35">
+                  Застосувати {totalToApply > 0 ? `(${N(totalToApply)})` : ""}
+                </button>
+              ) : (
+                <>
+                  <button onClick={runApply} disabled={applying}
+                    className="inline-flex h-10 items-center gap-2 rounded-[3px] bg-emerald-600 px-6 text-[11px] uppercase tracking-[0.14em] text-white transition-all hover:opacity-90 disabled:opacity-50">
+                    {applying ? <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />Записуємо…</> : `Підтвердити запис ${N(totalToApply)} змін`}
+                  </button>
+                  <button onClick={() => setConfirmApply(false)} disabled={applying}
+                    className="text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">Скасувати</button>
+                </>
+              )}
+              <span className="text-[11px] text-[#b9ae9b]">Зміни застосовуються в одній транзакції</span>
+            </div>
           </div>
 
           {/* Table of changes */}
@@ -655,6 +758,35 @@ function DiffTab() {
           )}
         </>
       )}
+
+      {/* Sync log */}
+      {log.length > 0 && (
+        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+          <h3 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Журнал синхронізацій</h3>
+          <div className="space-y-2">
+            {log.map((e, i) => {
+              const total = e.result.pricesUpdated + e.result.markedInStock + e.result.markedOutOfStock + e.result.newInserted;
+              const parts = [
+                e.result.pricesUpdated    ? `${e.result.pricesUpdated} цін`      : "",
+                e.result.markedInStock    ? `+${e.result.markedInStock} в наявн.` : "",
+                e.result.markedOutOfStock ? `−${e.result.markedOutOfStock} немає` : "",
+                e.result.newInserted      ? `${e.result.newInserted} нових`       : "",
+              ].filter(Boolean).join(" · ");
+              return (
+                <div key={i} className="flex items-center justify-between rounded-[3px] border border-[#f0ece5] px-3 py-2 text-[12px]">
+                  <span className="tabular-nums text-[#9c8f7d]">
+                    {new Date(e.at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <span className="flex-1 px-4 text-[#17130f]">{parts || "без змін"}</span>
+                  <span className="rounded-full bg-[#f5f1ea] px-2 py-0.5 text-[10px] tabular-nums text-[#9c8f7d]">
+                    {N(total)} змін · {(e.ms / 1000).toFixed(1)} с
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -676,8 +808,8 @@ const HUB_TABS: { id: HubTab; label: string; icon: string }[] = [
   },
   {
     id: "diff",
-    label: "Аналіз змін",
-    icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+    label: "Синхронізація",
+    icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
   },
 ];
 
@@ -704,7 +836,7 @@ export function AdminCatalogHub() {
       {/* Content */}
       {tab === "overview" && <OverviewTab />}
       {tab === "import"   && <ImportTab  />}
-      {tab === "diff"     && <DiffTab    />}
+      {tab === "diff"     && <SyncTab    />}
     </div>
   );
 }
