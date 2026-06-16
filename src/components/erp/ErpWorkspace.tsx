@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ErpOverview } from "./ErpOverview";
 import { ErpReceiving } from "./ErpReceiving";
 import { ErpSuppliers } from "./ErpSuppliers";
 import { ErpChannels } from "./ErpChannels";
@@ -41,10 +42,10 @@ const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px]
 
 /* ── root ───────────────────────────────────────────────────────────────── */
 
-type ErpSection = "products" | "receiving" | "suppliers" | "channels";
+type ErpSection = "overview" | "products" | "receiving" | "suppliers" | "channels";
 
 export function ErpWorkspace() {
-  const [section, setSection] = useState<ErpSection>("products");
+  const [section, setSection] = useState<ErpSection>("overview");
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
@@ -52,6 +53,7 @@ export function ErpWorkspace() {
       <div className="border-b border-[#e2ddd5] bg-white px-5">
         <div className="mx-auto flex max-w-[1200px] gap-1">
           {([
+            ["overview", "Огляд"],
             ["products", "Товари"],
             ["receiving", "Прихід"],
             ["suppliers", "Постачальники"],
@@ -65,6 +67,7 @@ export function ErpWorkspace() {
           ))}
         </div>
       </div>
+      {section === "overview" && <ErpOverview onGoto={setSection} />}
       {section === "products" && (selected ? <ProductCard id={selected} onBack={() => setSelected(null)} /> : <ProductList onOpen={setSelected} />)}
       {section === "receiving" && <ErpReceiving />}
       {section === "suppliers" && <ErpSuppliers />}
