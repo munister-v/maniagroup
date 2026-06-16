@@ -2,25 +2,23 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  type ActiveFilters,
+  catalogHref,
+  toggleInList,
+  activeCount,
+  hasAnyFilter,
+} from "@/lib/catalogFilters";
+import { colorLabel, swatchBackground, colorInfo } from "@/lib/colors";
+
+export type { ActiveFilters };
 
 export type Facets = {
-  brands: { name: string; slug: string }[];
+  brands: { name: string; slug: string; count?: number }[];
   categories?: { name: string; slug: string }[];
   sizes: { slug: string; name: string }[];
-  colors?: { name: string }[];
-};
-
-export type ActiveFilters = {
-  category?: string;
-  brand?: string;
-  brandGroup?: string;
-  gender?: string;
-  color?: string;
-  q?: string;
-  sort?: string;
-  size?: string;
-  min?: string;
-  max?: string;
+  colors?: { name: string; count?: number }[];
+  priceRange?: { min: number; max: number };
 };
 
 export function CatalogFilters({
@@ -35,33 +33,32 @@ export function CatalogFilters({
   const [min, setMin] = useState(active.min ?? "");
   const [max, setMax] = useState(active.max ?? "");
 
-  function buildHref(overrides: Partial<ActiveFilters>) {
-    const next = { ...active, ...overrides };
-    const params = new URLSearchParams();
-    if (next.category) params.set("category", next.category);
-    if (next.brand) params.set("brand", next.brand);
-    if (next.brandGroup) params.set("brandGroup", next.brandGroup);
-    if (next.gender) params.set("gender", next.gender);
-    if (next.color) params.set("color", next.color);
-    if (next.q) params.set("q", next.q);
-    if (next.sort && next.sort !== "newest") params.set("sort", next.sort);
-    if (next.size) params.set("size", next.size);
-    if (next.min) params.set("min", next.min);
-    if (next.max) params.set("max", next.max);
-    const qs = params.toString();
-    return qs ? `/catalog?${qs}` : "/catalog";
-  }
-
-  function go(overrides: Partial<ActiveFilters>) {
-    router.push(buildHref(overrides));
+  function go(patch: Partial<ActiveFilters>) {
+    router.push(catalogHref(active, patch));
     setOpen(false);
   }
 
-  const hasActive = active.size || active.min || active.max || active.brand || active.category || active.gender || active.color;
-  const activeCount = [active.category, active.brand, active.gender, active.color, active.size, active.min || active.max].filter(Boolean).length;
+  const range = facets.priceRange;
 
   const renderBody = () => (
     <div className="space-y-8">
+      {/* In-stock toggle */}
+      <label className="flex cursor-pointer items-center justify-between gap-2">
+        <span className="text-sm text-ink">Тільки в наявності</span>
+        <span
+          onClick={() => go({ inStock: !active.inStock })}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+            active.inStock ? "bg-ink" : "bg-line"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-paper transition-transform ${
+              active.inStock ? "translate-x-4" : "translate-x-0.5"
+            }`}
+          />
+        </span>
+      </label>
+
       {facets.categories && facets.categories.length > 0 && (
         <div>
           <h3 className="text-[11px] uppercase tracking-luxe text-muted">Категорії</h3>
@@ -86,19 +83,75 @@ export function CatalogFilters({
         <div>
           <h3 className="text-[11px] uppercase tracking-luxe text-muted">Бренди</h3>
           <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1">
-            {facets.brands.map((b) => (
-              <li key={b.slug}>
-                <button
-                  onClick={() => go({ brand: active.brand === b.slug ? undefined : b.slug })}
-                  className={`text-sm transition-colors hover:text-ink ${
-                    active.brand === b.slug ? "text-ink underline underline-offset-4" : "text-muted"
-                  }`}
-                >
-                  {b.name}
-                </button>
-              </li>
-            ))}
+            {facets.brands.map((b) => {
+              const checked = active.brands.includes(b.slug);
+              return (
+                <li key={b.slug}>
+                  <button
+                    onClick={() => go({ brands: toggleInList(active.brands, b.slug), brandGroup: undefined })}
+                    className="group flex w-full items-center gap-2.5 text-left"
+                  >
+                    <span
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center border transition-colors ${
+                        checked ? "border-ink bg-ink text-paper" : "border-line group-hover:border-ink"
+                      }`}
+                    >
+                      {checked && (
+                        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="3">
+                          <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={`text-sm transition-colors ${checked ? "text-ink" : "text-muted group-hover:text-ink"}`}>
+                      {b.name}
+                    </span>
+                    {b.count != null && <span className="ml-auto text-[11px] tabular-nums text-muted/50">{b.count}</span>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
+        </div>
+      )}
+
+      {facets.colors && facets.colors.length > 0 && (
+        <div>
+          <h3 className="text-[11px] uppercase tracking-luxe text-muted">Колір</h3>
+          <div className="mt-3 grid grid-cols-5 gap-2.5">
+            {facets.colors.map((c) => {
+              const selected = active.colors.includes(c.name);
+              const info = colorInfo(c.name);
+              return (
+                <button
+                  key={c.name}
+                  onClick={() => go({ colors: toggleInList(active.colors, c.name) })}
+                  title={`${colorLabel(c.name)}${c.count != null ? ` (${c.count})` : ""}`}
+                  aria-label={colorLabel(c.name)}
+                  aria-pressed={selected}
+                  className="group flex flex-col items-center gap-1"
+                >
+                  <span
+                    className={`relative flex h-7 w-7 items-center justify-center rounded-full transition-transform group-hover:scale-110 ${
+                      info.ring ? "ring-1 ring-inset ring-line" : ""
+                    } ${selected ? "ring-2 ring-ink ring-offset-1 ring-offset-paper" : ""}`}
+                    style={{ background: swatchBackground(c.name) }}
+                  >
+                    {selected && (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className={`h-3.5 w-3.5 ${info.ring || c.name === "Белый" || c.name === "Молочный" || c.name === "Кремовый" ? "text-ink" : "text-white"}`}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      >
+                        <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -107,11 +160,11 @@ export function CatalogFilters({
           <h3 className="text-[11px] uppercase tracking-luxe text-muted">Розмір</h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {facets.sizes.map((s) => {
-              const selected = active.size === s.slug;
+              const selected = active.sizes.includes(s.slug);
               return (
                 <button
                   key={s.slug}
-                  onClick={() => go({ size: selected ? undefined : s.slug })}
+                  onClick={() => go({ sizes: toggleInList(active.sizes, s.slug) })}
                   className={`flex h-9 min-w-9 items-center justify-center border px-2.5 text-xs uppercase transition-colors ${
                     selected ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
                   }`}
@@ -121,26 +174,6 @@ export function CatalogFilters({
               );
             })}
           </div>
-        </div>
-      )}
-
-      {facets.colors && facets.colors.length > 0 && (
-        <div>
-          <h3 className="text-[11px] uppercase tracking-luxe text-muted">Колір</h3>
-          <ul className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
-            {facets.colors.map((c) => (
-              <li key={c.name}>
-                <button
-                  onClick={() => go({ color: active.color === c.name ? undefined : c.name })}
-                  className={`text-sm transition-colors hover:text-ink ${
-                    active.color === c.name ? "text-ink underline underline-offset-4" : "text-muted"
-                  }`}
-                >
-                  {c.name}
-                </button>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
@@ -158,7 +191,7 @@ export function CatalogFilters({
             inputMode="numeric"
             value={min}
             onChange={(e) => setMin(e.target.value)}
-            placeholder="від"
+            placeholder={range ? `від ${range.min}` : "від"}
             className="h-9 w-full border border-line bg-white px-2 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
           />
           <span className="text-muted">—</span>
@@ -167,7 +200,7 @@ export function CatalogFilters({
             inputMode="numeric"
             value={max}
             onChange={(e) => setMax(e.target.value)}
-            placeholder="до"
+            placeholder={range ? `до ${range.max}` : "до"}
             className="h-9 w-full border border-line bg-white px-2 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
           />
           <button
@@ -180,12 +213,22 @@ export function CatalogFilters({
         </form>
       </div>
 
-      {hasActive && (
+      {hasAnyFilter(active) && (
         <button
           onClick={() => {
             setMin("");
             setMax("");
-            go({ size: undefined, min: undefined, max: undefined, brand: undefined, category: undefined, gender: undefined, color: undefined });
+            go({
+              category: undefined,
+              brands: [],
+              brandGroup: undefined,
+              gender: undefined,
+              colors: [],
+              sizes: [],
+              inStock: false,
+              min: undefined,
+              max: undefined,
+            });
           }}
           className="link-underline text-[11px] uppercase tracking-luxe text-ink"
         >
@@ -194,6 +237,8 @@ export function CatalogFilters({
       )}
     </div>
   );
+
+  const count = activeCount(active);
 
   return (
     <>
@@ -206,9 +251,9 @@ export function CatalogFilters({
           <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
         </svg>
         Фільтри
-        {activeCount > 0 && (
+        {count > 0 && (
           <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-ink px-1 text-[9px] tabular-nums text-paper">
-            {activeCount}
+            {count}
           </span>
         )}
       </button>

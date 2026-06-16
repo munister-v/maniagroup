@@ -2,8 +2,9 @@ import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
+import { ActiveFilterChips } from "@/components/ActiveFilterChips";
 import { CatalogSort } from "@/components/CatalogSort";
-import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets } from "@/lib/productSource";
+import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets, dbPriceRange, resolveBrandSlugs } from "@/lib/productSource";
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
 export const metadata = {
@@ -24,18 +25,25 @@ const GENDERS: { slug: string; label: string }[] = [
   { slug: "men", label: "Чоловікам" },
 ];
 
+const parseList = (v?: string) =>
+  v ? Array.from(new Set(v.split(",").map((s) => s.trim()).filter(Boolean))) : [];
+
 export default async function CatalogPage({
   searchParams,
 }: {
   searchParams: Promise<{
     category?: string;
     brand?: string;
+    brands?: string;
     brandGroup?: string;
     gender?: string;
     color?: string;
+    colors?: string;
+    inStock?: string;
     q?: string;
     sort?: string;
     size?: string;
+    sizes?: string;
     min?: string;
     max?: string;
     page?: string;
@@ -45,7 +53,15 @@ export default async function CatalogPage({
   // Map legacy WooCommerce nav/URL slugs to the store's own DB slugs so the
   // mega-menu links and old bookmarked URLs don't land on an empty catalog.
   const { category: categorySlug, gender } = resolveCatalogCategory(sp.category, sp.gender);
-  const { brand: brandSlugParam, brandGroup, color, q, size, min, max } = sp;
+  const { brandGroup, q, min, max } = sp;
+
+  // Multi-select params: comma-joined lists, with the legacy single param
+  // folded in so old bookmarked URLs (?brand=, ?color=, ?size=) still work.
+  const brandSlugs = Array.from(new Set([...parseList(sp.brands), ...(sp.brand ? [sp.brand] : [])]));
+  const colorNames = Array.from(new Set([...parseList(sp.colors), ...(sp.color ? [sp.color] : [])]));
+  const sizeSlugs = Array.from(new Set([...parseList(sp.sizes), ...(sp.size ? [sp.size] : [])]));
+  const inStock = sp.inStock === "1";
+
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
   const { orderby, order } = SORTS[sortKey];
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
@@ -54,18 +70,19 @@ export default async function CatalogPage({
   // ── Categories + brands facets ────────────────────────────────────────
   const categories = await getCatalogCategories();
 
-  const brands = (await dbBrands({ categorySlug, gender })).slice(0, 24);
-  const brandName = brandSlugParam ? brands.find((b) => b.slug === brandSlugParam)?.name : undefined;
+  const brands = (await dbBrands({ categorySlug, gender })).slice(0, 30);
+  const brandNames = await resolveBrandSlugs(brandSlugs);
 
   // ── Products ─────────────────────────────────────────────────────────
   const { products, total } = await getCatalogProducts({
     categorySlug,
-    brandName,
+    brandNames,
     brandGroup,
     gender: gender === "women" || gender === "men" ? gender : undefined,
-    color,
+    colors: colorNames,
     q,
-    size,
+    sizes: sizeSlugs,
+    inStock,
     minPrice: min ? Number(min) : undefined,
     maxPrice: max ? Number(max) : undefined,
     orderby: orderby === "price" ? "price" : "date",
@@ -74,9 +91,10 @@ export default async function CatalogPage({
     perPage,
   });
 
-  // ── Size + color facets ─────────────────────────────────────────────────
+  // ── Size + color + price facets ──────────────────────────────────────────
   const sizes = await dbSizeFacets({ categorySlug, q });
   const colors = await dbColorFacets({ categorySlug, gender });
+  const priceRange = await dbPriceRange({ categorySlug, gender });
 
   // ── Pagination ────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -86,27 +104,42 @@ export default async function CatalogPage({
     .slice(0, 20)
     .map((c) => ({ name: c.name, slug: c.slug }));
 
-  const facets: Facets = { brands, categories: categoryFacets, sizes, colors };
+  const facets: Facets = { brands, categories: categoryFacets, sizes, colors, priceRange };
   const brandGroupTitle = brandGroup
     ? brandGroup.charAt(0).toUpperCase() + brandGroup.slice(1)
     : undefined;
 
   const title =
-    brandName ??
+    (brandNames.length === 1 ? brandNames[0] : undefined) ??
     brandGroupTitle ??
     categories.find((c) => c.slug === categorySlug)?.name ??
     GENDERS.find((g) => g.slug === gender)?.label ??
     (q ? `Пошук: ${q}` : "Усі товари");
 
+  const activeFilters = {
+    category: categorySlug,
+    brands: brandSlugs,
+    brandGroup,
+    gender,
+    colors: colorNames,
+    sizes: sizeSlugs,
+    inStock,
+    q,
+    sort: sortKey,
+    min,
+    max,
+  };
+
   function buildHref(overrides: Record<string, string | undefined>) {
     const p: Record<string, string> = {};
     if (categorySlug) p.category = categorySlug;
-    if (brandSlugParam) p.brand = brandSlugParam;
+    if (brandSlugs.length) p.brands = brandSlugs.join(",");
     if (brandGroup) p.brandGroup = brandGroup;
     if (gender) p.gender = gender;
-    if (color) p.color = color;
+    if (colorNames.length) p.colors = colorNames.join(",");
+    if (sizeSlugs.length) p.sizes = sizeSlugs.join(",");
+    if (inStock) p.inStock = "1";
     if (q) p.q = q;
-    if (size) p.size = size;
     if (min) p.min = min;
     if (max) p.max = max;
     if (sortKey !== "newest") p.sort = sortKey;
@@ -133,10 +166,7 @@ export default async function CatalogPage({
 
       <div className="mt-6 grid gap-4 md:mt-8 lg:grid-cols-[220px_1fr] lg:gap-12">
         <div className="lg:pt-1">
-          <CatalogFilters
-            facets={facets}
-            active={{ category: categorySlug, brand: brandSlugParam, brandGroup, gender, color, q, sort: sortKey, size, min, max }}
-          />
+          <CatalogFilters facets={facets} active={activeFilters} />
         </div>
 
         <div className="min-w-0">
@@ -171,15 +201,17 @@ export default async function CatalogPage({
             </div>
           </div>
 
-          {/* Brand chips — horizontal scroll (tablet/desktop only; mobile uses Фільтри) */}
+          {/* Brand chips — horizontal scroll (tablet/desktop only; mobile uses Фільтри).
+              Click toggles the brand within the multi-select brands list. */}
           {brands.length > 0 && (
-            <div className="mb-6 hidden gap-2 overflow-x-auto pb-1 md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="mb-5 hidden gap-2 overflow-x-auto pb-1 md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {brands.map((b) => {
-                const active = brandSlugParam === b.slug;
+                const active = brandSlugs.includes(b.slug);
+                const next = active ? brandSlugs.filter((s) => s !== b.slug) : [...brandSlugs, b.slug];
                 return (
                   <Link
                     key={b.slug}
-                    href={buildHref(active ? { brand: undefined } : { brand: b.slug, page: undefined })}
+                    href={buildHref({ brands: next.length ? next.join(",") : undefined, brandGroup: undefined, page: undefined })}
                     className={`shrink-0 border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
                       active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
                     }`}
@@ -190,6 +222,14 @@ export default async function CatalogPage({
               })}
             </div>
           )}
+
+          {/* Active-filter chips — quick removal of any single applied filter */}
+          <ActiveFilterChips
+            active={activeFilters}
+            brandLabels={Object.fromEntries(brands.map((b) => [b.slug, b.name]))}
+            sizeLabels={Object.fromEntries(sizes.map((s) => [s.slug, s.name]))}
+            categoryLabel={categories.find((c) => c.slug === categorySlug)?.name}
+          />
 
           {/* Sort bar */}
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">

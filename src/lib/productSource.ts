@@ -65,11 +65,15 @@ function rowToProduct(row: any): Product {
 export type CatalogQuery = {
   categorySlug?: string;
   brandName?: string;
+  brandNames?: string[];
   brandGroup?: string;
   gender?: string;
   color?: string;
+  colors?: string[];
   q?: string;
   size?: string;
+  sizes?: string[];
+  inStock?: boolean;
   minPrice?: number;
   maxPrice?: number;
   orderby?: "price" | "date";
@@ -97,10 +101,19 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   }
   if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
   if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
+  if (params.brandNames && params.brandNames.length)
+    conds.push(`brand = ANY(${p(params.brandNames)})`);
   if (params.brandGroup)    conds.push(`brand ILIKE ${p("%" + params.brandGroup + "%")}`);
   if (params.gender)        conds.push(`gender = ${p(params.gender)}`);
   if (params.color)         conds.push(`color = ${p(params.color)}`);
+  if (params.colors && params.colors.length)
+    conds.push(`color = ANY(${p(params.colors)})`);
   if (params.size)          conds.push(`attributes::text LIKE ${p('%"slug":"' + params.size + '"%')}`);
+  if (params.sizes && params.sizes.length) {
+    const ors = params.sizes.map((s) => `attributes::text LIKE ${p('%"slug":"' + s + '"%')}`);
+    conds.push(`(${ors.join(" OR ")})`);
+  }
+  if (params.inStock)       conds.push(`is_in_stock = TRUE`);
   if (params.minPrice)      conds.push(`price >= ${p(params.minPrice)}`);
   if (params.maxPrice)      conds.push(`price <= ${p(params.maxPrice)}`);
 
@@ -191,37 +204,64 @@ export async function dbProductById(id: string): Promise<DbProductDetail | null>
 
 // ── Brand facets ─────────────────────────────────────────────────────────
 
-export async function dbBrands(filters?: { categorySlug?: string; gender?: string }): Promise<{ name: string; slug: string }[]> {
+export async function dbBrands(filters?: { categorySlug?: string; gender?: string }): Promise<{ name: string; slug: string; count: number }[]> {
   const conds = ["is_in_stock = TRUE", "brand <> ''", "brand <> 'Mania Group'"];
   const bind: unknown[] = [];
   if (filters?.categorySlug) { bind.push(filters.categorySlug); conds.push(`category_slug = $${bind.length}`); }
   if (filters?.gender === "women" || filters?.gender === "men") { bind.push(filters.gender); conds.push(`gender = $${bind.length}`); }
 
-  const rows = await q<{ brand: string }>(
+  const rows = await q<{ brand: string; n: string }>(
     `SELECT brand, COUNT(*) n FROM products WHERE ${conds.join(" AND ")} GROUP BY brand ORDER BY n DESC`,
     bind,
   );
-  return rows.map((r) => ({ name: r.brand, slug: brandSlug(r.brand) }));
+  return rows.map((r) => ({ name: r.brand, slug: brandSlug(r.brand), count: Number(r.n) }));
 }
 
 // ── Color facets ───────────────────────────────────────────────────────────
 
-export async function dbColorFacets(filters?: { categorySlug?: string; gender?: string }): Promise<{ name: string }[]> {
-  const conds = ["is_in_stock = TRUE", "color <> ''", "status = 'publish'"];
+export async function dbColorFacets(filters?: { categorySlug?: string; gender?: string }): Promise<{ name: string; count: number }[]> {
+  const conds = ["is_in_stock = TRUE", "color <> ''", "color <> '<>'", "status = 'publish'"];
   const bind: unknown[] = [];
   if (filters?.categorySlug) { bind.push(filters.categorySlug); conds.push(`category_slug = $${bind.length}`); }
   if (filters?.gender === "women" || filters?.gender === "men") { bind.push(filters.gender); conds.push(`gender = $${bind.length}`); }
 
-  const rows = await q<{ color: string }>(
-    `SELECT color, COUNT(*) n FROM products WHERE ${conds.join(" AND ")} GROUP BY color ORDER BY n DESC LIMIT 20`,
+  const rows = await q<{ color: string; n: string }>(
+    `SELECT color, COUNT(*) n FROM products WHERE ${conds.join(" AND ")} GROUP BY color ORDER BY n DESC LIMIT 28`,
     bind,
   );
-  return rows.map((r) => ({ name: r.color }));
+  return rows.map((r) => ({ name: r.color, count: Number(r.n) }));
+}
+
+// ── Price range ──────────────────────────────────────────────────────────────
+
+export async function dbPriceRange(filters?: { categorySlug?: string; gender?: string }): Promise<{ min: number; max: number }> {
+  const conds = ["is_in_stock = TRUE", "status = 'publish'", "price > 0"];
+  const bind: unknown[] = [];
+  if (filters?.categorySlug) { bind.push(filters.categorySlug); conds.push(`category_slug = $${bind.length}`); }
+  if (filters?.gender === "women" || filters?.gender === "men") { bind.push(filters.gender); conds.push(`gender = $${bind.length}`); }
+
+  const row = await q1<{ lo: string; hi: string }>(
+    `SELECT MIN(price)::int AS lo, MAX(price)::int AS hi FROM products WHERE ${conds.join(" AND ")}`,
+    bind,
+  );
+  return { min: Number(row?.lo ?? 0), max: Number(row?.hi ?? 0) };
 }
 
 /** Stable slug for a brand name, reversible via the facet map on the page. */
 export function brandSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Resolve brand slugs (from the URL) back to their real DB brand names. Slugs
+ * are lossy, so we map against the full distinct-brand set. Unknown slugs are
+ * dropped. One cheap query, used by the catalog page for multi-select brands.
+ */
+export async function resolveBrandSlugs(slugs: string[]): Promise<string[]> {
+  if (!slugs.length) return [];
+  const rows = await q<{ brand: string }>("SELECT DISTINCT brand FROM products WHERE brand <> ''");
+  const bySlug = new Map(rows.map((r) => [brandSlug(r.brand), r.brand]));
+  return slugs.map((s) => bySlug.get(s)).filter((b): b is string => !!b);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────
