@@ -80,10 +80,10 @@ export async function replaceCatalog(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // Preserve hand-entered costs across the full replace (ids are stable:
-    // Store post-id for in-stock, SYNTH_OFFSET+КОД for archived).
-    const manual = await client.query<{ id: string; cost_price: string }>(
-      "SELECT id::text, cost_price::text FROM products WHERE cost_source = 'manual' AND cost_price IS NOT NULL",
+    // Preserve hand-entered & receipt-derived costs across the full replace
+    // (ids are stable: Store post-id for in-stock, SYNTH_OFFSET+КОД for archived).
+    const manual = await client.query<{ id: string; cost_price: string; cost_source: string }>(
+      "SELECT id::text, cost_price::text, cost_source FROM products WHERE cost_source IN ('manual','receipt') AND cost_price IS NOT NULL",
     );
     await client.query("TRUNCATE products, categories");
 
@@ -110,11 +110,11 @@ export async function replaceCatalog(
       );
     }
 
-    // Re-apply preserved manual costs onto the freshly imported rows.
+    // Re-apply preserved manual / receipt costs onto the freshly imported rows.
     for (const m of manual.rows) {
       await client.query(
-        "UPDATE products SET cost_price = $2, cost_source = 'manual' WHERE id = $1",
-        [m.id, m.cost_price],
+        "UPDATE products SET cost_price = $2, cost_source = $3 WHERE id = $1",
+        [m.id, m.cost_price, m.cost_source],
       );
     }
 
@@ -154,6 +154,70 @@ export async function insertVariants(
         `INSERT INTO product_variants (product_id, size, stock_qty) VALUES ${tuples.join(",")}
          ON CONFLICT (product_id, size) DO UPDATE SET stock_qty = EXCLUDED.stock_qty, updated_at = now()`,
         vals,
+      );
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export type ManualVariant = {
+  product_id: number; size: string; barcode: string; stock_qty: number;
+  price: number | null; active: boolean; updated_by: string;
+};
+
+/** Snapshot variants a human edited (updated_by set) — to survive a full import. */
+export async function getManualVariants(): Promise<ManualVariant[]> {
+  const rows = await q<{
+    product_id: string; size: string; barcode: string; stock_qty: number;
+    price: string | null; active: boolean; updated_by: string;
+  }>(
+    `SELECT product_id::text, size, barcode, stock_qty, price::float::text AS price, active, updated_by
+       FROM product_variants WHERE updated_by <> ''`,
+  );
+  return rows.map((r) => ({
+    product_id: Number(r.product_id), size: r.size, barcode: r.barcode,
+    stock_qty: Number(r.stock_qty), price: r.price != null ? Number(r.price) : null,
+    active: r.active, updated_by: r.updated_by,
+  }));
+}
+
+/**
+ * Re-apply hand-edited variants after a full import overwrote them with the
+ * WP baseline, then refresh the products mirror for the affected ids. Skips
+ * variants whose product no longer exists in the rebuilt catalog.
+ */
+export async function reapplyManualVariants(rows: ManualVariant[]): Promise<void> {
+  if (!rows.length) return;
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const touched = new Set<number>();
+    for (const v of rows) {
+      const exists = await client.query("SELECT 1 FROM products WHERE id = $1", [v.product_id]);
+      if (!exists.rows.length) continue;
+      await client.query(
+        `INSERT INTO product_variants (product_id, size, barcode, stock_qty, price, active, updated_by, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, now())
+         ON CONFLICT (product_id, size) DO UPDATE SET
+           barcode = EXCLUDED.barcode, stock_qty = EXCLUDED.stock_qty,
+           price = EXCLUDED.price, active = EXCLUDED.active,
+           updated_by = EXCLUDED.updated_by, updated_at = now()`,
+        [v.product_id, v.size, v.barcode, v.stock_qty, v.price, v.active, v.updated_by],
+      );
+      touched.add(v.product_id);
+    }
+    for (const pid of touched) {
+      await client.query(
+        `UPDATE products p SET stock_qty = s.total, is_in_stock = (s.total > 0), updated_at = now()
+           FROM (SELECT COALESCE(SUM(stock_qty),0) AS total FROM product_variants WHERE product_id = $1 AND active) s
+          WHERE p.id = $1`,
+        [pid],
       );
     }
     await client.query("COMMIT");

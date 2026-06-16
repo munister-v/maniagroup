@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ErpReceiving } from "./ErpReceiving";
+import { ErpSuppliers } from "./ErpSuppliers";
+import { ErpChannels } from "./ErpChannels";
 
 /* ── types ──────────────────────────────────────────────────────────────── */
 
@@ -38,11 +41,36 @@ const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px]
 
 /* ── root ───────────────────────────────────────────────────────────────── */
 
+type ErpSection = "products" | "receiving" | "suppliers" | "channels";
+
 export function ErpWorkspace() {
+  const [section, setSection] = useState<ErpSection>("products");
   const [selected, setSelected] = useState<string | null>(null);
-  return selected
-    ? <ProductCard id={selected} onBack={() => setSelected(null)} />
-    : <ProductList onOpen={setSelected} />;
+
+  return (
+    <div>
+      <div className="border-b border-[#e2ddd5] bg-white px-5">
+        <div className="mx-auto flex max-w-[1200px] gap-1">
+          {([
+            ["products", "Товари"],
+            ["receiving", "Прихід"],
+            ["suppliers", "Постачальники"],
+            ["channels", "Канали / Вигрузки"],
+          ] as const).map(([id, label]) => (
+            <button key={id}
+              onClick={() => { setSection(id); setSelected(null); }}
+              className={`-mb-px border-b-2 px-4 py-3 text-[12px] uppercase tracking-[0.12em] transition-colors ${
+                section === id ? "border-[#17130f] text-[#17130f]" : "border-transparent text-[#9c8f7d] hover:text-[#17130f]"
+              }`}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {section === "products" && (selected ? <ProductCard id={selected} onBack={() => setSelected(null)} /> : <ProductList onOpen={setSelected} />)}
+      {section === "receiving" && <ErpReceiving />}
+      {section === "suppliers" && <ErpSuppliers />}
+      {section === "channels" && <ErpChannels />}
+    </div>
+  );
 }
 
 /* ── product list ───────────────────────────────────────────────────────── */

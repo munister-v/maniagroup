@@ -287,6 +287,46 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 );
 CREATE INDEX IF NOT EXISTS idx_movements_product ON stock_movements(product_id, created_at DESC);
 
+-- ── ERP: receiving documents (приход) — feed real purchase cost ──
+-- Posting a receipt adds stock (receipt movements) and updates the product's
+-- weighted-average cost_price (cost_source='receipt'), which the finance engine
+-- already prefers over the derived markup — closing the "no cost" gap.
+CREATE TABLE IF NOT EXISTS receipts (
+  id         BIGSERIAL PRIMARY KEY,
+  supplier   TEXT NOT NULL DEFAULT '',
+  doc_date   DATE NOT NULL DEFAULT current_date,
+  note       TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'draft',  -- draft | posted
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  posted_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(doc_date DESC);
+
+CREATE TABLE IF NOT EXISTS receipt_items (
+  id         BIGSERIAL PRIMARY KEY,
+  receipt_id BIGINT NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+  product_id BIGINT NOT NULL,
+  variant_id BIGINT,
+  size       TEXT NOT NULL DEFAULT '',
+  name       TEXT NOT NULL DEFAULT '',
+  qty        INTEGER NOT NULL DEFAULT 0,
+  unit_cost  NUMERIC NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_receipt_items_receipt ON receipt_items(receipt_id);
+
+-- ── ERP: suppliers directory (постачальники) ──
+-- Reusable supplier records; receipts reference one (snapshotting the name in
+-- receipts.supplier for historical accuracy even if a supplier is renamed).
+CREATE TABLE IF NOT EXISTS suppliers (
+  id         BIGSERIAL PRIMARY KEY,
+  name       TEXT NOT NULL DEFAULT '',
+  contact    TEXT NOT NULL DEFAULT '',
+  phone      TEXT NOT NULL DEFAULT '',
+  note       TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS supplier_id BIGINT;
+
 -- ── Marketing: discount coupons ──
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;

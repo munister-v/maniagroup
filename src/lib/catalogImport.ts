@@ -16,7 +16,10 @@
  */
 
 import * as XLSX from "xlsx";
-import { replaceCatalog, insertVariants, setMeta, type ProductRow } from "./db";
+import {
+  replaceCatalog, insertVariants, getManualVariants, reapplyManualVariants,
+  setMeta, type ProductRow,
+} from "./db";
 
 const STORE_API = "https://maniagroup.com.ua/wp-json/wc/store/products";
 
@@ -206,6 +209,11 @@ export async function importCatalog(opts: {
   await setMeta("sync_status", "syncing");
 
   try {
+    // Snapshot hand-edited ERP variants so a full rebuild doesn't wipe the
+    // bookkeeper's stock/barcode/price corrections (E3).
+    const manualVariants = await getManualVariants();
+    if (manualVariants.length) onProgress(`Збережено ручних розмірів: ${manualVariants.length}`);
+
     onProgress("Парсинг MG.xls…");
     const mg = parseMg(opts.mgBuffer);
     onProgress(`MG: ${mg.size} товарів`);
@@ -298,6 +306,11 @@ export async function importCatalog(opts: {
 
     onProgress(`Запис розмірів (варіанти): ${variants.length}…`);
     await insertVariants(variants);
+
+    if (manualVariants.length) {
+      onProgress(`Відновлення ручних розмірів: ${manualVariants.length}…`);
+      await reapplyManualVariants(manualVariants);
+    }
 
     const inStock = rows.filter((r) => r.is_in_stock === true).length;
     const archived = rows.length - inStock;
