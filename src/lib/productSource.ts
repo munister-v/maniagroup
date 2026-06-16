@@ -6,7 +6,8 @@
 
 import type { Product } from "./catalog";
 import { q, q1 } from "./pg";
-import { ukrainianize, expandSearchTerms } from "./uk";
+import { ukrainianize, expandSearchTerms, translateMaterials, translateSeason, translateCountry } from "./uk";
+import { colorLabel } from "./colors";
 
 // WcCategory shape kept for callers; categories now come from our own table.
 export type WcCategory = { id: number; name: string; slug: string; parent: number; count: number };
@@ -55,9 +56,9 @@ function rowToProduct(row: any): Product {
     tag: !inStock ? undefined : onSale ? "sale" : undefined,
     image: images[0]?.src || undefined,
     inStock,
-    color: row.color || undefined,
-    composition: row.composition || undefined,
-    season: row.season || undefined,
+    color: row.color ? colorLabel(row.color) : undefined,
+    composition: translateMaterials(row.composition) || undefined,
+    season: translateSeason(row.season) || undefined,
   };
 }
 
@@ -232,10 +233,10 @@ export async function dbProductById(id: string): Promise<DbProductDetail | null>
     product: rowToProduct(row),
     images,
     sizes,
-    composition: row.composition || undefined,
-    color: row.color || undefined,
-    season: row.season || undefined,
-    country: row.country || undefined,
+    composition: translateMaterials(row.composition) || undefined,
+    color: row.color ? colorLabel(row.color) : undefined,
+    season: translateSeason(row.season) || undefined,
+    country: translateCountry(row.country) || undefined,
     inStock: row.is_in_stock === true,
   };
 }
