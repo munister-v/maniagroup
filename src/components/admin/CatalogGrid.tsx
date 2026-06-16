@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminProducts } from "./AdminProducts";
+import { SocialPostButton } from "./AiAssistant";
 
 type Row = {
   id: string;
@@ -500,10 +501,26 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
                     </td>
                   ))}
                   <td className="px-2 py-0.5 text-right align-middle">
-                    <button onClick={() => openFullCard(row.id)}
-                      className="rounded-[3px] border border-[#e8e4de] px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-[#17130f] transition-colors hover:border-[#17130f]">
-                      Картка
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <SocialPostButton
+                        product={{
+                          name: row.name,
+                          brand: row.brand,
+                          category: row.category,
+                          color: row.color,
+                          season: row.season,
+                          composition: row.composition,
+                          price: String(row.price ?? row.regular_price ?? 0),
+                          oldPrice: row.sale_price != null && row.regular_price != null && row.sale_price < row.regular_price ? String(row.regular_price) : undefined,
+                          inStock: String(row.is_in_stock),
+                        }}
+                        onToast={onToast}
+                      />
+                      <button onClick={() => openFullCard(row.id)}
+                        className="rounded-[3px] border border-[#e8e4de] px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-[#17130f] transition-colors hover:border-[#17130f]">
+                        Картка
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

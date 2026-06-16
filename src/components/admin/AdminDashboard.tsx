@@ -10,6 +10,7 @@ import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
+import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
@@ -286,6 +287,9 @@ export function AdminDashboard({
         </main>
       </div>
 
+      {/* AI floating assistant */}
+      <AiAssistant />
+
       {/* Toast */}
       {toast && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-[4px] bg-[#17130f] px-5 py-3 text-[12px] tracking-wide text-white shadow-lg">
@@ -423,6 +427,9 @@ function OverviewSection({
           )}
         </div>
       </div>
+
+      {/* AI digest */}
+      <AiInsights />
 
       {/* Windowed revenue analytics */}
       <AnalyticsCard />
