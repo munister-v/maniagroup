@@ -183,6 +183,40 @@ CREATE TABLE IF NOT EXISTS order_items (
   line_total   NUMERIC NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+
+-- ── CRM: order fulfilment + timeline ──
+-- orders already exists in prod, so add columns idempotently.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS ttn          TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS source       TEXT NOT NULL DEFAULT 'site';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS stock_applied BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Unified order timeline: status changes, notes, ttn, stock events.
+CREATE TABLE IF NOT EXISTS order_events (
+  id         BIGSERIAL PRIMARY KEY,
+  order_id   BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL DEFAULT 'note',
+  message    TEXT NOT NULL DEFAULT '',
+  author     TEXT NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id, created_at DESC);
+
+-- ── CRM: customer notes + tags ──
+CREATE TABLE IF NOT EXISTS customer_notes (
+  id         BIGSERIAL PRIMARY KEY,
+  account_id BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL DEFAULT '',
+  author     TEXT NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_customer_notes_acct ON customer_notes(account_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS customer_tags (
+  account_id BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  tag        TEXT NOT NULL,
+  PRIMARY KEY (account_id, tag)
+);
 `;
 
 /** Idempotent schema creation. Awaited by every data-layer call via withDb(). */

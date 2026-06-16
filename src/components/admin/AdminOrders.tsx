@@ -12,6 +12,9 @@ export type AdminOrder = {
   shipping_city: string;
   shipping_branch: string;
   comment: string;
+  ttn?: string;
+  tracking_url?: string;
+  source?: string;
   subtotal: string;
   shipping_cost: string;
   line_items: {
@@ -57,6 +60,7 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<AdminOrder | null>(null);
+  const [creating, setCreating] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buildParams = useCallback((p: number) => {
@@ -136,8 +140,13 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
             Скинути
           </button>
         )}
+        <button onClick={() => setCreating(true)}
+          className="ml-auto flex h-9 items-center gap-2 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-wider text-white hover:opacity-85">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+          Створити
+        </button>
         <a href={`/api/admin/orders/export?${buildParams(1)}`}
-          className="ml-auto flex h-9 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+          className="flex h-9 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" strokeLinecap="round" strokeLinejoin="round" /></svg>
           Експорт CSV
         </a>
@@ -213,7 +222,9 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
         </div>
       )}
 
-      {active && <OrderDrawer order={active} onClose={() => setActive(null)} onStatus={(s) => changeStatus(active, s)} />}
+      {active && <OrderDrawer order={active} onClose={() => setActive(null)} onStatus={(s) => changeStatus(active, s)}
+        onPatched={(patch) => { setActive((a) => a && { ...a, ...patch }); setOrders((os) => os.map((o) => o.id === active.id ? { ...o, ...patch } : o)); }} />}
+      {creating && <ManualOrderModal onClose={() => setCreating(false)} onCreated={(num) => { setCreating(false); onToast?.(`Замовлення ${num} створено`); load(1); }} onToast={onToast} />}
     </div>
   );
 }
@@ -234,6 +245,150 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (s: string
   );
 }
 
+type PickerProduct = { id: string; name: string; brand: string; price: number; image_src: string };
+type ManualLine = { product_id: string; name: string; brand: string; image_src: string; price: number; variation: string; quantity: number };
+
+function ManualOrderModal({ onClose, onCreated, onToast }: {
+  onClose: () => void;
+  onCreated: (number: string) => void;
+  onToast?: (m: string) => void;
+}) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [city, setCity] = useState("");
+  const [branch, setBranch] = useState("");
+  const [comment, setComment] = useState("");
+  const [payment, setPayment] = useState<"cod" | "prepay">("cod");
+  const [lines, setLines] = useState<ManualLine[]>([]);
+  const [search, setSearch] = useState("");
+  const [results, setResults] = useState<PickerProduct[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const deb = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onSearch(v: string) {
+    setSearch(v);
+    if (deb.current) clearTimeout(deb.current);
+    if (!v.trim()) { setResults([]); return; }
+    deb.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/admin/products?q=${encodeURIComponent(v.trim())}`);
+        const data = await res.json();
+        setResults((data.products ?? []).slice(0, 8));
+      } finally { setSearching(false); }
+    }, 300);
+  }
+
+  function addProduct(p: PickerProduct) {
+    setLines((ls) => {
+      const ex = ls.find((l) => l.product_id === p.id && l.variation === "");
+      if (ex) return ls.map((l) => l === ex ? { ...l, quantity: l.quantity + 1 } : l);
+      return [...ls, { product_id: p.id, name: p.name, brand: p.brand, image_src: p.image_src, price: p.price, variation: "", quantity: 1 }];
+    });
+    setSearch(""); setResults([]);
+  }
+  const setLine = (i: number, patch: Partial<ManualLine>) => setLines((ls) => ls.map((l, k) => k === i ? { ...l, ...patch } : l));
+  const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
+
+  async function submit() {
+    if (!firstName.trim() || !phone.trim()) { onToast?.("Вкажіть ім'я та телефон"); return; }
+    if (lines.length === 0) { onToast?.("Додайте товар"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/orders/manual", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName, lastName, phone, email, shippingCity: city, shippingBranch: branch,
+          comment, paymentMethod: payment,
+          items: lines.map((l) => ({ product_id: Number(l.product_id), variation: l.variation, quantity: l.quantity })),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) onCreated(data.number);
+      else onToast?.(data.error ?? "Помилка створення");
+    } finally { setSaving(false); }
+  }
+
+  const inp = "h-9 w-full rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end">
+      <div onClick={onClose} className="absolute inset-0 bg-black/40" />
+      <div className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-white shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee7db] bg-white px-6 py-4">
+          <p className="text-[15px] font-medium text-[#17130f]">Нове замовлення вручну</p>
+          <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]">✕</button>
+        </div>
+
+        <div className="space-y-6 px-6 py-5">
+          <section>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Товари</p>
+            <div className="relative">
+              <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Пошук товару за назвою / брендом / SKU…" className={inp} />
+              {(results.length > 0 || searching) && (
+                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-[3px] border border-[#e8e4de] bg-white shadow-lg">
+                  {searching && <p className="px-3 py-2 text-[12px] text-[#9c8f7d]">Пошук…</p>}
+                  {results.map((p) => (
+                    <button key={p.id} onClick={() => addProduct(p)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#faf8f5]">
+                      <div className="h-9 w-7 shrink-0 overflow-hidden bg-[#f3efe8]">{p.image_src && <img src={p.image_src} alt="" className="h-full w-full object-cover" />}</div>
+                      <div className="min-w-0 flex-1"><p className="truncate text-[12px] text-[#17130f]">{p.name}</p><p className="text-[10px] text-[#9c8f7d]">{p.brand} · {uah(p.price)}</p></div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {lines.length > 0 && (
+              <div className="mt-3 divide-y divide-[#f0ece6] rounded-[3px] border border-[#eee7db]">
+                {lines.map((l, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2">
+                    <div className="h-10 w-8 shrink-0 overflow-hidden bg-[#f3efe8]">{l.image_src && <img src={l.image_src} alt="" className="h-full w-full object-cover" />}</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] text-[#17130f]">{l.name}</p>
+                      <input value={l.variation} onChange={(e) => setLine(i, { variation: e.target.value })} placeholder="розмір"
+                        className="mt-0.5 h-6 w-20 rounded-[2px] border border-[#e8e4de] px-1.5 text-[11px] focus:border-[#17130f] focus:outline-none" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setLine(i, { quantity: Math.max(1, l.quantity - 1) })} className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#e8e4de] text-[#9c8f7d] hover:border-[#17130f]">−</button>
+                      <span className="w-6 text-center text-[12px] tabular-nums">{l.quantity}</span>
+                      <button onClick={() => setLine(i, { quantity: l.quantity + 1 })} className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#e8e4de] text-[#9c8f7d] hover:border-[#17130f]">+</button>
+                    </div>
+                    <span className="w-20 text-right text-[12px] font-medium tabular-nums">{uah(l.price * l.quantity)}</span>
+                    <button onClick={() => setLines((ls) => ls.filter((_, k) => k !== i))} className="text-[#c62828] hover:opacity-70">✕</button>
+                  </div>
+                ))}
+                <div className="flex justify-between px-3 py-2 text-[13px] font-medium"><span>Разом</span><span className="tabular-nums">{uah(subtotal)}</span></div>
+              </div>
+            )}
+          </section>
+
+          <section className="grid grid-cols-2 gap-2">
+            <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Імʼя *" className={inp} />
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Прізвище" className={inp} />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон *" className={inp} />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className={inp} />
+            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Місто" className={inp} />
+            <input value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="Відділення НП" className={inp} />
+            <select value={payment} onChange={(e) => setPayment(e.target.value as "cod" | "prepay")} className={inp}>
+              <option value="cod">Накладений платіж</option>
+              <option value="prepay">Передоплата</option>
+            </select>
+            <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Коментар" className={`${inp} col-span-2`} />
+          </section>
+
+          <button onClick={submit} disabled={saving}
+            className="h-11 w-full rounded-[3px] bg-[#17130f] text-[12px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+            {saving ? "Створення…" : `Створити замовлення · ${uah(subtotal)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DrawerRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3 py-1.5 text-[13px]">
@@ -243,9 +398,58 @@ function DrawerRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function OrderDrawer({ order, onClose, onStatus }: { order: AdminOrder; onClose: () => void; onStatus: (s: string) => void }) {
+type OrderEvent = { id: number; type: string; message: string; author: string; created_at: string };
+
+function OrderDrawer({ order, onClose, onStatus, onPatched }: {
+  order: AdminOrder;
+  onClose: () => void;
+  onStatus: (s: string) => void;
+  onPatched: (patch: Partial<AdminOrder>) => void;
+}) {
   const date = new Date(order.date_created).toLocaleString("uk-UA", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const payLabel = order.payment_method === "prepay" ? "Передоплата" : "Накладений платіж";
+
+  const [ttn, setTtn] = useState(order.ttn ?? "");
+  const [savingTtn, setSavingTtn] = useState(false);
+  const [events, setEvents] = useState<OrderEvent[]>([]);
+  const [note, setNote] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+
+  const loadEvents = useCallback(async () => {
+    const res = await fetch(`/api/admin/orders/${order.id}/events`);
+    if (res.ok) setEvents((await res.json()).events ?? []);
+  }, [order.id]);
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+  // Refresh the timeline whenever the order status changes from the parent.
+  useEffect(() => { loadEvents(); }, [order.status, loadEvents]);
+
+  async function saveTtn() {
+    setSavingTtn(true);
+    try {
+      const res = await fetch("/api/admin/orders", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: order.id, ttn: ttn.trim() }),
+      });
+      if (res.ok) {
+        const url = ttn.trim() ? `https://novaposhta.ua/tracking/?cargo_number=${ttn.replace(/\D/g, "")}` : "";
+        onPatched({ ttn: ttn.trim(), tracking_url: url });
+        loadEvents();
+      }
+    } finally { setSavingTtn(false); }
+  }
+
+  async function addNote() {
+    const text = note.trim();
+    if (!text) return;
+    setSavingNote(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.id}/events`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      if (res.ok) { setNote(""); setEvents((await res.json()).events ?? []); }
+    } finally { setSavingNote(false); }
+  }
 
   return (
     <div className="fixed inset-0 z-[80] flex justify-end">
@@ -253,7 +457,10 @@ function OrderDrawer({ order, onClose, onStatus }: { order: AdminOrder; onClose:
       <div className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-white shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee7db] bg-white px-6 py-4">
           <div>
-            <p className="font-mono text-[15px] font-medium text-[#17130f]">{order.number}</p>
+            <div className="flex items-center gap-2">
+              <p className="font-mono text-[15px] font-medium text-[#17130f]">{order.number}</p>
+              {order.source === "manual" && <span className="rounded-full bg-[#ede7f6] px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#6a1b9a]">Вручну</span>}
+            </div>
             <p className="text-[11px] text-[#9c8f7d]">{date}</p>
           </div>
           <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]">✕</button>
@@ -281,6 +488,25 @@ function OrderDrawer({ order, onClose, onStatus }: { order: AdminOrder; onClose:
           </section>
 
           <section>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">ТТН Нової Пошти</p>
+            <div className="flex items-center gap-2">
+              <input value={ttn} onChange={(e) => setTtn(e.target.value)} placeholder="20 4500 0000 0000"
+                className="h-9 flex-1 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] tracking-wide focus:border-[#17130f] focus:outline-none" />
+              <button onClick={saveTtn} disabled={savingTtn || ttn.trim() === (order.ttn ?? "")}
+                className="h-9 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-40">
+                {savingTtn ? "…" : "Зберегти"}
+              </button>
+            </div>
+            {order.tracking_url && (
+              <a href={order.tracking_url} target="_blank" rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 text-[12px] text-[#1565c0] hover:underline">
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M10 14L21 3m0 0h-6m6 0v6M21 14v5a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                Відстежити на novaposhta.ua
+              </a>
+            )}
+          </section>
+
+          <section>
             <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Товари ({order.line_items.length})</p>
             <div className="divide-y divide-[#f0ece6] rounded-[3px] border border-[#eee7db]">
               {order.line_items.map((it) => (
@@ -302,6 +528,35 @@ function OrderDrawer({ order, onClose, onStatus }: { order: AdminOrder; onClose:
             <div className="flex justify-between py-0.5 text-[#9c8f7d]"><span>Сума товарів</span><span className="tabular-nums">{uah(order.subtotal)}</span></div>
             <div className="flex justify-between py-0.5 text-[#9c8f7d]"><span>Доставка</span><span className="tabular-nums">{Number(order.shipping_cost) > 0 ? uah(order.shipping_cost) : "за тарифами НП"}</span></div>
             <div className="mt-1 flex justify-between border-t border-[#eee7db] pt-2 text-[15px] font-medium text-[#17130f]"><span>Разом</span><span className="tabular-nums">{uah(order.total)}</span></div>
+          </section>
+
+          <section>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Історія та нотатки</p>
+            <div className="flex gap-2">
+              <input value={note} onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addNote(); }}
+                placeholder="Додати внутрішню нотатку…"
+                className="h-9 flex-1 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+              <button onClick={addNote} disabled={savingNote || !note.trim()}
+                className="h-9 rounded-[3px] border border-[#17130f] px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+                {savingNote ? "…" : "Додати"}
+              </button>
+            </div>
+            <ul className="mt-3 space-y-2.5">
+              {events.length === 0 && <li className="text-[12px] text-[#b9ae9b]">Подій ще немає</li>}
+              {events.map((ev) => (
+                <li key={ev.id} className="flex gap-2.5">
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ev.type === "note" ? "bg-[#17130f]" : ev.type === "status" ? "bg-[#1565c0]" : ev.type === "ttn" ? "bg-[#2e7d32]" : "bg-[#b9ae9b]"}`} />
+                  <div className="min-w-0">
+                    <p className="text-[13px] leading-snug text-[#17130f]">{ev.message}</p>
+                    <p className="text-[10px] text-[#9c8f7d]">
+                      {new Date(ev.created_at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      {ev.author && ev.author !== "system" ? ` · ${ev.author}` : ""}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </section>
         </div>
       </div>

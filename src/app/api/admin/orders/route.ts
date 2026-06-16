@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { listOrders, updateOrderStatus, type Order } from "@/lib/orders";
+import { listOrders, updateOrderStatus, setOrderTracking, type Order } from "@/lib/orders";
 
 export function serializeOrder(o: Order) {
   return {
@@ -18,6 +18,9 @@ export function serializeOrder(o: Order) {
     shipping_city: o.shipping_city,
     shipping_branch: o.shipping_branch,
     comment: o.comment,
+    ttn: o.ttn,
+    tracking_url: o.tracking_url,
+    source: o.source,
     subtotal: String(o.subtotal),
     shipping_cost: String(o.shipping_cost),
     line_items: o.items.map((it) => ({
@@ -59,9 +62,15 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const { id, status } = (await req.json()) as { id: number; status: string };
+  const body = (await req.json()) as { id: number; status?: string; ttn?: string };
   try {
-    await updateOrderStatus(Number(id), status);
+    if (typeof body.ttn === "string") {
+      await setOrderTracking(Number(body.id), body.ttn);
+    } else if (body.status) {
+      await updateOrderStatus(Number(body.id), body.status);
+    } else {
+      return NextResponse.json({ error: "Нічого оновлювати" }, { status: 400 });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 400 });

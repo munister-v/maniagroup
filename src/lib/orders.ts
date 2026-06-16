@@ -41,6 +41,9 @@ export type Order = {
   shipping_city: string;
   shipping_branch: string;
   comment: string;
+  ttn: string;
+  tracking_url: string;
+  source: string;
   subtotal: number;
   shipping_cost: number;
   total: number;
@@ -48,7 +51,78 @@ export type Order = {
   items: OrderItem[];
 };
 
+export type OrderEvent = {
+  id: number;
+  order_id: number;
+  type: string;
+  message: string;
+  author: string;
+  created_at: string;
+};
+
 export const ORDER_STATUSES = ["pending", "processing", "on-hold", "completed", "cancelled", "refunded"] as const;
+
+// Statuses that free up reserved stock (order no longer consumes inventory).
+const STOCK_RELEASING = new Set(["cancelled", "refunded"]);
+
+/** Nova Poshta public tracking URL for a TTN. */
+export function npTrackingUrl(ttn: string): string {
+  const clean = ttn.replace(/\D/g, "");
+  return clean ? `https://novaposhta.ua/tracking/?cargo_number=${clean}` : "";
+}
+
+type StockLine = { product_id: number | string; quantity: number };
+
+/**
+ * Adjust inventory for a set of lines. dir = -1 reserves stock (new order),
+ * +1 releases it (cancellation). Only touches rows with a known stock_qty so
+ * we never falsely flip an unmanaged product to out-of-stock.
+ */
+async function adjustStock(
+  client: { query: (t: string, p?: unknown[]) => Promise<unknown> },
+  lines: StockLine[],
+  dir: -1 | 1,
+): Promise<void> {
+  for (const l of lines) {
+    await client.query(
+      `UPDATE products
+         SET stock_qty = GREATEST(0, COALESCE(stock_qty,0) + $1::int * $2::int),
+             is_in_stock = GREATEST(0, COALESCE(stock_qty,0) + $1::int * $2::int) > 0,
+             updated_at = now()
+       WHERE id = $3::bigint AND stock_qty IS NOT NULL`,
+      [dir, l.quantity, Number(l.product_id)],
+    );
+  }
+}
+
+/** Append a timeline event to an order. */
+export async function addOrderEvent(
+  orderId: number,
+  type: string,
+  message: string,
+  author = "admin",
+): Promise<void> {
+  await q(
+    "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,$2,$3,$4)",
+    [orderId, type, message, author],
+  );
+}
+
+export async function getOrderEvents(orderId: number): Promise<OrderEvent[]> {
+  return q<OrderEvent>(
+    `SELECT id, order_id, type, message, author, created_at
+     FROM order_events WHERE order_id = $1 ORDER BY created_at DESC, id DESC`,
+    [orderId],
+  );
+}
+
+/** Set / clear the Nova Poshta TTN; auto-derives the tracking URL and logs it. */
+export async function setOrderTracking(orderId: number, ttn: string): Promise<void> {
+  const clean = ttn.trim();
+  const url = npTrackingUrl(clean);
+  await q("UPDATE orders SET ttn = $1, tracking_url = $2, updated_at = now() WHERE id = $3", [clean, url, orderId]);
+  await addOrderEvent(orderId, "ttn", clean ? `ТТН: ${clean}` : "ТТН видалено");
+}
 
 /** Create an order from the current cart, snapshotting item data + prices. */
 export async function createOrder(input: OrderInput): Promise<{ id: number; number: string }> {
@@ -89,9 +163,97 @@ export async function createOrder(input: OrderInput): Promise<{ id: number; numb
         [id, Number(it.product_id), it.name, it.brand, it.slug, it.image ?? "", it.variation, it.price, it.quantity, it.line_total],
       );
     }
+
+    // Reserve inventory and mark the order so a later cancellation can release it.
+    await adjustStock(client, cart.items, -1);
+    await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
+    await client.query(
+      "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'created',$2,'system')",
+      [id, `Замовлення ${number} створено · ${cart.subtotal.toLocaleString("uk-UA")} ₴`],
+    );
     await client.query("COMMIT");
 
     await clearCart(input.cartToken);
+    return { id, number };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export type ManualOrderInput = {
+  accountId?: number | null;
+  email: string;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  shippingCity: string;
+  shippingBranch: string;
+  comment?: string;
+  paymentMethod?: "cod" | "prepay";
+  items: { product_id: number; variation: string; quantity: number }[];
+};
+
+/** Create an order by hand (phone / Instagram sale), snapshotting product data. */
+export async function createManualOrder(input: ManualOrderInput): Promise<{ id: number; number: string }> {
+  const lines = input.items.filter((i) => i.quantity > 0);
+  if (lines.length === 0) throw new Error("Додайте хоча б один товар");
+
+  const ids = lines.map((l) => Number(l.product_id));
+  const products = await q<{ id: string; name: string; brand: string; slug: string; image_src: string; price: number }>(
+    `SELECT id::text AS id, name, brand, slug, image_src, price::float AS price
+     FROM products WHERE id = ANY($1)`,
+    [ids],
+  );
+  const byId = new Map(products.map((p) => [p.id, p]));
+
+  const snapshot = lines.map((l) => {
+    const p = byId.get(String(l.product_id));
+    if (!p) throw new Error(`Товар ${l.product_id} не знайдено`);
+    return {
+      product_id: Number(l.product_id),
+      name: p.name, brand: p.brand, slug: p.slug, image_src: p.image_src,
+      variation: l.variation, price: p.price, quantity: l.quantity,
+      line_total: p.price * l.quantity,
+    };
+  });
+  const subtotal = snapshot.reduce((s, l) => s + l.line_total, 0);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const ins = await client.query(
+      `INSERT INTO orders
+         (account_id, email, phone, first_name, last_name, status, payment_method,
+          shipping_method, shipping_city, shipping_branch, comment, source, subtotal, shipping_cost, total)
+       VALUES ($1,$2,$3,$4,$5,'pending',$6,'novaposhta',$7,$8,$9,'manual',$10,0,$10)
+       RETURNING id`,
+      [
+        input.accountId ?? null, input.email, input.phone, input.firstName, input.lastName,
+        input.paymentMethod ?? "cod", input.shippingCity, input.shippingBranch, input.comment ?? "", subtotal,
+      ],
+    );
+    const id = ins.rows[0].id as number;
+    const number = `MG-${100000 + id}`;
+    await client.query("UPDATE orders SET number = $1 WHERE id = $2", [number, id]);
+
+    for (const l of snapshot) {
+      await client.query(
+        `INSERT INTO order_items
+           (order_id, product_id, name, brand, slug, image_src, variation, price, quantity, line_total)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [id, l.product_id, l.name, l.brand, l.slug, l.image_src, l.variation, l.price, l.quantity, l.line_total],
+      );
+    }
+    await adjustStock(client, snapshot, -1);
+    await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
+    await client.query(
+      "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'created',$2,'admin')",
+      [id, `Ручне замовлення ${number} створено · ${subtotal.toLocaleString("uk-UA")} ₴`],
+    );
+    await client.query("COMMIT");
     return { id, number };
   } catch (e) {
     await client.query("ROLLBACK");
@@ -127,6 +289,7 @@ async function hydrate(orders: Record<string, unknown>[]): Promise<Order[]> {
 
 const ORDER_SELECT = `id, number, account_id, email, phone, first_name, last_name, status,
   payment_method, shipping_method, shipping_city, shipping_branch, comment,
+  ttn, tracking_url, source,
   subtotal, shipping_cost, total, created_at`;
 
 /** Orders for a customer (by account id or, as fallback, email). */
@@ -178,9 +341,55 @@ export async function getOrder(id: number): Promise<Order | null> {
   return (await hydrate([row]))[0];
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Очікує оплати", processing: "В обробці", "on-hold": "На утриманні",
+  completed: "Виконано", cancelled: "Скасовано", refunded: "Повернуто",
+};
+
 export async function updateOrderStatus(id: number, status: string): Promise<void> {
   if (!ORDER_STATUSES.includes(status as (typeof ORDER_STATUSES)[number])) throw new Error("Невірний статус");
-  await q("UPDATE orders SET status = $1, updated_at = now() WHERE id = $2", [status, id]);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const cur = await client.query(
+      "SELECT status, stock_applied FROM orders WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    if (cur.rows.length === 0) throw new Error("Замовлення не знайдено");
+    const prev = cur.rows[0].status as string;
+    const applied = cur.rows[0].stock_applied as boolean;
+    if (prev === status) { await client.query("ROLLBACK"); return; }
+
+    const items = await client.query<{ product_id: string; quantity: number }>(
+      "SELECT product_id::text AS product_id, quantity FROM order_items WHERE order_id = $1",
+      [id],
+    );
+    const releasing = STOCK_RELEASING.has(status);
+    const wasReleasing = STOCK_RELEASING.has(prev);
+
+    // Release stock when moving into cancelled/refunded; re-reserve when leaving it.
+    if (releasing && applied) {
+      await adjustStock(client, items.rows, 1);
+      await client.query("UPDATE orders SET stock_applied = FALSE WHERE id = $1", [id]);
+      await client.query("INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'stock','Залишки повернено на склад','system')", [id]);
+    } else if (wasReleasing && !releasing && !applied) {
+      await adjustStock(client, items.rows, -1);
+      await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
+      await client.query("INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'stock','Залишки знову зарезервовано','system')", [id]);
+    }
+
+    await client.query("UPDATE orders SET status = $1, updated_at = now() WHERE id = $2", [status, id]);
+    await client.query(
+      "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'status',$2,'admin')",
+      [id, `Статус: ${STATUS_LABELS[prev] ?? prev} → ${STATUS_LABELS[status] ?? status}`],
+    );
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 // Revenue counts orders that represent real sales (not cancelled/refunded).
