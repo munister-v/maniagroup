@@ -66,13 +66,22 @@ function normGender(t: string): string {
 type MgRow = {
   code: string; article: string; brand: string; name: string; sizes: string;
   base: number; sale: number; composition: string; collection: string;
-  gender: string; color: string; country: string;
+  gender: string; color: string; country: string; cost: number;
 };
 
 function parseMg(buf: Buffer): Map<string, MgRow> {
   const wb = XLSX.read(buf, { type: "buffer", codepage: 1251 });
   const sh = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sh, { header: 1, defval: "", blankrows: false });
+
+  // Future-proof: if the store ever adds a purchase-cost column, detect it by
+  // header text (Закупочная/Себестоимость/Cost) and capture the real cost.
+  let costCol = -1;
+  for (const r of rows) {
+    const idx = r.findIndex((c) => /закуп|себест|cost|опт/i.test(String(c ?? "")));
+    if (idx >= 0 && String(r[0] ?? "").trim().toUpperCase().startsWith("КОД")) { costCol = idx; break; }
+  }
+
   const map = new Map<string, MgRow>();
   for (const r of rows) {
     const code = String(r[0] ?? "").trim().split(".")[0];
@@ -90,6 +99,7 @@ function parseMg(buf: Buffer): Map<string, MgRow> {
       gender: normGender(String(r[9] ?? "")),
       color: String(r[10] ?? "").trim(),
       country: String(r[11] ?? "").trim(),
+      cost: costCol >= 0 ? (Number(r[costCol]) || 0) : 0,
     });
   }
   return map;
@@ -99,6 +109,7 @@ function parseMg(buf: Buffer): Map<string, MgRow> {
 type WpRow = {
   id: string; name: string; regular: number; sale: number; category: string;
   sizes: string[]; season: string; color: string; country: string; article: string;
+  qty: number; // total units in stock across all size variations ("In Stock?")
 };
 
 function parseWp(buf: Buffer): Map<string, WpRow> {
@@ -122,12 +133,15 @@ function parseWp(buf: Buffer): Map<string, WpRow> {
         color: String(r["Цвет"] ?? "").trim(),
         country: String(r["Страна производитель"] ?? "").trim(),
         article: String(r["Артикул"] ?? "").trim(),
+        qty: 0,
       };
       map.set(id, p);
     }
     const size = String(r["Attribute 1 Value(s)"] ?? "").trim();
+    // "In Stock?" is the actual unit count for this size, not a 0/1 flag.
     const qty = Number(r["In Stock?"]) || 0;
     if (size && qty > 0 && !p.sizes.includes(size)) p.sizes.push(size);
+    if (qty > 0) p.qty += qty;
   }
   return map;
 }
@@ -240,6 +254,9 @@ export async function importCatalog(opts: {
         color: w.color || m?.color || "", country: w.country || m?.country || "",
         season: w.season || "", collection: m?.collection || "",
         composition: m?.composition || "",
+        stock_qty: w.qty || 0,
+        cost_price: m && m.cost > 0 ? m.cost : null,
+        cost_source: m && m.cost > 0 ? "import" : "",
         created_at: now, updated_at: now,
       });
     }
@@ -259,6 +276,9 @@ export async function importCatalog(opts: {
         description: "", short_description: "",
         color: m.color, country: m.country, season: "", collection: m.collection,
         composition: m.composition,
+        stock_qty: 0,
+        cost_price: m.cost > 0 ? m.cost : null,
+        cost_source: m.cost > 0 ? "import" : "",
         created_at: now, updated_at: now,
       });
     }

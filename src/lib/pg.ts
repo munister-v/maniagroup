@@ -222,6 +222,37 @@ CREATE TABLE IF NOT EXISTS customer_tags (
 ALTER TABLE products ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_products_featured ON products(featured) WHERE featured;
 
+-- ── Finance: cost basis for profit/margin ──
+-- The XLS exports carry no purchase cost, so cost is resolved by priority:
+--   1. products.cost_price (manual edit or imported absolute cost)
+--   2. per-brand rule (cost_rules.pct)
+--   3. global markup / base-pct (store_settings: finance_markup_pct, finance_cost_basis)
+ALTER TABLE products    ADD COLUMN IF NOT EXISTS cost_price  NUMERIC;          -- NULL ⇒ derive
+ALTER TABLE products    ADD COLUMN IF NOT EXISTS cost_source TEXT NOT NULL DEFAULT ''; -- 'manual'|'import'|''
+-- Snapshot the cost into each order line at order time so historical profit
+-- stays correct even when cost settings change later.
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price  NUMERIC NOT NULL DEFAULT 0;
+
+-- Per-brand cost override. pct is interpreted per the global finance_cost_basis:
+--   basis markup: cost = price * 100/(100+pct)
+--   basis base:   cost = regular_price * pct/100
+CREATE TABLE IF NOT EXISTS cost_rules (
+  brand      TEXT PRIMARY KEY,
+  pct        NUMERIC NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Operating-expense ledger (for net profit, beyond COGS).
+CREATE TABLE IF NOT EXISTS expenses (
+  id         BIGSERIAL PRIMARY KEY,
+  spent_on   DATE NOT NULL DEFAULT current_date,
+  category   TEXT NOT NULL DEFAULT 'other',  -- ads|rent|salary|shipping|goods|tax|fee|other
+  amount     NUMERIC NOT NULL DEFAULT 0,
+  note       TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(spent_on DESC);
+
 -- ── Marketing: discount coupons ──
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;

@@ -1,6 +1,48 @@
+import type { PoolClient } from "pg";
 import { pool, q, q1 } from "./pg";
 import { getCart, clearCart } from "./cart";
 import { validateCoupon, incrementCouponUsage } from "./coupons";
+import { getFinanceSettings, getCostRules, resolveCost } from "./finance";
+
+/**
+ * Resolve the per-unit cost for each order line at order time, so COGS is
+ * snapshotted and stays correct even if cost settings change later. Under the
+ * "markup" basis the cost is derived from the *line* selling price (what we
+ * actually charged); under "base" it uses the product's regular price.
+ */
+async function resolveLineCosts(
+  client: PoolClient,
+  lines: { product_id: number | string; price: number }[],
+): Promise<Map<string, number>> {
+  const ids = lines.map((l) => Number(l.product_id));
+  const [settings, rules, prods] = await Promise.all([
+    getFinanceSettings(),
+    getCostRules(),
+    client.query<{ id: string; cost_price: string | null; regular_price: string; brand: string }>(
+      "SELECT id::text, cost_price::text, regular_price::text, brand FROM products WHERE id = ANY($1)",
+      [ids],
+    ),
+  ]);
+  const ruleByBrand = new Map(rules.map((r) => [r.brand, r.pct]));
+  const byId = new Map(prods.rows.map((p) => [p.id, p]));
+  const out = new Map<string, number>();
+  for (const l of lines) {
+    const key = String(l.product_id);
+    const p = byId.get(key);
+    const brandPct = p ? ruleByBrand.get(p.brand) : undefined;
+    out.set(key, resolveCost(
+      {
+        cost_price: p?.cost_price != null ? Number(p.cost_price) : null,
+        price: l.price,
+        regular_price: p ? Number(p.regular_price) : 0,
+        brand: p?.brand,
+      },
+      settings,
+      brandPct,
+    ));
+  }
+  return out;
+}
 
 export type OrderInput = {
   cartToken: string;
@@ -172,12 +214,13 @@ export async function createOrder(input: OrderInput): Promise<{ id: number; numb
     const number = `MG-${100000 + id}`;
     await client.query("UPDATE orders SET number = $1 WHERE id = $2", [number, id]);
 
+    const costs = await resolveLineCosts(client, cart.items);
     for (const it of cart.items) {
       await client.query(
         `INSERT INTO order_items
-           (order_id, product_id, name, brand, slug, image_src, variation, price, quantity, line_total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [id, Number(it.product_id), it.name, it.brand, it.slug, it.image ?? "", it.variation, it.price, it.quantity, it.line_total],
+           (order_id, product_id, name, brand, slug, image_src, variation, price, quantity, line_total, cost_price)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [id, Number(it.product_id), it.name, it.brand, it.slug, it.image ?? "", it.variation, it.price, it.quantity, it.line_total, costs.get(String(it.product_id)) ?? 0],
       );
     }
 
@@ -259,12 +302,13 @@ export async function createManualOrder(input: ManualOrderInput): Promise<{ id: 
     const number = `MG-${100000 + id}`;
     await client.query("UPDATE orders SET number = $1 WHERE id = $2", [number, id]);
 
+    const costs = await resolveLineCosts(client, snapshot);
     for (const l of snapshot) {
       await client.query(
         `INSERT INTO order_items
-           (order_id, product_id, name, brand, slug, image_src, variation, price, quantity, line_total)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [id, l.product_id, l.name, l.brand, l.slug, l.image_src, l.variation, l.price, l.quantity, l.line_total],
+           (order_id, product_id, name, brand, slug, image_src, variation, price, quantity, line_total, cost_price)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [id, l.product_id, l.name, l.brand, l.slug, l.image_src, l.variation, l.price, l.quantity, l.line_total, costs.get(String(l.product_id)) ?? 0],
       );
     }
     await adjustStock(client, snapshot, -1);

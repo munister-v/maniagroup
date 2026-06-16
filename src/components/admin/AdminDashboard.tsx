@@ -282,7 +282,7 @@ export function AdminDashboard({
           {section === "customers" && <AdminCustomers />}
           {section === "coupons" && <CouponsSection onToast={showToast} />}
           {section === "subscribers" && <SubscribersSection />}
-          {section === "accounting" && <AdminAccounting />}
+          {section === "accounting" && <AdminAccounting onToast={showToast} />}
           {section === "backup" && <BackupSection />}
           {section === "settings" && <SettingsSection />}
         </main>

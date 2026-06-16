@@ -55,6 +55,9 @@ export type ProductRow = {
   season: string;
   collection: string;
   composition: string;
+  stock_qty?: number | null;
+  cost_price?: number | null;
+  cost_source?: string;
 };
 
 const PRODUCT_COLS = [
@@ -62,6 +65,7 @@ const PRODUCT_COLS = [
   "price", "regular_price", "sale_price", "is_in_stock", "status",
   "image_src", "images", "attributes", "description", "short_description",
   "color", "country", "season", "collection", "composition",
+  "stock_qty", "cost_price", "cost_source",
 ] as const;
 
 /**
@@ -76,6 +80,11 @@ export async function replaceCatalog(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Preserve hand-entered costs across the full replace (ids are stable:
+    // Store post-id for in-stock, SYNTH_OFFSET+КОД for archived).
+    const manual = await client.query<{ id: string; cost_price: string }>(
+      "SELECT id::text, cost_price::text FROM products WHERE cost_source = 'manual' AND cost_price IS NOT NULL",
+    );
     await client.query("TRUNCATE products, categories");
 
     const CHUNK = 500;
@@ -100,6 +109,15 @@ export async function replaceCatalog(
         [cid++, c.name, c.slug, c.count],
       );
     }
+
+    // Re-apply preserved manual costs onto the freshly imported rows.
+    for (const m of manual.rows) {
+      await client.query(
+        "UPDATE products SET cost_price = $2, cost_source = 'manual' WHERE id = $1",
+        [m.id, m.cost_price],
+      );
+    }
+
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK");

@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import {
+  FinancePnL, FinanceProfitability, FinanceExpenses,
+  FinanceCashflow, FinanceInventory, FinanceCostSettings,
+} from "./AdminFinance";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -559,32 +563,57 @@ function InventoryTab() {
 
 // ── Root ─────────────────────────────────────────────────────────────────────
 
-type AccountingTab = "register" | "monthly" | "products" | "inventory";
+type AccountingTab =
+  | "register" | "monthly" | "products" | "inventory"
+  | "pnl" | "profit" | "expenses" | "cashflow" | "valuation" | "cost";
 
-const TABS: { id: AccountingTab; label: string }[] = [
-  { id: "register",  label: "Реєстр замовлень" },
-  { id: "monthly",   label: "По місяцях"        },
-  { id: "products",  label: "Топ товарів"        },
-  { id: "inventory", label: "Залишки"            },
+// Two groups: операційний облік (revenue/ops) and фінанси (profit/cost).
+const TAB_GROUPS: { title: string; tabs: { id: AccountingTab; label: string }[] }[] = [
+  {
+    title: "Операційний облік",
+    tabs: [
+      { id: "register",  label: "Реєстр замовлень" },
+      { id: "monthly",   label: "По місяцях" },
+      { id: "products",  label: "Топ товарів" },
+      { id: "inventory", label: "Залишки" },
+    ],
+  },
+  {
+    title: "Фінанси",
+    tabs: [
+      { id: "pnl",       label: "Прибутки і збитки" },
+      { id: "profit",    label: "Маржа" },
+      { id: "expenses",  label: "Витрати" },
+      { id: "cashflow",  label: "Грошовий потік" },
+      { id: "valuation", label: "Оцінка складу" },
+      { id: "cost",      label: "Собівартість" },
+    ],
+  },
 ];
 
-export function AdminAccounting() {
-  const [tab, setTab] = useState<AccountingTab>("register");
+export function AdminAccounting({ onToast }: { onToast?: (m: string) => void }) {
+  const [tab, setTab] = useState<AccountingTab>("pnl");
 
   return (
     <div className="space-y-6">
-      {/* Tab bar */}
-      <div className="flex flex-wrap gap-1 rounded-[4px] border border-[#e8e4de] bg-white p-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`rounded-[3px] px-4 py-2 text-[11px] uppercase tracking-[0.12em] transition-colors ${
-              tab === t.id ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
-            }`}
-          >
-            {t.label}
-          </button>
+      {/* Tab bar — grouped */}
+      <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-[#e8e4de] bg-white p-2">
+        {TAB_GROUPS.map((g, gi) => (
+          <div key={g.title} className="flex flex-wrap items-center gap-1">
+            {gi > 0 && <span className="mx-1 hidden h-5 w-px bg-[#e8e4de] sm:block" />}
+            <span className="mr-1 text-[9px] uppercase tracking-[0.14em] text-[#b9ae9b]">{g.title}</span>
+            {g.tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`rounded-[3px] px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                  tab === t.id ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         ))}
       </div>
 
@@ -592,6 +621,12 @@ export function AdminAccounting() {
       {tab === "monthly"   && <MonthlyTab />}
       {tab === "products"  && <ProductsTab />}
       {tab === "inventory" && <InventoryTab />}
+      {tab === "pnl"       && <FinancePnL />}
+      {tab === "profit"    && <FinanceProfitability />}
+      {tab === "expenses"  && <FinanceExpenses />}
+      {tab === "cashflow"  && <FinanceCashflow />}
+      {tab === "valuation" && <FinanceInventory />}
+      {tab === "cost"      && <FinanceCostSettings onToast={onToast} />}
     </div>
   );
 }
