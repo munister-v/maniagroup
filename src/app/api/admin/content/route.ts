@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { getEditableContent, saveDraft, type SiteContent } from "@/lib/siteContent";
+import { getEditableContent, getPublishedContent, saveDraft, type SiteContent } from "@/lib/siteContent";
 
-/** Editor reads the working draft (or published current if no draft yet). */
-export async function GET() {
+/** Editor reads the working draft (or published current if no draft yet).
+ *  Pass ?slot=current to get the published version (for "reset draft" UX). */
+export async function GET(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ ok: false }, { status: 401 });
+  const { searchParams } = new URL(req.url);
+  if (searchParams.get("slot") === "current") {
+    return NextResponse.json(await getPublishedContent());
+  }
   return NextResponse.json(await getEditableContent());
 }
 

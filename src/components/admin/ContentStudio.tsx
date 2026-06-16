@@ -51,13 +51,69 @@ export function ContentStudio({
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const historyCommitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>(JSON.stringify(content));
   const reloadAfterSave = useRef(false);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const pendingScroll = useRef<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Undo/redo history ──────────────────────────────────────────────────
+  // History is committed on a 1.5 s idle (not every keystroke) so each step
+  // covers a meaningful chunk of edits rather than single characters.
+  const historyStack = useRef<SiteContent[]>([content]);
+  const historyIdx = useRef<number>(0);
+  const skipHistoryPush = useRef(false);
+
+  const updateHistory = useCallback((c: SiteContent) => {
+    if (skipHistoryPush.current) { skipHistoryPush.current = false; return; }
+    if (historyCommitRef.current) clearTimeout(historyCommitRef.current);
+    historyCommitRef.current = setTimeout(() => {
+      const stack = historyStack.current.slice(0, historyIdx.current + 1);
+      const last = stack[stack.length - 1];
+      if (last && JSON.stringify(last) === JSON.stringify(c)) return;
+      stack.push(c);
+      if (stack.length > 100) stack.shift();
+      historyStack.current = stack;
+      historyIdx.current = stack.length - 1;
+      setCanUndo(historyIdx.current > 0);
+      setCanRedo(false);
+    }, 1500);
+  }, []);
+
+  function undo() {
+    if (historyIdx.current <= 0) return;
+    historyIdx.current--;
+    skipHistoryPush.current = true;
+    setContent(historyStack.current[historyIdx.current]);
+    setCanUndo(historyIdx.current > 0);
+    setCanRedo(true);
+  }
+
+  function redo() {
+    if (historyIdx.current >= historyStack.current.length - 1) return;
+    historyIdx.current++;
+    skipHistoryPush.current = true;
+    setContent(historyStack.current[historyIdx.current]);
+    setCanUndo(true);
+    setCanRedo(historyIdx.current < historyStack.current.length - 1);
+  }
+
+  // Keyboard shortcuts: Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y)
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.key === "z" && e.shiftKey) || e.key === "y") { e.preventDefault(); redo(); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Smooth, same-origin reload that keeps the scroll position so editing feels
   // continuous instead of jumping to the top on every keystroke-driven save.
@@ -98,6 +154,7 @@ export function ContentStudio({
   }, [reloadPreview]);
 
   useEffect(() => {
+    updateHistory(content);
     const json = JSON.stringify(content);
     if (json === lastSaved.current) return;
     setDirty(true);
@@ -108,7 +165,7 @@ export function ContentStudio({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [content, previewOn, saveDraft]);
+  }, [content, previewOn, saveDraft, updateHistory]);
 
   // Reload the preview whenever edits land, but only while previewing.
   useEffect(() => {
@@ -207,6 +264,23 @@ export function ContentStudio({
     }
   }
 
+  async function resetDraft() {
+    if (!window.confirm("Скинути чернетку до поточного опублікованого вмісту? Незбережені зміни буде замінено.")) return;
+    const res = await fetch("/api/admin/content?slot=current");
+    if (!res.ok) { showToast("Помилка при завантаженні"); return; }
+    const published = await res.json() as SiteContent;
+    lastSaved.current = JSON.stringify(published);
+    setContent(published);
+    setDirty(false);
+    // Reset undo history to the freshly loaded published state
+    historyStack.current = [published];
+    historyIdx.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    showToast("Чернетку скинуто до опублікованого ✓");
+    if (previewOn) setIframeKey((k) => k + 1);
+  }
+
   const deviceW = DEVICES.find((d) => d.id === device)!.w;
 
   return (
@@ -243,6 +317,24 @@ export function ContentStudio({
           </span>
 
           <div className="ml-auto flex items-center gap-1.5">
+            {/* Undo / Redo */}
+            <button
+              onClick={undo}
+              disabled={!canUndo}
+              title="Скасувати (Ctrl+Z)"
+              className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-1" />
+            </button>
+            <button
+              onClick={redo}
+              disabled={!canRedo}
+              title="Повторити (Ctrl+Shift+Z)"
+              className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Icon d="M15 14l5-5-5-5M19 9H8a5 5 0 0 0 0 10h1" />
+            </button>
+
             <button
               onClick={snapshot}
               className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]"
@@ -267,7 +359,17 @@ export function ContentStudio({
           <div className="mb-4 rounded-[4px] border border-[#e8e4de] bg-white">
             <div className="flex items-center justify-between border-b border-[#e8e4de] px-3 py-2">
               <p className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Копії та історія</p>
-              <span className="text-[10px] text-[#9c8f7d]">{versions.length}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={resetDraft}
+                  className="flex items-center gap-1 rounded-[3px] border border-red-200 px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-red-600 transition-colors hover:border-red-400"
+                  title="Скинути чернетку до поточного опублікованого вмісту"
+                >
+                  <Icon d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M9 9l6 6M15 9l-6 6" className="h-3 w-3" />
+                  Скинути до опублікованого
+                </button>
+                <span className="text-[10px] text-[#9c8f7d]">{versions.length}</span>
+              </div>
             </div>
             <ul className="max-h-72 divide-y divide-[#f0ece6] overflow-y-auto">
               {versions.length === 0 && (

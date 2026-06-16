@@ -302,6 +302,11 @@ export async function getEditableContent(): Promise<SiteContent> {
   return ensureSeeded();
 }
 
+/** Return the currently published content (ignores draft). */
+export async function getPublishedContent(): Promise<SiteContent> {
+  return ensureSeeded();
+}
+
 /** Save the working draft (autosave). Does not touch the published site. */
 export async function saveDraft(content: SiteContent): Promise<void> {
   await writeSlot("draft", content);
