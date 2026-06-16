@@ -116,8 +116,16 @@ const SYSTEM = `Ти — розумний AI-асистент адміністр
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { action: string; message?: string; product?: Record<string, string>; history?: { role: string; content: string }[] };
+  let body: { action: string; message?: string; product?: Record<string, string>; history?: { role: string; content: string }[]; field?: string; text?: string; context?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
   const { action, message, product, history = [] } = body;
+
+  try {
 
   // ── AI-дайджест (огляд магазину) ────────────────────────────────────
   if (action === "insights") {
@@ -213,5 +221,10 @@ ${text}
     return NextResponse.json({ text: improved.trim() });
   }
 
-  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[AI route]", msg);
+    return NextResponse.json({ error: `ШІ недоступний: ${msg.slice(0, 200)}` }, { status: 500 });
+  }
 }

@@ -10,6 +10,7 @@ import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
+import { AdminCatalogHub } from "./AdminCatalogHub";
 import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
@@ -272,7 +273,7 @@ export function AdminDashboard({
             />
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
-          {section === "catalog" && <CatalogImportSection />}
+          {section === "catalog" && <AdminCatalogHub />}
           {section === "products" && (
             <CatalogGrid onToast={showToast} onImport={() => setSection("catalog")} />
           )}

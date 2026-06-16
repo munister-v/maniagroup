@@ -84,10 +84,14 @@ export function AiAssistant() {
         }),
       });
       const d = await res.json();
-      const aiMsg: Msg = { role: "assistant", content: d.text ?? "Вибачте, сталася помилка." };
+      const aiMsg: Msg = {
+        role: "assistant",
+        content: d.text ?? (d.error ? `Помилка: ${d.error}` : "Вибачте, сталася помилка."),
+      };
       setMsgs((prev) => [...prev, aiMsg]);
-    } catch {
-      setMsgs((prev) => [...prev, { role: "assistant", content: "Не вдалося отримати відповідь. Перевірте підключення." }]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Невідома помилка";
+      setMsgs((prev) => [...prev, { role: "assistant", content: `Помилка мережі: ${msg}` }]);
     } finally {
       setLoading(false);
     }
