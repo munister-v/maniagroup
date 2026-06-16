@@ -1513,78 +1513,120 @@ type CatalogImportResult = {
   inStock: number; archived: number; total: number; withImages: number; categories: number;
 };
 
+type ImportHistoryEntry = {
+  at: string; mg: string; wp: string;
+  inStock: number; archived: number; total: number; withImages: number; categories: number;
+};
+type SyncMeta = {
+  last_sync?: string; source?: string; total_products?: number; history?: ImportHistoryEntry[];
+};
+
+function fmtBytes(n: number): string {
+  return n < 1024 * 1024 ? `${Math.round(n / 1024)} КБ` : `${(n / 1024 / 1024).toFixed(1)} МБ`;
+}
+// Guess which slot a dropped file belongs to from its name.
+function detectSlot(name: string): "mg" | "wp" | null {
+  const u = name.toUpperCase();
+  if (/\bMG\b|MG\.|_MG|-MG| MG/.test(u) || u.includes("MG")) return "mg";
+  if (/\bWP\b|WP\.|_WP|-WP| WP/.test(u) || u.includes("WP")) return "wp";
+  return null;
+}
+
 function CatalogImportSection() {
   const [mg, setMg] = useState<File | null>(null);
   const [wp, setWp] = useState<File | null>(null);
   const [status, setStatus] = useState<"idle" | "importing" | "done" | "error">("idle");
   const [result, setResult] = useState<CatalogImportResult | null>(null);
   const [error, setError] = useState("");
-  const [meta, setMeta] = useState<{ last_sync?: string; source?: string; total_products?: number } | null>(null);
+  const [meta, setMeta] = useState<SyncMeta | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/admin/sync").then((r) => r.json()).then(setMeta).catch(() => {});
-  }, []);
+  const loadMeta = () => fetch("/api/admin/sync").then((r) => r.json()).then(setMeta).catch(() => {});
+  useEffect(() => { loadMeta(); }, []);
 
-  async function run() {
-    if (!mg || !wp) return;
-    setStatus("importing");
-    setError("");
-    setResult(null);
-    const fd = new FormData();
-    fd.append("mg", mg);
-    fd.append("wp", wp);
-    try {
-      const res = await fetch("/api/admin/import-catalog", { method: "POST", body: fd });
-      const data = await res.json();
-      if (res.ok && data.ok) {
-        setStatus("done");
-        setResult(data);
-      } else {
-        setStatus("error");
-        setError(data.error ?? "Помилка імпорту");
-      }
-    } catch {
-      setStatus("error");
-      setError("Не вдалося завантажити файли");
+  function assign(files: FileList | File[]) {
+    for (const f of Array.from(files)) {
+      if (!/\.xlsx?$/i.test(f.name)) continue;
+      const slot = detectSlot(f.name);
+      if (slot === "mg") setMg(f);
+      else if (slot === "wp") setWp(f);
+      else if (!mg) setMg(f);
+      else setWp(f);
     }
   }
 
-  const pickClass =
-    "inline-flex h-9 cursor-pointer items-center rounded-[3px] border border-[#e8e4de] bg-white px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:bg-[#f7f5f2]";
+  async function run() {
+    if (!mg || !wp) return;
+    setStatus("importing"); setError(""); setResult(null);
+    const fd = new FormData();
+    fd.append("mg", mg); fd.append("wp", wp);
+    try {
+      const res = await fetch("/api/admin/import-catalog", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.ok) { setStatus("done"); setResult(data); loadMeta(); }
+      else { setStatus("error"); setError(data.error ?? "Помилка імпорту"); }
+    } catch {
+      setStatus("error"); setError("Не вдалося завантажити файли");
+    }
+  }
+
+  const slot = (label: string, file: File | null, set: (f: File | null) => void, hint: string) => (
+    <div className={`flex-1 rounded-[4px] border p-3 transition-colors ${file ? "border-emerald-300 bg-emerald-50/40" : "border-[#e8e4de] bg-white"}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">{label}</span>
+        {file && <button onClick={() => set(null)} className="text-[11px] text-[#9c8f7d] hover:text-red-600">✕</button>}
+      </div>
+      {file ? (
+        <div className="mt-1.5">
+          <p className="truncate text-[13px] text-[#17130f]">{file.name}</p>
+          <p className="text-[11px] text-[#9c8f7d]">{fmtBytes(file.size)}</p>
+        </div>
+      ) : (
+        <label className="mt-1.5 flex h-9 cursor-pointer items-center text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
+          {hint}
+          <input type="file" accept=".xls,.xlsx" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) set(f); }} />
+        </label>
+      )}
+    </div>
+  );
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <Card title="Імпорт каталогу з XLS" subtitle="Дві вигрузки магазину: MG (повний перелік) + WP (поточні залишки)">
+    <div className="max-w-3xl space-y-6">
+      <Card title="Імпорт каталогу з XLS" subtitle="Перетягніть обидві вигрузки магазину — MG (повний перелік) і WP (поточні залишки). Файли визначаються автоматично за назвою.">
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className={pickClass}>
-              {mg ? "MG обрано ✓" : "Файл MG.xls"}
-              <input type="file" accept=".xls,.xlsx" className="sr-only"
-                onChange={(e) => setMg(e.target.files?.[0] ?? null)} />
+          {/* Dropzone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setDragOver(false); assign(e.dataTransfer.files); }}
+            className={`rounded-[4px] border-2 border-dashed px-4 py-6 text-center transition-colors ${dragOver ? "border-[#17130f] bg-[#f7f5f2]" : "border-[#e0dacf]"}`}
+          >
+            <svg viewBox="0 0 24 24" className="mx-auto h-7 w-7 text-[#b9ae9b]" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <p className="mt-2 text-[13px] text-[#17130f]">Перетягніть сюди MG.xls та WP.xls</p>
+            <label className="mt-1 inline-block cursor-pointer text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
+              або оберіть файли
+              <input type="file" accept=".xls,.xlsx" multiple className="sr-only" onChange={(e) => e.target.files && assign(e.target.files)} />
             </label>
-            <span className="max-w-[14rem] truncate text-[12px] text-[#9c8f7d]">{mg?.name}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <label className={pickClass}>
-              {wp ? "WP обрано ✓" : "Файл WP.xls"}
-              <input type="file" accept=".xls,.xlsx" className="sr-only"
-                onChange={(e) => setWp(e.target.files?.[0] ?? null)} />
-            </label>
-            <span className="max-w-[14rem] truncate text-[12px] text-[#9c8f7d]">{wp?.name}</span>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {slot("MG — повний перелік", mg, setMg, "обрати файл MG")}
+            {slot("WP — залишки", wp, setWp, "обрати файл WP")}
           </div>
 
           <button
             onClick={run}
             disabled={!mg || !wp || status === "importing"}
-            className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
+            className="inline-flex h-10 items-center rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
           >
             {status === "importing" ? "Імпортуємо… (~1 хв)" : "Імпортувати каталог"}
           </button>
 
           {status === "importing" && (
-            <p className="text-[12px] text-[#9c8f7d]">
+            <div className="flex items-center gap-2 text-[12px] text-[#9c8f7d]">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#d8d2c8] border-t-[#17130f]" />
               Парсимо файли і підтягуємо фото зі Store API. Не закривайте сторінку.
-            </p>
+            </div>
           )}
           {status === "error" && <p className="text-[12px] text-red-600">✗ {error}</p>}
           {status === "done" && result && (
@@ -1597,21 +1639,50 @@ function CatalogImportSection() {
       </Card>
 
       <Card title="Поточний стан каталогу">
-        <dl className="space-y-2 text-[12px]">
-          <div className="flex gap-3">
-            <dt className="w-32 text-[#9c8f7d]">Джерело</dt>
-            <dd className="text-[#17130f]">{meta?.source === "xls" ? "XLS-імпорт" : meta?.source || "—"}</dd>
-          </div>
-          <div className="flex gap-3">
-            <dt className="w-32 text-[#9c8f7d]">Товарів у БД</dt>
-            <dd className="text-[#17130f]">{meta?.total_products ?? "—"}</dd>
-          </div>
-          <div className="flex gap-3">
-            <dt className="w-32 text-[#9c8f7d]">Останній імпорт</dt>
-            <dd className="text-[#17130f]">{meta?.last_sync ? new Date(meta.last_sync).toLocaleString("uk-UA") : "—"}</dd>
-          </div>
+        <dl className="grid grid-cols-3 gap-3">
+          {[
+            { l: "Джерело", v: meta?.source === "xls" ? "XLS-імпорт" : meta?.source || "—" },
+            { l: "Товарів у БД", v: meta?.total_products?.toLocaleString("uk-UA") ?? "—" },
+            { l: "Останній імпорт", v: meta?.last_sync ? new Date(meta.last_sync).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—" },
+          ].map((s) => (
+            <div key={s.l} className="rounded-[3px] border border-[#eee7db] bg-[#faf8f5] px-3 py-3">
+              <p className="text-[15px] font-medium text-[#17130f]">{s.v}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-[#9c8f7d]">{s.l}</p>
+            </div>
+          ))}
         </dl>
       </Card>
+
+      {meta?.history && meta.history.length > 0 && (
+        <Card title="Історія імпортів" subtitle="Останні завантаження каталогу">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-[12px]">
+              <thead>
+                <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+                  <th className="py-2 pr-3 text-left">Дата</th>
+                  <th className="py-2 pr-3 text-left">Файли</th>
+                  <th className="py-2 pr-3 text-right">У наявності</th>
+                  <th className="py-2 pr-3 text-right">Архів</th>
+                  <th className="py-2 pr-3 text-right">З фото</th>
+                  <th className="py-2 text-right">Усього</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#f7f4f0]">
+                {meta.history.map((h, i) => (
+                  <tr key={i}>
+                    <td className="py-2 pr-3 text-[#17130f]">{new Date(h.at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}</td>
+                    <td className="max-w-[180px] truncate py-2 pr-3 text-[#9c8f7d]" title={`${h.mg} · ${h.wp}`}>{h.mg} · {h.wp}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{h.inStock}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums text-[#9c8f7d]">{h.archived}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{h.withImages}</td>
+                    <td className="py-2 text-right font-medium tabular-nums">{h.total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Card title="Як це працює">
         <ul className="space-y-2 text-[12px] text-[#9c8f7d]">
@@ -1620,6 +1691,7 @@ function CatalogImportSection() {
             "WP.xls — категорії, поточні залишки і ціни",
             "Фото та посилання підтягуються зі Store API за КОД (sku)",
             "Розпродане показується в каталозі з позначкою «Немає в наявності»",
+            "Сайт працює під час імпорту — оновлення відбувається атомарно",
           ].map((t) => (
             <li key={t} className="flex items-center gap-2">
               <span className="h-1 w-1 rounded-full bg-[#b9ae9b]" />

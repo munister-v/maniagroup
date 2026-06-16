@@ -9,18 +9,22 @@ import { getMeta } from "@/lib/db";
  */
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const [status, last_sync, total, error, source] = await Promise.all([
+  const [status, last_sync, total, error, source, historyRaw] = await Promise.all([
     getMeta("sync_status"),
     getMeta("last_sync"),
     getMeta("total_products"),
     getMeta("sync_error"),
     getMeta("source"),
+    getMeta("import_history"),
   ]);
+  let history: unknown[] = [];
+  try { history = JSON.parse(historyRaw || "[]"); } catch { history = []; }
   return NextResponse.json({
     status: status || "idle",
     last_sync,
     total_products: Number(total || 0),
     error,
     source,
+    history,
   });
 }
