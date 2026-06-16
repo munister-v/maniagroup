@@ -5,8 +5,10 @@ import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
 import { NewsletterForm } from "@/components/NewsletterForm";
-import { CATEGORIES, BRAND_LOGO_BY_DBNAME, brandsLogoFirst, type Product } from "@/lib/catalog";
+import { CATEGORIES, type Product } from "@/lib/catalog";
 import { getProducts, getFeaturedProducts, dbBrands } from "@/lib/productSource";
+import { getResolvedBrandLogoMap, resolveBrandLogo } from "@/lib/brandLogos";
+import { BrandLogo } from "@/components/BrandLogo";
 import { getSiteContent } from "@/lib/siteContent";
 
 export const metadata = {
@@ -30,6 +32,9 @@ export default async function Home() {
   let brands: { name: string; slug: string }[] = [];
   try { brands = await dbBrands(); } catch { brands = []; }
 
+  let brandLogos: Record<string, string> = {};
+  try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
+
   // Keep the hero "брендів" stat truthful: replace its value with the live
   // brand count (rounded down to a tidy 10), leaving the admin's other stats.
   const hero = brands.length
@@ -45,7 +50,7 @@ export default async function Home() {
 
   const sectionMap: Record<string, React.ReactNode> = {
     hero: <Hero hero={hero} />,
-    marquee: <BrandMarquee brands={brands} />,
+    marquee: <BrandMarquee brands={brands} logoMap={brandLogos} />,
     categories: <CategoryTrio />,
     featured: <Featured products={featured} />,
     newArrivals: <NewArrivals products={products} />,
@@ -155,11 +160,20 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
 
 /* ───────────────────────────────────────────────── Brand strip */
 // Static (non-scrolling) strip of every brand in the catalog, logos first.
-function BrandMarquee({ brands }: { brands: { name: string; slug: string }[] }) {
+function BrandMarquee({
+  brands,
+  logoMap,
+}: {
+  brands: { name: string; slug: string }[];
+  logoMap: Record<string, string>;
+}) {
   if (brands.length === 0) return null;
-  // Logos first, then most-stocked brands; cap so the static strip stays tidy.
-  // The full list lives in the header «Бренди» menu and the catalog.
-  const ordered = brandsLogoFirst(brands).slice(0, 18);
+  // Resolve each brand's logo, sort logo-first, cap so the static strip stays
+  // tidy. The full list lives in the header «Бренди» menu and the catalog.
+  const withLogo = brands.map((b) => ({ ...b, logo: resolveBrandLogo(b.name, logoMap) }));
+  const ordered = [...withLogo]
+    .sort((a, b) => (a.logo ? 0 : 1) - (b.logo ? 0 : 1))
+    .slice(0, 18);
   return (
     <section id="brands" className="border-y border-line py-9 md:py-11">
       <div className="wrap">
@@ -170,32 +184,22 @@ function BrandMarquee({ brands }: { brands: { name: string; slug: string }[] }) 
           </h2>
         </div>
         <ul className="flex flex-wrap items-center justify-center gap-x-9 gap-y-5 md:gap-x-12">
-          {ordered.map((brand) => {
-            const logo = BRAND_LOGO_BY_DBNAME[brand.name];
-            return (
-              <li key={brand.slug}>
-                <Link
-                  href={`/catalog?brand=${brand.slug}`}
-                  aria-label={brand.name}
-                  className="flex items-center"
-                >
-                  {logo ? (
-                    <Image
-                      src={logo}
-                      alt={brand.name}
-                      width={150}
-                      height={40}
-                      className="h-7 w-auto max-w-[140px] object-contain opacity-60 transition-opacity hover:opacity-100 md:h-8"
-                    />
-                  ) : (
-                    <span className="whitespace-nowrap font-display text-lg tracking-wide text-ink/55 transition-colors hover:text-ink md:text-xl">
-                      {brand.name}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
+          {ordered.map((brand) => (
+            <li key={brand.slug}>
+              <Link
+                href={`/catalog?brand=${brand.slug}`}
+                aria-label={brand.name}
+                className="flex items-center"
+              >
+                <BrandLogo
+                  name={brand.name}
+                  src={brand.logo}
+                  imgClass="h-7 w-auto max-w-[140px] object-contain opacity-60 transition-opacity hover:opacity-100 md:h-8"
+                  textClass="whitespace-nowrap font-display text-lg tracking-wide text-ink/55 transition-colors hover:text-ink md:text-xl"
+                />
+              </Link>
+            </li>
+          ))}
         </ul>
       </div>
     </section>

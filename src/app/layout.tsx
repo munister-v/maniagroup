@@ -5,6 +5,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getSiteContent, announcementActive } from "@/lib/siteContent";
 import { dbBrands } from "@/lib/productSource";
+import { getResolvedBrandLogoMap } from "@/lib/brandLogos";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -96,6 +97,8 @@ export default async function RootLayout({
   const jsonLd = await orgJsonLd();
   let brands: { name: string; slug: string }[] = [];
   try { brands = await dbBrands(); } catch { brands = []; }
+  let brandLogos: Record<string, string> = {};
+  try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
   return (
     <html
       lang="uk"
@@ -107,7 +110,7 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <AnnouncementBar />
-        <Header brands={brands} />
+        <Header brands={brands} brandLogos={brandLogos} />
         <main className="flex-1 pb-14 md:pb-0">{children}</main>
         <Footer />
       </body>

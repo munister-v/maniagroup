@@ -8,10 +8,11 @@ import { AdminOrders } from "./AdminOrders";
 import { AdminCustomers } from "./AdminCustomers";
 import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
+import { AdminBrandLogos } from "./AdminBrandLogos";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "orders" | "customers" | "coupons" | "subscribers" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -71,6 +72,11 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "products",
     label: "Каталог",
     d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+  },
+  {
+    id: "brands",
+    label: "Бренди",
+    d: "M3 7h18M3 12h18M3 17h18",
   },
   {
     id: "catalog",
@@ -263,6 +269,7 @@ export function AdminDashboard({
           {section === "products" && (
             <CatalogGrid onToast={showToast} onImport={() => setSection("catalog")} />
           )}
+          {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}
           {section === "coupons" && <CouponsSection onToast={showToast} />}

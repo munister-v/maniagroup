@@ -258,6 +258,14 @@ CREATE TABLE IF NOT EXISTS content_versions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_content_versions_created ON content_versions(created_at DESC);
+
+-- ── Brand logos (manual upload + auto from logo CDN) ──
+CREATE TABLE IF NOT EXISTS brand_logos (
+  brand      TEXT PRIMARY KEY,             -- exact products.brand value
+  logo_url   TEXT NOT NULL,                -- /uploads/brands/x.png or external CDN URL
+  source     TEXT NOT NULL DEFAULT 'manual', -- 'manual' | 'auto'
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 /** Idempotent schema creation. Awaited by every data-layer call via withDb(). */
