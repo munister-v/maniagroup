@@ -5,8 +5,8 @@ import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
 import { NewsletterForm } from "@/components/NewsletterForm";
-import { BRANDS, BRAND_LOGOS, brandHref, CATEGORIES, type Product } from "@/lib/catalog";
-import { getProducts } from "@/lib/productSource";
+import { CATEGORIES, type Product } from "@/lib/catalog";
+import { getProducts, getFeaturedProducts, dbBrands } from "@/lib/productSource";
 import { getSiteContent } from "@/lib/siteContent";
 
 export const metadata = {
@@ -24,10 +24,17 @@ export default async function Home() {
 
   const content = await getSiteContent();
 
+  let featured: Product[] = [];
+  try { featured = await getFeaturedProducts(8); } catch { featured = []; }
+
+  let brands: { name: string; slug: string }[] = [];
+  try { brands = await dbBrands(); } catch { brands = []; }
+
   const sectionMap: Record<string, React.ReactNode> = {
     hero: <Hero hero={content.hero} />,
-    marquee: <BrandMarquee />,
+    marquee: <BrandMarquee brands={brands} />,
     categories: <CategoryTrio />,
+    featured: <Featured products={featured} />,
     newArrivals: <NewArrivals products={products} />,
     editorial: <Editorial />,
     services: <ServiceRow services={content.services} />,
@@ -134,32 +141,44 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
 }
 
 /* ───────────────────────────────────────────────── Brand marquee */
-function BrandMarquee() {
-  const row = [...BRANDS, ...BRANDS];
+
+// Maps actual DB brand names → logo file in /public/images/brands/
+const BRAND_LOGO_MAP: Record<string, string> = {
+  "EA7":             "/images/brands/ea7-emporio-armani.png",
+  "MOSCHINO Love":   "/images/brands/moschino.png",
+  "ANTONY MORATO":   "/images/brands/antony-morato.png",
+  "HARMONT&BLAINE":  "/images/brands/harmont-blaine.png",
+  "MC2 SAINT BARTH": "/images/brands/mc2-saint-barth.png",
+  "FRED MELLO":      "/images/brands/fred-mello.png",
+};
+
+function BrandMarquee({ brands }: { brands: { name: string; slug: string }[] }) {
+  // Double the list for seamless looping marquee
+  const row = brands.length > 0 ? [...brands, ...brands] : [];
   return (
     <section id="brands" className="border-y border-line py-7">
       <div className="relative overflow-hidden">
         <div className="flex w-max items-center animate-marquee">
           {row.map((brand, i) => {
-            const logo = BRAND_LOGOS[brand];
+            const logo = BRAND_LOGO_MAP[brand.name];
             return (
               <Link
                 key={i}
-                href={brandHref(brand)}
-                aria-label={brand}
+                href={`/catalog?brand=${brand.slug}`}
+                aria-label={brand.name}
                 className="mx-9 flex shrink-0 items-center"
               >
                 {logo ? (
                   <Image
                     src={logo}
-                    alt={brand}
+                    alt={brand.name}
                     width={150}
                     height={40}
                     className="h-7 w-auto max-w-[150px] object-contain opacity-55 transition-opacity hover:opacity-100 md:h-9"
                   />
                 ) : (
                   <span className="whitespace-nowrap font-display text-xl tracking-wide text-ink/55 transition-colors hover:text-ink md:text-2xl">
-                    {brand}
+                    {brand.name}
                   </span>
                 )}
               </Link>
@@ -219,6 +238,32 @@ function CategoryTrio() {
 }
 
 /* ───────────────────────────────────────────────── New arrivals */
+function Featured({ products }: { products: Product[] }) {
+  if (products.length === 0) return null;
+  return (
+    <section className="wrap pb-16 md:pb-24">
+      <Reveal>
+        <div className="mb-8 flex items-end justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-luxe text-muted">Кураторський вибір</p>
+            <h2 className="mt-2 font-display text-3xl text-ink md:text-4xl">Обране</h2>
+          </div>
+          <Link href="/catalog" className="link-underline hidden text-[12px] uppercase tracking-luxe text-ink sm:block">
+            Дивитися все →
+          </Link>
+        </div>
+      </Reveal>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
+        {products.map((product, i) => (
+          <Reveal key={product.id} delay={(i % 4) * 70}>
+            <ProductCard product={product} />
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function NewArrivals({ products }: { products: Product[] }) {
   return (
     <section id="women" className="wrap pb-16 md:pb-24">
