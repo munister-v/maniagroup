@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { saveSiteContent, DEFAULT_CONTENT, type SiteContent } from "@/lib/siteContent";
+import { publishContent, DEFAULT_CONTENT, type SiteContent } from "@/lib/siteContent";
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
@@ -24,6 +24,6 @@ export async function POST(req: Request) {
     services: (saved.services as SiteContent["services"] | undefined) ?? DEFAULT_CONTENT.services,
   };
 
-  await saveSiteContent(merged);
+  await publishContent(merged, "Імпорт з резервної копії");
   return NextResponse.json({ ok: true });
 }

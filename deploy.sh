@@ -17,6 +17,7 @@ rsync -az -e "ssh -i $KEY" \
   --exclude='data/*.db' \
   --exclude='data/*.db-shm' \
   --exclude='data/*.db-wal' \
+  --exclude='data/site-content.json' \
   ./ "$HOST:$REMOTE_DIR/"
 
 echo "→ Installing & building…"

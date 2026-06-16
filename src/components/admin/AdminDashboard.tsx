@@ -7,6 +7,7 @@ import { HOME_SECTIONS } from "@/lib/homeSections";
 import { AdminProducts } from "./AdminProducts";
 import { AdminOrders } from "./AdminOrders";
 import { AdminCustomers } from "./AdminCustomers";
+import { ContentStudio } from "./ContentStudio";
 
 /* ─── Types ─── */
 
@@ -136,8 +137,6 @@ export function AdminDashboard({
 }) {
   const [section, setSection] = useState<Section>("overview");
   const [content, setContent] = useState<SiteContent>(initial);
-  const [contentStatus, setContentStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [unsaved, setUnsaved] = useState(false);
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
@@ -165,24 +164,6 @@ export function AdminDashboard({
 
   function update(fn: (c: SiteContent) => SiteContent) {
     setContent(fn);
-    setUnsaved(true);
-  }
-
-  async function saveContent() {
-    setContentStatus("saving");
-    const res = await fetch("/api/admin/content", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(content),
-    });
-    if (res.ok) {
-      setContentStatus("saved");
-      setUnsaved(false);
-      setTimeout(() => setContentStatus("idle"), 2500);
-    } else {
-      setContentStatus("error");
-      setTimeout(() => setContentStatus("idle"), 3000);
-    }
   }
 
   async function logout() {
@@ -255,38 +236,8 @@ export function AdminDashboard({
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" /></svg>
             </button>
             <h1 className="text-sm font-medium">{navLabel}</h1>
-            {unsaved && section === "content" && (
-              <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-600">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                Незбережено
-              </span>
-            )}
           </div>
-          <div className="flex items-center gap-3">
-            {section === "content" && (
-              <button
-                onClick={saveContent}
-                disabled={contentStatus === "saving" || (!unsaved && contentStatus === "idle")}
-                className={`h-8 rounded-[3px] px-5 text-[11px] uppercase tracking-[0.12em] transition-all ${
-                  contentStatus === "saved"
-                    ? "bg-emerald-600 text-white"
-                    : contentStatus === "error"
-                    ? "bg-red-600 text-white"
-                    : unsaved
-                    ? "bg-[#17130f] text-white hover:opacity-85"
-                    : "cursor-default bg-[#17130f]/10 text-[#17130f]/30"
-                }`}
-              >
-                {contentStatus === "saving"
-                  ? "Зберігаємо…"
-                  : contentStatus === "saved"
-                  ? "✓ Збережено"
-                  : contentStatus === "error"
-                  ? "Помилка"
-                  : "Зберегти"}
-              </button>
-            )}
-          </div>
+          <div className="flex items-center gap-3" />
         </header>
 
         {/* Body */}
@@ -300,7 +251,12 @@ export function AdminDashboard({
             />
           )}
           {section === "content" && (
-            <ContentSection content={content} update={update} />
+            <ContentStudio
+              content={content}
+              setContent={setContent}
+              showToast={showToast}
+              editor={<ContentSection content={content} update={update} />}
+            />
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
           {section === "catalog" && <CatalogImportSection />}

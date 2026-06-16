@@ -1,5 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { cookies } from "next/headers";
+import { q, q1 } from "./pg";
+import { isAdmin } from "./adminAuth";
 
 export type SiteContent = {
   announcement: string;
@@ -213,19 +216,160 @@ export const DEFAULT_CONTENT: SiteContent = {
   },
 };
 
-export async function getSiteContent(): Promise<SiteContent> {
+export const PREVIEW_COOKIE = "mg_preview";
+const MAX_VERSIONS = 60;
+
+export type ContentVersion = {
+  id: number;
+  label: string;
+  author: string;
+  createdAt: string;
+};
+
+/** Read one content slot ('current' | 'draft') from Postgres, merged over defaults. */
+async function readSlot(key: "current" | "draft"): Promise<SiteContent | null> {
+  const row = await q1<{ val: SiteContent }>("SELECT val FROM content_store WHERE key = $1", [key]);
+  if (!row) return null;
+  const saved = (typeof row.val === "string" ? JSON.parse(row.val as unknown as string) : row.val) as Partial<SiteContent>;
+  return deepMerge(DEFAULT_CONTENT, saved) as SiteContent;
+}
+
+async function writeSlot(key: "current" | "draft", content: SiteContent): Promise<void> {
+  await q(
+    `INSERT INTO content_store(key, val, updated_at) VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val, updated_at = now()`,
+    [key, JSON.stringify(content)],
+  );
+}
+
+/**
+ * One-time migration / seed. If 'current' is absent, seed it from the legacy
+ * data/site-content.json (if present) or DEFAULT_CONTENT, so existing prod
+ * content is preserved on the first read after the Postgres switch.
+ */
+async function ensureSeeded(): Promise<SiteContent> {
+  const current = await readSlot("current");
+  if (current) return current;
+  let seed: SiteContent = DEFAULT_CONTENT;
   try {
     const raw = await fs.readFile(FILE, "utf-8");
-    const saved = JSON.parse(raw) as Partial<SiteContent> & Record<string, unknown>;
-    return deepMerge(DEFAULT_CONTENT, saved) as SiteContent;
+    seed = deepMerge(DEFAULT_CONTENT, JSON.parse(raw)) as SiteContent;
   } catch {
-    return DEFAULT_CONTENT;
+    /* no legacy file — start from defaults */
+  }
+  await writeSlot("current", seed);
+  return seed;
+}
+
+/** Is the current request an admin previewing the unpublished draft? */
+async function previewActive(): Promise<boolean> {
+  try {
+    const jar = await cookies();
+    if (jar.get(PREVIEW_COOKIE)?.value !== "1") return false;
+    return await isAdmin();
+  } catch {
+    return false;
   }
 }
 
-export async function saveSiteContent(content: SiteContent): Promise<void> {
-  await fs.mkdir(path.dirname(FILE), { recursive: true });
-  await fs.writeFile(FILE, JSON.stringify(content, null, 2), "utf-8");
+/**
+ * Public content reader used by every page. Returns the published 'current'
+ * content — unless the viewer is an admin with preview mode on, in which case
+ * the working 'draft' is shown so edits can be checked before publishing.
+ * Always falls back to file/defaults if Postgres is unreachable.
+ */
+export async function getSiteContent(): Promise<SiteContent> {
+  try {
+    if (await previewActive()) {
+      const draft = await readSlot("draft");
+      if (draft) return draft;
+    }
+    return await ensureSeeded();
+  } catch {
+    try {
+      const raw = await fs.readFile(FILE, "utf-8");
+      return deepMerge(DEFAULT_CONTENT, JSON.parse(raw)) as SiteContent;
+    } catch {
+      return DEFAULT_CONTENT;
+    }
+  }
+}
+
+/** Editor reader: the draft if one exists, otherwise the published current. */
+export async function getEditableContent(): Promise<SiteContent> {
+  const draft = await readSlot("draft");
+  if (draft) return draft;
+  return ensureSeeded();
+}
+
+/** Save the working draft (autosave). Does not touch the published site. */
+export async function saveDraft(content: SiteContent): Promise<void> {
+  await writeSlot("draft", content);
+}
+
+/**
+ * Publish: snapshot the outgoing current into version history, promote the
+ * given content to 'current', and clear the draft. Trims old versions.
+ */
+export async function publishContent(content: SiteContent, label = ""): Promise<void> {
+  const outgoing = await readSlot("current");
+  if (outgoing) {
+    await q(
+      `INSERT INTO content_versions(label, content, author) VALUES ($1, $2::jsonb, 'admin')`,
+      [label || `Перед публікацією ${new Date().toLocaleString("uk-UA")}`, JSON.stringify(outgoing)],
+    );
+    await q(
+      `DELETE FROM content_versions WHERE id NOT IN (
+         SELECT id FROM content_versions ORDER BY created_at DESC LIMIT $1
+       )`,
+      [MAX_VERSIONS],
+    );
+  }
+  await writeSlot("current", content);
+  await q("DELETE FROM content_store WHERE key = 'draft'");
+}
+
+/** Discard the working draft (revert to published). */
+export async function discardDraft(): Promise<void> {
+  await q("DELETE FROM content_store WHERE key = 'draft'");
+}
+
+/** Save a named manual snapshot of the given content (a "копія"). */
+export async function snapshotContent(content: SiteContent, label: string): Promise<void> {
+  await q(
+    `INSERT INTO content_versions(label, content, author) VALUES ($1, $2::jsonb, 'admin')`,
+    [label || `Копія ${new Date().toLocaleString("uk-UA")}`, JSON.stringify(content)],
+  );
+  await q(
+    `DELETE FROM content_versions WHERE id NOT IN (
+       SELECT id FROM content_versions ORDER BY created_at DESC LIMIT $1
+     )`,
+    [MAX_VERSIONS],
+  );
+}
+
+/** List version snapshots, newest first (metadata only). */
+export async function listVersions(): Promise<ContentVersion[]> {
+  const rows = await q<{ id: string; label: string; author: string; created_at: string }>(
+    "SELECT id, label, author, created_at FROM content_versions ORDER BY created_at DESC",
+  );
+  return rows.map((r) => ({ id: Number(r.id), label: r.label, author: r.author, createdAt: r.created_at }));
+}
+
+/** Full content of one version (for restore/preview). */
+export async function getVersion(id: number): Promise<SiteContent | null> {
+  const row = await q1<{ content: SiteContent }>("SELECT content FROM content_versions WHERE id = $1", [id]);
+  if (!row) return null;
+  const c = typeof row.content === "string" ? JSON.parse(row.content as unknown as string) : row.content;
+  return deepMerge(DEFAULT_CONTENT, c) as SiteContent;
+}
+
+/** Load a version into the working draft so it can be previewed then published. */
+export async function restoreVersionToDraft(id: number): Promise<SiteContent | null> {
+  const content = await getVersion(id);
+  if (!content) return null;
+  await writeSlot("draft", content);
+  return content;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

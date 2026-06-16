@@ -239,6 +239,25 @@ CREATE TABLE IF NOT EXISTS coupons (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_coupons_code ON coupons(lower(code));
+
+-- ── CMS: site content (published 'current' + working 'draft') ──
+-- Single source of truth for all editable site copy. Lives in Postgres so it
+-- survives rsync deploys (the old data/site-content.json was wiped by --delete).
+CREATE TABLE IF NOT EXISTS content_store (
+  key        TEXT PRIMARY KEY,           -- 'current' | 'draft'
+  val        JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── CMS: version history (snapshots for restore / "копії") ──
+CREATE TABLE IF NOT EXISTS content_versions (
+  id         BIGSERIAL PRIMARY KEY,
+  label      TEXT NOT NULL DEFAULT '',
+  content    JSONB NOT NULL,
+  author     TEXT NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_content_versions_created ON content_versions(created_at DESC);
 `;
 
 /** Idempotent schema creation. Awaited by every data-layer call via withDb(). */
