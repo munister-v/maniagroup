@@ -11,6 +11,7 @@ echo "→ Syncing files…"
 rsync -az -e "ssh -i $KEY" \
   --delete \
   --exclude='.git' \
+  --exclude='.env.local' \
   --exclude='node_modules' \
   --exclude='.next' \
   --exclude='data/*.db' \
