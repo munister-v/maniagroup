@@ -300,7 +300,6 @@ export type MegaMenu = {
   featured: { title: string; caption: string; tone: string; slug: string; image?: string; href?: string };
 };
 
-// hrefs/slugs map to real WooCommerce category slugs on maniagroup.com.ua
 export const MEGA_MENU: MegaMenu[] = [
   {
     label: "Бренди",
@@ -309,23 +308,23 @@ export const MEGA_MENU: MegaMenu[] = [
       {
         title: "Популярні",
         links: [
-          { label: "EA7 Emporio Armani", slug: "ea7", logo: "/images/brands/ea7-emporio-armani.png" },
-          { label: "Moschino", slug: "love-moschino", logo: "/images/brands/moschino.png" },
-          { label: "Antony Morato", slug: "antony-morato-uomo", logo: "/images/brands/antony-morato.png" },
-          { label: "Harmont & Blaine", slug: "harmontblaine", logo: "/images/brands/harmont-blaine.png" },
+          { label: "EA7 Emporio Armani", slug: "ea7", href: "/catalog?brandGroup=ea7", logo: "/images/brands/ea7-emporio-armani.png" },
+          { label: "Moschino", slug: "moschino-love", href: "/catalog?brandGroup=moschino", logo: "/images/brands/moschino.png" },
+          { label: "Antony Morato", slug: "antony-morato", href: "/catalog?brand=antony-morato", logo: "/images/brands/antony-morato.png" },
+          { label: "Harmont & Blaine", slug: "harmont-blaine", href: "/catalog?brand=harmont-blaine", logo: "/images/brands/harmont-blaine.png" },
         ],
       },
       {
         title: "Ще бренди",
         links: [
-          { label: "MC2 Saint Barth", slug: "mc2-saint-barth", logo: "/images/brands/mc2-saint-barth.png" },
-          { label: "Fred Mello", slug: "fred-mello", logo: "/images/brands/fred-mello.png" },
-          { label: "J.B4", slug: "j-b4-just-before" },
-          { label: "Kocca", slug: "kocca" },
+          { label: "MC2 Saint Barth", slug: "mc2-saint-barth", href: "/catalog?brand=mc2-saint-barth", logo: "/images/brands/mc2-saint-barth.png" },
+          { label: "Fred Mello", slug: "fred-mello", href: "/catalog?brand=fred-mello", logo: "/images/brands/fred-mello.png" },
+          { label: "J.B4", slug: "j-b4-just-before", href: "/catalog?brand=j-b4-just-before" },
+          { label: "Kocca", slug: "kocca", href: "/catalog?brand=kocca" },
         ],
       },
     ],
-    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab", slug: "j-b4-just-before", image: "/images/01_dropdown-season-ss26.webp" },
+    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab", slug: "j-b4-just-before", href: "/catalog?brand=j-b4-just-before", image: "/images/01_dropdown-season-ss26.webp" },
   },
   {
     label: "Жінкам",

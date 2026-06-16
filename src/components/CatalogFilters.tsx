@@ -13,6 +13,7 @@ export type Facets = {
 export type ActiveFilters = {
   category?: string;
   brand?: string;
+  brandGroup?: string;
   gender?: string;
   color?: string;
   q?: string;
@@ -39,6 +40,7 @@ export function CatalogFilters({
     const params = new URLSearchParams();
     if (next.category) params.set("category", next.category);
     if (next.brand) params.set("brand", next.brand);
+    if (next.brandGroup) params.set("brandGroup", next.brandGroup);
     if (next.gender) params.set("gender", next.gender);
     if (next.color) params.set("color", next.color);
     if (next.q) params.set("q", next.q);

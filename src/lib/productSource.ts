@@ -65,6 +65,7 @@ function rowToProduct(row: any): Product {
 export type CatalogQuery = {
   categorySlug?: string;
   brandName?: string;
+  brandGroup?: string;
   gender?: string;
   color?: string;
   q?: string;
@@ -96,6 +97,7 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   }
   if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
   if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
+  if (params.brandGroup)    conds.push(`brand ILIKE ${p("%" + params.brandGroup + "%")}`);
   if (params.gender)        conds.push(`gender = ${p(params.gender)}`);
   if (params.color)         conds.push(`color = ${p(params.color)}`);
   if (params.size)          conds.push(`attributes::text LIKE ${p('%"slug":"' + params.size + '"%')}`);

@@ -30,6 +30,7 @@ export default async function CatalogPage({
   searchParams: Promise<{
     category?: string;
     brand?: string;
+    brandGroup?: string;
     gender?: string;
     color?: string;
     q?: string;
@@ -44,7 +45,7 @@ export default async function CatalogPage({
   // Map legacy WooCommerce nav/URL slugs to the store's own DB slugs so the
   // mega-menu links and old bookmarked URLs don't land on an empty catalog.
   const { category: categorySlug, gender } = resolveCatalogCategory(sp.category, sp.gender);
-  const { brand: brandSlugParam, color, q, size, min, max } = sp;
+  const { brand: brandSlugParam, brandGroup, color, q, size, min, max } = sp;
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
   const { orderby, order } = SORTS[sortKey];
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
@@ -60,6 +61,7 @@ export default async function CatalogPage({
   const { products, total } = await getCatalogProducts({
     categorySlug,
     brandName,
+    brandGroup,
     gender: gender === "women" || gender === "men" ? gender : undefined,
     color,
     q,
@@ -85,8 +87,13 @@ export default async function CatalogPage({
     .map((c) => ({ name: c.name, slug: c.slug }));
 
   const facets: Facets = { brands, categories: categoryFacets, sizes, colors };
+  const brandGroupTitle = brandGroup
+    ? brandGroup.charAt(0).toUpperCase() + brandGroup.slice(1)
+    : undefined;
+
   const title =
     brandName ??
+    brandGroupTitle ??
     categories.find((c) => c.slug === categorySlug)?.name ??
     GENDERS.find((g) => g.slug === gender)?.label ??
     (q ? `Пошук: ${q}` : "Усі товари");
@@ -95,6 +102,7 @@ export default async function CatalogPage({
     const p: Record<string, string> = {};
     if (categorySlug) p.category = categorySlug;
     if (brandSlugParam) p.brand = brandSlugParam;
+    if (brandGroup) p.brandGroup = brandGroup;
     if (gender) p.gender = gender;
     if (color) p.color = color;
     if (q) p.q = q;
@@ -127,7 +135,7 @@ export default async function CatalogPage({
         <div className="lg:pt-1">
           <CatalogFilters
             facets={facets}
-            active={{ category: categorySlug, brand: brandSlugParam, gender, color, q, sort: sortKey, size, min, max }}
+            active={{ category: categorySlug, brand: brandSlugParam, brandGroup, gender, color, q, sort: sortKey, size, min, max }}
           />
         </div>
 
