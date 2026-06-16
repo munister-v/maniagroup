@@ -3,7 +3,7 @@ import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
-import { getSiteContent } from "@/lib/siteContent";
+import { getSiteContent, announcementActive } from "@/lib/siteContent";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -77,7 +77,7 @@ async function orgJsonLd() {
 
 async function AnnouncementBar() {
   const content = await getSiteContent();
-  if (!content.announcement) return null;
+  if (!announcementActive(content)) return null;
   return (
     <div className="bg-ink text-paper">
       <p className="wrap py-2 text-center text-[11px] uppercase tracking-luxe">

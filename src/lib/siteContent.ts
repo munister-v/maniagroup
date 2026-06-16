@@ -3,6 +3,12 @@ import path from "path";
 
 export type SiteContent = {
   announcement: string;
+  announcementFrom: string;
+  announcementTo: string;
+  footer: {
+    about: string;
+    columns: { title: string; links: { label: string; href: string }[] }[];
+  };
   seo: {
     siteName: string;
     defaultTitle: string;
@@ -54,10 +60,55 @@ export type SiteContent = {
 
 export { HOME_SECTIONS } from "./homeSections";
 
+/**
+ * Whether the announcement bar should show now. Empty from/to means "no bound".
+ * Dates are "YYYY-MM-DD"; lexical comparison is valid for that format.
+ */
+export function announcementActive(c: SiteContent, now = new Date()): boolean {
+  if (!c.announcement.trim()) return false;
+  const today = now.toISOString().slice(0, 10);
+  if (c.announcementFrom && today < c.announcementFrom) return false;
+  if (c.announcementTo && today > c.announcementTo) return false;
+  return true;
+}
+
 const FILE = path.join(process.cwd(), "data", "site-content.json");
 
 export const DEFAULT_CONTENT: SiteContent = {
   announcement: "Безкоштовна доставка Новою Поштою від 3 000 ₴ · Оригінал гарантовано",
+  announcementFrom: "",
+  announcementTo: "",
+  footer: {
+    about:
+      "Інтернет-магазин брендового одягу, взуття та аксесуарів. Оригінал, дбайливо відібраний у європейських домів моди.",
+    columns: [
+      {
+        title: "Магазин",
+        links: [
+          { label: "Жінкам", href: "/catalog?gender=women" },
+          { label: "Чоловікам", href: "/catalog?gender=men" },
+          { label: "Бренди", href: "/catalog" },
+          { label: "Новинки", href: "/catalog?sort=newest" },
+          { label: "Sale", href: "/catalog?sort=price_asc" },
+        ],
+      },
+      {
+        title: "Допомога",
+        links: [
+          { label: "Доставка та оплата", href: "/delivery" },
+          { label: "Обмін і повернення", href: "/returns" },
+          { label: "Контакти", href: "/contacts" },
+        ],
+      },
+      {
+        title: "Компанія",
+        links: [
+          { label: "Про Mania Group", href: "/about" },
+          { label: "Гарантія оригіналу", href: "/about" },
+        ],
+      },
+    ],
+  },
   seo: {
     siteName: "Mania Group",
     defaultTitle: "Mania Group — брендовий одяг, взуття та аксесуари",

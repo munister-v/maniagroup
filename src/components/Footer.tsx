@@ -1,37 +1,10 @@
 import Link from "next/link";
 import { getSiteContent } from "@/lib/siteContent";
 
-const COLUMNS: { title: string; links: { label: string; href: string }[] }[] = [
-  {
-    title: "Магазин",
-    links: [
-      { label: "Жінкам", href: "/catalog?gender=women" },
-      { label: "Чоловікам", href: "/catalog?gender=men" },
-      { label: "Бренди", href: "/catalog" },
-      { label: "Новинки", href: "/catalog?sort=newest" },
-      { label: "Sale", href: "/catalog?sort=price_asc" },
-    ],
-  },
-  {
-    title: "Допомога",
-    links: [
-      { label: "Доставка та оплата", href: "/delivery" },
-      { label: "Обмін і повернення", href: "/returns" },
-      { label: "Контакти", href: "/contacts" },
-    ],
-  },
-  {
-    title: "Компанія",
-    links: [
-      { label: "Про Mania Group", href: "/about" },
-      { label: "Гарантія оригіналу", href: "/about" },
-    ],
-  },
-];
-
 export async function Footer() {
   const content = await getSiteContent();
   const { phone, email, instagram, facebook } = content.contacts;
+  const COLUMNS = content.footer.columns;
 
   return (
     <footer className="mt-24 border-t border-line pb-20 md:pb-0">
@@ -41,8 +14,7 @@ export async function Footer() {
             MANIA&nbsp;GROUP
           </p>
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">
-            Інтернет-магазин брендового одягу, взуття та аксесуарів. Оригінал,
-            дбайливо відібраний у європейських домів моди.
+            {content.footer.about}
           </p>
           {phone && (
             <a

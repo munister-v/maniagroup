@@ -634,12 +634,13 @@ function SyncCard({ sync, onNavigate }: { sync: SyncState | null; onNavigate: (s
 
 /* ─── Content ─── */
 
-type ContentTab = "home" | "seo" | "contacts" | "about" | "delivery" | "returns";
+type ContentTab = "home" | "seo" | "contacts" | "footer" | "about" | "delivery" | "returns";
 
 const CONTENT_TABS: { id: ContentTab; label: string }[] = [
   { id: "home",     label: "Головна" },
   { id: "seo",      label: "SEO" },
   { id: "contacts", label: "Контакти" },
+  { id: "footer",   label: "Футер" },
   { id: "about",    label: "Про нас" },
   { id: "delivery", label: "Доставка" },
   { id: "returns",  label: "Повернення" },
@@ -695,6 +696,58 @@ function HomeSectionsEditor({
   );
 }
 
+type FooterColumn = { title: string; links: { label: string; href: string }[] };
+
+function FooterColumnsEditor({
+  columns,
+  onChange,
+}: {
+  columns: FooterColumn[];
+  onChange: (v: FooterColumn[]) => void;
+}) {
+  const setCol = (i: number, patch: Partial<FooterColumn>) =>
+    onChange(columns.map((c, k) => (k === i ? { ...c, ...patch } : c)));
+  const setLink = (ci: number, li: number, patch: Partial<{ label: string; href: string }>) =>
+    setCol(ci, { links: columns[ci].links.map((l, k) => (k === li ? { ...l, ...patch } : l)) });
+
+  const inputCls = "h-9 w-full border border-[#e5ded3] bg-white px-2.5 text-[13px] focus:border-[#17130f] focus:outline-none";
+
+  return (
+    <div className="space-y-5">
+      {columns.map((col, ci) => (
+        <div key={ci} className="rounded-[3px] border border-[#eceae6] p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <input value={col.title} onChange={(e) => setCol(ci, { title: e.target.value })}
+              placeholder="Заголовок колонки" className={`${inputCls} font-medium`} />
+            <button onClick={() => onChange(columns.filter((_, k) => k !== ci))}
+              className="shrink-0 px-2 text-[11px] uppercase tracking-wider text-[#c62828] hover:underline">Видалити</button>
+          </div>
+          <div className="space-y-2">
+            {col.links.map((l, li) => (
+              <div key={li} className="flex items-center gap-2">
+                <input value={l.label} onChange={(e) => setLink(ci, li, { label: e.target.value })}
+                  placeholder="Назва" className={inputCls} />
+                <input value={l.href} onChange={(e) => setLink(ci, li, { href: e.target.value })}
+                  placeholder="/catalog" className={inputCls} />
+                <button onClick={() => setCol(ci, { links: col.links.filter((_, k) => k !== li) })}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[2px] text-[#9c8f7d] hover:bg-[#fdecec] hover:text-[#c62828]" aria-label="Прибрати">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="h-4 w-4"><path d="M5 12h14" /></svg>
+                </button>
+              </div>
+            ))}
+            <button onClick={() => setCol(ci, { links: [...col.links, { label: "", href: "" }] })}
+              className="text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">+ Додати посилання</button>
+          </div>
+        </div>
+      ))}
+      <button onClick={() => onChange([...columns, { title: "Нова колонка", links: [] }])}
+        className="flex h-10 items-center gap-2 border border-[#17130f] px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:bg-[#17130f] hover:text-white">
+        + Додати колонку
+      </button>
+    </div>
+  );
+}
+
 function ContentSection({
   content,
   update,
@@ -715,6 +768,9 @@ function ContentSection({
   }
   function seoF<K extends keyof SiteContent["seo"]>(field: K, v: SiteContent["seo"][K]) {
     update((c) => ({ ...c, seo: { ...c.seo, [field]: v } }));
+  }
+  function footerF<K extends keyof SiteContent["footer"]>(field: K, v: SiteContent["footer"][K]) {
+    update((c) => ({ ...c, footer: { ...c.footer, [field]: v } }));
   }
   function aboutF(field: keyof SiteContent["about"], v: unknown) {
     update((c) => ({ ...c, about: { ...c.about, [field]: v } }));
@@ -751,6 +807,21 @@ function ContentSection({
               <Field label="Текст" value={content.announcement}
                 onChange={(v) => set("announcement", v)}
                 placeholder="Безкоштовна доставка від 3 000 ₴…" />
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Показувати з</span>
+                  <input type="date" value={content.announcementFrom}
+                    onChange={(e) => set("announcementFrom", e.target.value)}
+                    className="mt-1.5 h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Показувати до</span>
+                  <input type="date" value={content.announcementTo}
+                    onChange={(e) => set("announcementTo", e.target.value)}
+                    className="mt-1.5 h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                </label>
+              </div>
+              <p className="mt-2 text-[11px] text-[#9c8f7d]">Залиште дати порожніми — смуга показується завжди (поки текст не порожній).</p>
             </Card>
 
             <Card title="Hero-блок" subtitle="Перший екран головної сторінки">
@@ -841,6 +912,22 @@ function ContentSection({
               </div>
             </div>
           </Card>
+        )}
+
+        {/* ── Футер ── */}
+        {tab === "footer" && (
+          <>
+            <Card title="Про магазин" subtitle="Короткий текст у лівій колонці футера">
+              <Field label="Текст" value={content.footer.about}
+                onChange={(v) => footerF("about", v)} textarea />
+            </Card>
+            <Card title="Колонки посилань" subtitle="Меню в футері — заголовки та посилання">
+              <FooterColumnsEditor
+                columns={content.footer.columns}
+                onChange={(v) => footerF("columns", v)}
+              />
+            </Card>
+          </>
         )}
 
         {/* ── Про нас ── */}
