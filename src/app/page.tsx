@@ -5,7 +5,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { Grain } from "@/components/Grain";
 import { NewsletterForm } from "@/components/NewsletterForm";
-import { CATEGORIES, type Product } from "@/lib/catalog";
+import { CATEGORIES, BRAND_LOGO_BY_DBNAME, brandsLogoFirst, type Product } from "@/lib/catalog";
 import { getProducts, getFeaturedProducts, dbBrands } from "@/lib/productSource";
 import { getSiteContent } from "@/lib/siteContent";
 
@@ -140,53 +140,50 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
   );
 }
 
-/* ───────────────────────────────────────────────── Brand marquee */
-
-// Maps actual DB brand names → logo file in /public/images/brands/
-const BRAND_LOGO_MAP: Record<string, string> = {
-  "EA7":             "/images/brands/ea7-emporio-armani.png",
-  "MOSCHINO Love":   "/images/brands/moschino.png",
-  "ANTONY MORATO":   "/images/brands/antony-morato.png",
-  "HARMONT&BLAINE":  "/images/brands/harmont-blaine.png",
-  "MC2 SAINT BARTH": "/images/brands/mc2-saint-barth.png",
-  "FRED MELLO":      "/images/brands/fred-mello.png",
-};
-
+/* ───────────────────────────────────────────────── Brand strip */
+// Static (non-scrolling) strip of every brand in the catalog, logos first.
 function BrandMarquee({ brands }: { brands: { name: string; slug: string }[] }) {
-  // Double the list for seamless looping marquee
-  const row = brands.length > 0 ? [...brands, ...brands] : [];
+  if (brands.length === 0) return null;
+  // Logos first, then most-stocked brands; cap so the static strip stays tidy.
+  // The full list lives in the header «Бренди» menu and the catalog.
+  const ordered = brandsLogoFirst(brands).slice(0, 18);
   return (
-    <section id="brands" className="border-y border-line py-7">
-      <div className="relative overflow-hidden">
-        <div className="flex w-max items-center animate-marquee">
-          {row.map((brand, i) => {
-            const logo = BRAND_LOGO_MAP[brand.name];
+    <section id="brands" className="border-y border-line py-9 md:py-11">
+      <div className="wrap">
+        <div className="mb-7 text-center">
+          <p className="text-[11px] uppercase tracking-luxe text-muted">Наші бренди</p>
+          <h2 className="mt-2 font-display text-2xl text-ink md:text-3xl">
+            Європейські марки в одному місці
+          </h2>
+        </div>
+        <ul className="flex flex-wrap items-center justify-center gap-x-9 gap-y-5 md:gap-x-12">
+          {ordered.map((brand) => {
+            const logo = BRAND_LOGO_BY_DBNAME[brand.name];
             return (
-              <Link
-                key={i}
-                href={`/catalog?brand=${brand.slug}`}
-                aria-label={brand.name}
-                className="mx-9 flex shrink-0 items-center"
-              >
-                {logo ? (
-                  <Image
-                    src={logo}
-                    alt={brand.name}
-                    width={150}
-                    height={40}
-                    className="h-7 w-auto max-w-[150px] object-contain opacity-55 transition-opacity hover:opacity-100 md:h-9"
-                  />
-                ) : (
-                  <span className="whitespace-nowrap font-display text-xl tracking-wide text-ink/55 transition-colors hover:text-ink md:text-2xl">
-                    {brand.name}
-                  </span>
-                )}
-              </Link>
+              <li key={brand.slug}>
+                <Link
+                  href={`/catalog?brand=${brand.slug}`}
+                  aria-label={brand.name}
+                  className="flex items-center"
+                >
+                  {logo ? (
+                    <Image
+                      src={logo}
+                      alt={brand.name}
+                      width={150}
+                      height={40}
+                      className="h-7 w-auto max-w-[140px] object-contain opacity-60 transition-opacity hover:opacity-100 md:h-8"
+                    />
+                  ) : (
+                    <span className="whitespace-nowrap font-display text-lg tracking-wide text-ink/55 transition-colors hover:text-ink md:text-xl">
+                      {brand.name}
+                    </span>
+                  )}
+                </Link>
+              </li>
             );
           })}
-        </div>
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-paper to-transparent" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-paper to-transparent" />
+        </ul>
       </div>
     </section>
   );

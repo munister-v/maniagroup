@@ -45,6 +45,30 @@ export const BRAND_LOGOS: Record<string, string> = {
   "Fred Mello": "/images/brands/fred-mello.png",
 };
 
+/**
+ * Logo lookup keyed by the EXACT brand name as stored in the DB (`products.brand`).
+ * Used by the homepage strip and the header brands menu so the right PNG renders
+ * for the real catalog brands. Brands without an entry render as styled text.
+ */
+export const BRAND_LOGO_BY_DBNAME: Record<string, string> = {
+  EA7: "/images/brands/ea7-emporio-armani.png",
+  "EA7 Swim": "/images/brands/ea7-emporio-armani.png",
+  "MOSCHINO Love": "/images/brands/moschino.png",
+  "ANTONY MORATO": "/images/brands/antony-morato.png",
+  "HARMONT&BLAINE": "/images/brands/harmont-blaine.png",
+  "MC2 SAINT BARTH": "/images/brands/mc2-saint-barth.png",
+  "FRED MELLO": "/images/brands/fred-mello.png",
+};
+
+/** Brands sorted logo-first (then by original order) for marquee/menus. */
+export function brandsLogoFirst<T extends { name: string }>(brands: T[]): T[] {
+  return [...brands].sort((a, b) => {
+    const la = BRAND_LOGO_BY_DBNAME[a.name] ? 0 : 1;
+    const lb = BRAND_LOGO_BY_DBNAME[b.name] ? 0 : 1;
+    return la - lb;
+  });
+}
+
 /** Catalog href filtered to a single brand (mirrors brandSlug in productSource). */
 export function brandHref(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

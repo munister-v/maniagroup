@@ -6,6 +6,7 @@
 
 import type { Product } from "./catalog";
 import { q, q1 } from "./pg";
+import { ukrainianize, expandSearchTerms } from "./uk";
 
 // WcCategory shape kept for callers; categories now come from our own table.
 export type WcCategory = { id: number; name: string; slug: string; parent: number; count: number };
@@ -43,12 +44,12 @@ function rowToProduct(row: any): Product {
   return {
     id: String(row.id),
     slug: row.slug || String(row.id),
-    name: row.name,
+    name: ukrainianize(row.name),       // RU→UK at display time; DB stays as imported
     brand: row.brand,
     price: onSale ? (sale as number) : regular,
     oldPrice: onSale ? regular : undefined,
     gender: row.gender === "men" ? "men" : "women",
-    category: row.category,
+    category: ukrainianize(row.category),
     categorySlug: row.category_slug || undefined,
     tone: toneFor(id),
     tag: !inStock ? undefined : onSale ? "sale" : undefined,
@@ -100,7 +101,29 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
 
   if (params.q && params.q.trim()) {
     const term = params.q.trim();
-    conds.push(`(name ILIKE ${p("%" + term + "%")} OR brand ILIKE ${p("%" + term + "%")} OR category ILIKE ${p("%" + term + "%")})`);
+    const ors: string[] = [];
+    // Bilingual: a UA query ("сукня") also matches RU-stored names ("Платье").
+    const variants = new Set<string>([term]);
+    for (const word of term.split(/\s+/)) for (const v of expandSearchTerms(word)) variants.add(v);
+    for (const v of variants) {
+      ors.push(`name ILIKE ${p("%" + v + "%")}`);
+      ors.push(`category ILIKE ${p("%" + v + "%")}`);
+    }
+    // Article / SKU search — exact substring and a punctuation-insensitive form
+    // so "FM24 W24" or "fm24w24" both find "FM24W24FC_COFFEE".
+    ors.push(`brand ILIKE ${p("%" + term + "%")}`);
+    ors.push(`sku ILIKE ${p("%" + term + "%")}`);
+    const compact = term.replace(/[\s\-_.]/g, "");
+    // Always run for article-like queries: the TARGET (sku/name) may contain
+    // separators even when the query doesn't — so "P26PAB8278ABUN00016" still
+    // finds "…(P26PAB8278ABUN 00016)", and "fm24 w24" finds "FM24W24FC".
+    if (compact.length >= 3) {
+      const strip = (col: string) =>
+        `replace(replace(replace(replace(${col},' ',''),'-',''),'.',''),'_','')`;
+      ors.push(`${strip("sku")} ILIKE ${p("%" + compact + "%")}`);
+      ors.push(`${strip("name")} ILIKE ${p("%" + compact + "%")}`);
+    }
+    conds.push(`(${ors.join(" OR ")})`);
   }
   if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
   if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
@@ -178,9 +201,10 @@ export async function dbSizeFacets(params: { categorySlug?: string; q?: string }
 // ── Categories ─────────────────────────────────────────────────────────
 
 export async function getCatalogCategories(): Promise<WcCategory[]> {
-  return q<WcCategory>(
+  const rows = await q<WcCategory>(
     "SELECT id, name, slug, parent, count FROM categories ORDER BY count DESC, name ASC",
   );
+  return rows.map((c) => ({ ...c, name: ukrainianize(c.name) }));
 }
 
 // ── Single product ─────────────────────────────────────────────────────

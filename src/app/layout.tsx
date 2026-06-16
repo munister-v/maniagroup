@@ -4,6 +4,7 @@ import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { getSiteContent, announcementActive } from "@/lib/siteContent";
+import { dbBrands } from "@/lib/productSource";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -93,6 +94,8 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const jsonLd = await orgJsonLd();
+  let brands: { name: string; slug: string }[] = [];
+  try { brands = await dbBrands(); } catch { brands = []; }
   return (
     <html
       lang="uk"
@@ -104,7 +107,7 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <AnnouncementBar />
-        <Header />
+        <Header brands={brands} />
         <main className="flex-1 pb-14 md:pb-0">{children}</main>
         <Footer />
       </body>

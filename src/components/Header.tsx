@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { MEGA_MENU, type MegaMenu } from "@/lib/catalog";
+import { MEGA_MENU, type MegaMenu, BRAND_LOGO_BY_DBNAME, brandsLogoFirst } from "@/lib/catalog";
 import { formatPrice } from "@/lib/catalog";
+
+type Brand = { name: string; slug: string };
 import { CartDrawer } from "./CartDrawer";
 import { Grain } from "./Grain";
 
@@ -59,7 +61,7 @@ const SOCIAL_ICONS = {
     "M21.05 3.07 17.6 19.65c-.26 1.16-.94 1.44-1.9.9l-5.26-3.88-2.54 2.45c-.28.28-.52.52-1.06.52l.38-5.4L17.4 5.6c.46-.4-.1-.62-.62-.22L7.1 11.8l-5.26-1.64c-1.14-.36-1.16-1.14.24-1.69L19.66 1.6c.95-.36 1.78.22 1.4 1.47Z",
 };
 
-export function Header() {
+export function Header({ brands = [] }: { brands?: Brand[] }) {
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -231,9 +233,11 @@ export function Header() {
         </nav>
 
         {/* mega-menu panel */}
-        {active && (
+        {active === "Бренди" ? (
+          <BrandsPanel brands={brands} />
+        ) : active ? (
           <MegaPanel item={MEGA_MENU.find((m) => m.label === active)!} />
-        )}
+        ) : null}
       </header>
 
       {/* mobile menu */}
@@ -287,7 +291,15 @@ export function Header() {
                   </button>
                   {open && (
                     <div className="grid grid-cols-2 gap-x-4 pb-4">
-                      {item.columns.flatMap((col) => col.links).map((l) => (
+                      {(item.label === "Бренди"
+                        ? brandsLogoFirst(brands).map((b) => ({
+                            label: b.name,
+                            slug: b.slug,
+                            href: `/catalog?brand=${b.slug}`,
+                            logo: BRAND_LOGO_BY_DBNAME[b.name],
+                          }))
+                        : item.columns.flatMap((col) => col.links)
+                      ).map((l) => (
                         <Link
                           key={l.slug}
                           href={l.href ?? `/catalog?category=${l.slug}`}
@@ -500,6 +512,57 @@ export function Header() {
 
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
     </>
+  );
+}
+
+function BrandsPanel({ brands }: { brands: Brand[] }) {
+  const ordered = brandsLogoFirst(brands);
+  return (
+    <div className="absolute inset-x-0 top-full hidden border-b border-line bg-paper text-ink shadow-[0_28px_44px_-28px_rgba(23,19,15,0.35)] md:block">
+      <div className="wrap py-10">
+        <div className="mb-7 flex items-end justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-luxe text-muted">Бренди</p>
+            <h3 className="mt-1.5 font-display text-2xl text-ink">
+              Усі бренди в одному місці
+            </h3>
+          </div>
+          <Link
+            href="/catalog"
+            className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink"
+          >
+            Весь каталог →
+          </Link>
+        </div>
+        <ul className="grid grid-cols-4 gap-x-8 gap-y-1 lg:grid-cols-6">
+          {ordered.map((b) => {
+            const logo = BRAND_LOGO_BY_DBNAME[b.name];
+            return (
+              <li key={b.slug}>
+                <Link
+                  href={`/catalog?brand=${b.slug}`}
+                  className="flex h-10 items-center transition-opacity hover:opacity-100"
+                >
+                  {logo ? (
+                    <Image
+                      src={logo}
+                      alt={b.name}
+                      width={110}
+                      height={28}
+                      className="h-6 w-auto max-w-[110px] object-contain object-left opacity-70 transition-opacity hover:opacity-100"
+                    />
+                  ) : (
+                    <span className="text-sm text-ink/75 transition-colors hover:text-ink">
+                      {b.name}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
 
