@@ -9,10 +9,11 @@ import { AdminCustomers } from "./AdminCustomers";
 import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
 import { AdminBrandLogos } from "./AdminBrandLogos";
+import { AdminAccounting } from "./AdminAccounting";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -102,6 +103,11 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "subscribers",
     label: "Підписники",
     d: "M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
+  },
+  {
+    id: "accounting",
+    label: "Облік",
+    d: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
   },
   {
     id: "backup",
@@ -274,6 +280,7 @@ export function AdminDashboard({
           {section === "customers" && <AdminCustomers />}
           {section === "coupons" && <CouponsSection onToast={showToast} />}
           {section === "subscribers" && <SubscribersSection />}
+          {section === "accounting" && <AdminAccounting />}
           {section === "backup" && <BackupSection />}
           {section === "settings" && <SettingsSection />}
         </main>
