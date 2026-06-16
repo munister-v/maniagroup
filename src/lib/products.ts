@@ -46,9 +46,15 @@ function sizeAttributes(sizes: string[] | undefined): string {
   ]);
 }
 
-export async function listAdminProducts(opts: { q?: string; page?: number; perPage?: number; stock?: "in" | "out" } = {}) {
-  const perPage = opts.perPage ?? 30;
-  const offset = ((opts.page ?? 1) - 1) * perPage;
+// Columns the grid can sort by — whitelisted to keep ORDER BY injection-safe.
+const SORTABLE: Record<string, string> = {
+  id: "id", name: "name", brand: "brand", sku: "sku", category: "category",
+  gender: "gender", regular_price: "regular_price", sale_price: "sale_price",
+  price: "price", is_in_stock: "is_in_stock", status: "status", color: "color",
+  season: "season",
+};
+
+function buildProductFilters(opts: { q?: string; stock?: "in" | "out"; brand?: string }) {
   const conds: string[] = [];
   const bind: unknown[] = [];
   if (opts.q) {
@@ -57,16 +63,86 @@ export async function listAdminProducts(opts: { q?: string; page?: number; perPa
   }
   if (opts.stock === "in") conds.push("is_in_stock = TRUE");
   if (opts.stock === "out") conds.push("is_in_stock = FALSE");
-  const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+  if (opts.brand) { bind.push(opts.brand); conds.push(`brand = $${bind.length}`); }
+  return { where: conds.length ? `WHERE ${conds.join(" AND ")}` : "", bind };
+}
+
+/** Extract a comma-joined size list from the attributes JSON. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sizesFromAttributes(attrs: any): string {
+  const a = typeof attrs === "string" ? safeParse(attrs) : attrs;
+  if (!Array.isArray(a)) return "";
+  const size = a.find((x: { taxonomy?: string }) => x?.taxonomy === "pa_size");
+  return (size?.terms ?? []).map((t: { name: string }) => t.name).join(", ");
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function safeParse(s: string): any { try { return JSON.parse(s); } catch { return []; } }
+
+export async function listAdminProducts(opts: {
+  q?: string; page?: number; perPage?: number; stock?: "in" | "out";
+  brand?: string; sortBy?: string; sortDir?: "asc" | "desc";
+} = {}) {
+  const perPage = Math.min(Math.max(opts.perPage ?? 30, 1), 300);
+  const offset = ((opts.page ?? 1) - 1) * perPage;
+  const { where, bind } = buildProductFilters(opts);
+  const col = SORTABLE[opts.sortBy ?? "id"] ?? "id";
+  const dir = opts.sortDir === "asc" ? "ASC" : "DESC";
   const rows = await q(
     `SELECT id::text AS id, name, slug, sku, brand, category, category_slug, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
-            price::float AS price, is_in_stock, status, image_src, featured
-     FROM products ${where} ORDER BY id DESC LIMIT ${perPage} OFFSET ${offset}`,
+            price::float AS price, is_in_stock, status, image_src, featured,
+            color, season, composition, country, attributes
+     FROM products ${where} ORDER BY ${col} ${dir} NULLS LAST, id DESC LIMIT ${perPage} OFFSET ${offset}`,
     bind,
   );
   const countRow = await q1<{ cnt: string }>(`SELECT count(*)::text AS cnt FROM products ${where}`, bind);
-  return { products: rows, total: Number(countRow?.cnt ?? 0) };
+  const products = rows.map((r) => {
+    const { attributes, ...rest } = r as Record<string, unknown>;
+    return { ...rest, sizes: sizesFromAttributes(attributes) };
+  });
+  return { products, total: Number(countRow?.cnt ?? 0) };
+}
+
+export type ExportRow = {
+  id: string; sku: string; name: string; brand: string; category: string; gender: string;
+  regular_price: number; sale_price: number | null; price: number;
+  is_in_stock: boolean; status: string; color: string; season: string;
+  composition: string; country: string; slug: string; image_src: string; sizes: string;
+};
+
+/** All matching rows (no pagination) for export — flattened, export-ready. */
+export async function exportAdminProducts(opts: { q?: string; stock?: "in" | "out"; brand?: string; ids?: string[] } = {}): Promise<ExportRow[]> {
+  const { where, bind } = buildProductFilters(opts);
+  let finalWhere = where;
+  if (opts.ids && opts.ids.length) {
+    bind.push(opts.ids.map((n) => Number(n)));
+    finalWhere = `${where ? where + " AND" : "WHERE"} id = ANY($${bind.length})`;
+  }
+  const rows = await q(
+    `SELECT id::text AS id, sku, name, brand, category, gender,
+            regular_price::float AS regular_price, sale_price::float AS sale_price,
+            price::float AS price, is_in_stock, status, color, season, composition,
+            country, slug, image_src, attributes
+     FROM products ${finalWhere} ORDER BY id DESC`,
+    bind,
+  );
+  return rows.map((r) => {
+    const { attributes, ...rest } = r as Record<string, unknown>;
+    return { ...rest, sizes: sizesFromAttributes(attributes) } as ExportRow;
+  });
+}
+
+/** Apply per-field edits to many products at once (spreadsheet bulk save). */
+export async function bulkUpdateProducts(
+  updates: { id: string; fields: Partial<AdminProductInput> }[],
+): Promise<number> {
+  let n = 0;
+  for (const u of updates) {
+    if (!u.id || !u.fields || Object.keys(u.fields).length === 0) continue;
+    await updateAdminProduct(u.id, u.fields);
+    n++;
+  }
+  return n;
 }
 
 export async function getAdminProduct(id: string) {

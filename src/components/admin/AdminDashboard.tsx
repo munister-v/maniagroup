@@ -4,10 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { SiteContent } from "@/lib/siteContent";
 import { HOME_SECTIONS } from "@/lib/homeSections";
-import { AdminProducts } from "./AdminProducts";
 import { AdminOrders } from "./AdminOrders";
 import { AdminCustomers } from "./AdminCustomers";
 import { ContentStudio } from "./ContentStudio";
+import { CatalogGrid } from "./CatalogGrid";
 
 /* ─── Types ─── */
 
@@ -68,14 +68,14 @@ const NAV: { id: Section; label: string; d: string }[] = [
     d: "M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z",
   },
   {
-    id: "catalog",
-    label: "Каталог (XLS)",
-    d: "M4 4h16v4H4V4zm0 6h16v10H4V10zm4 3h8",
+    id: "products",
+    label: "Каталог",
+    d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
   },
   {
-    id: "products",
-    label: "Товари",
-    d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+    id: "catalog",
+    label: "Імпорт XLS",
+    d: "M4 4h16v4H4V4zm0 6h16v10H4V10zm4 3h8",
   },
   {
     id: "orders",
@@ -260,7 +260,9 @@ export function AdminDashboard({
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
           {section === "catalog" && <CatalogImportSection />}
-          {section === "products" && <AdminProducts onToast={showToast} />}
+          {section === "products" && (
+            <CatalogGrid onToast={showToast} onImport={() => setSection("catalog")} />
+          )}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}
           {section === "coupons" && <CouponsSection onToast={showToast} />}
