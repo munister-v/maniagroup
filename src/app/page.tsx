@@ -30,8 +30,21 @@ export default async function Home() {
   let brands: { name: string; slug: string }[] = [];
   try { brands = await dbBrands(); } catch { brands = []; }
 
+  // Keep the hero "брендів" stat truthful: replace its value with the live
+  // brand count (rounded down to a tidy 10), leaving the admin's other stats.
+  const hero = brands.length
+    ? {
+        ...content.hero,
+        stats: content.hero.stats.map((s) =>
+          /бренд/i.test(s.label)
+            ? { ...s, value: `${Math.max(10, Math.floor(brands.length / 10) * 10)}+` }
+            : s,
+        ),
+      }
+    : content.hero;
+
   const sectionMap: Record<string, React.ReactNode> = {
-    hero: <Hero hero={content.hero} />,
+    hero: <Hero hero={hero} />,
     marquee: <BrandMarquee brands={brands} />,
     categories: <CategoryTrio />,
     featured: <Featured products={featured} />,
