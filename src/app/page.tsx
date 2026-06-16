@@ -1,3 +1,4 @@
+import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ProductCard } from "@/components/ProductCard";
@@ -23,15 +24,31 @@ export default async function Home() {
 
   const content = await getSiteContent();
 
+  const sectionMap: Record<string, React.ReactNode> = {
+    hero: <Hero hero={content.hero} />,
+    marquee: <BrandMarquee />,
+    categories: <CategoryTrio />,
+    newArrivals: <NewArrivals products={products} />,
+    editorial: <Editorial />,
+    services: <ServiceRow services={content.services} />,
+    newsletter: <Newsletter />,
+  };
+
+  // Render in admin-configured order; append any sections missing from the
+  // saved config (e.g. newly added) so nothing silently disappears.
+  const configured = content.homeSections.filter((s) => sectionMap[s.id]);
+  const missing = Object.keys(sectionMap)
+    .filter((id) => !configured.some((s) => s.id === id))
+    .map((id) => ({ id, enabled: true }));
+  const order = [...configured, ...missing];
+
   return (
     <>
-      <Hero hero={content.hero} />
-      <BrandMarquee />
-      <CategoryTrio />
-      <NewArrivals products={products} />
-      <Editorial />
-      <ServiceRow services={content.services} />
-      <Newsletter />
+      {order
+        .filter((s) => s.enabled)
+        .map((s) => (
+          <React.Fragment key={s.id}>{sectionMap[s.id]}</React.Fragment>
+        ))}
     </>
   );
 }

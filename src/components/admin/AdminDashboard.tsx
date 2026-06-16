@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { SiteContent } from "@/lib/siteContent";
+import { HOME_SECTIONS } from "@/lib/homeSections";
 import { AdminProducts } from "./AdminProducts";
 import { AdminOrders } from "./AdminOrders";
 import { AdminCustomers } from "./AdminCustomers";
@@ -627,15 +628,66 @@ function SyncCard({ sync, onNavigate }: { sync: SyncState | null; onNavigate: (s
 
 /* ─── Content ─── */
 
-type ContentTab = "home" | "contacts" | "about" | "delivery" | "returns";
+type ContentTab = "home" | "seo" | "contacts" | "about" | "delivery" | "returns";
 
 const CONTENT_TABS: { id: ContentTab; label: string }[] = [
   { id: "home",     label: "Головна" },
+  { id: "seo",      label: "SEO" },
   { id: "contacts", label: "Контакти" },
   { id: "about",    label: "Про нас" },
   { id: "delivery", label: "Доставка" },
   { id: "returns",  label: "Повернення" },
 ];
+
+function HomeSectionsEditor({
+  sections,
+  onChange,
+}: {
+  sections: { id: string; enabled: boolean }[];
+  onChange: (v: { id: string; enabled: boolean }[]) => void;
+}) {
+  // Reconcile saved config with the canonical list: keep saved order, append any
+  // sections missing from config (enabled), drop unknown ids.
+  const saved = sections.filter((s) => HOME_SECTIONS.some((m) => m.id === s.id));
+  const missing = HOME_SECTIONS.filter((m) => !saved.some((s) => s.id === m.id)).map((m) => ({ id: m.id, enabled: true }));
+  const items = [...saved, ...missing];
+
+  const labelOf = (id: string) => HOME_SECTIONS.find((m) => m.id === id)?.label ?? id;
+  function move(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  }
+  function toggle(i: number) {
+    onChange(items.map((s, k) => (k === i ? { ...s, enabled: !s.enabled } : s)));
+  }
+
+  return (
+    <ul className="space-y-2">
+      {items.map((s, i) => (
+        <li key={s.id} className="flex items-center gap-3 rounded-[3px] border border-[#eceae6] bg-white px-3 py-2">
+          <div className="flex flex-col gap-0.5">
+            <button onClick={() => move(i, -1)} disabled={i === 0}
+              className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#9c8f7d] hover:bg-[#f5f1ea] disabled:opacity-25">▲</button>
+            <button onClick={() => move(i, 1)} disabled={i === items.length - 1}
+              className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#9c8f7d] hover:bg-[#f5f1ea] disabled:opacity-25">▼</button>
+          </div>
+          <span className="w-6 text-center text-[11px] tabular-nums text-[#bdb3a4]">{i + 1}</span>
+          <span className={`flex-1 text-[13px] ${s.enabled ? "text-[#17130f]" : "text-[#bdb3a4] line-through"}`}>
+            {labelOf(s.id)}
+          </span>
+          <button onClick={() => toggle(i)}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${s.enabled ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}
+            aria-label={s.enabled ? "Сховати" : "Показати"}>
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${s.enabled ? "left-[18px]" : "left-0.5"}`} />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function ContentSection({
   content,
@@ -654,6 +706,9 @@ function ContentSection({
   }
   function contact(field: keyof SiteContent["contacts"], v: string) {
     update((c) => ({ ...c, contacts: { ...c.contacts, [field]: v } }));
+  }
+  function seoF<K extends keyof SiteContent["seo"]>(field: K, v: SiteContent["seo"][K]) {
+    update((c) => ({ ...c, seo: { ...c.seo, [field]: v } }));
   }
   function aboutF(field: keyof SiteContent["about"], v: unknown) {
     update((c) => ({ ...c, about: { ...c.about, [field]: v } }));
@@ -727,6 +782,40 @@ function ContentSection({
                   </div>
                 ))}
               </div>
+            </Card>
+
+            <Card title="Секції головної" subtitle="Порядок та видимість блоків на головній сторінці">
+              <HomeSectionsEditor
+                sections={content.homeSections}
+                onChange={(v) => set("homeSections", v)}
+              />
+            </Card>
+          </>
+        )}
+
+        {/* ── SEO ── */}
+        {tab === "seo" && (
+          <>
+            <Card title="Мета-теги сайту" subtitle="Заголовок та опис у пошуковій видачі Google і соцмережах">
+              <div className="space-y-4">
+                <Field label="Назва сайту" value={content.seo.siteName}
+                  onChange={(v) => seoF("siteName", v)} placeholder="Mania Group" />
+                <Field label="Заголовок головної (title)" value={content.seo.defaultTitle}
+                  onChange={(v) => seoF("defaultTitle", v)} placeholder="Mania Group — брендовий одяг…" />
+                <Field label="Шаблон заголовка інших сторінок" value={content.seo.titleTemplate}
+                  onChange={(v) => seoF("titleTemplate", v)} placeholder="%s — Mania Group" />
+                <p className="-mt-2 text-[11px] text-[#9c8f7d]">%s замінюється назвою сторінки (напр. «Каталог»).</p>
+                <Field label="Опис (meta description)" value={content.seo.description}
+                  onChange={(v) => seoF("description", v)} textarea />
+                <Field label="OG-зображення (URL)" value={content.seo.ogImage}
+                  onChange={(v) => seoF("ogImage", v)} placeholder="/images/hero.webp" />
+              </div>
+            </Card>
+
+            <Card title="Ключові слова" subtitle="Через кому — використовуються в meta keywords">
+              <Field label="Ключові слова" value={content.seo.keywords.join(", ")}
+                onChange={(v) => seoF("keywords", v.split(",").map((k) => k.trim()).filter(Boolean))}
+                textarea placeholder="брендовий одяг, інтернет-магазин, EA7…" />
             </Card>
           </>
         )}

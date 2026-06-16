@@ -3,6 +3,14 @@ import path from "path";
 
 export type SiteContent = {
   announcement: string;
+  seo: {
+    siteName: string;
+    defaultTitle: string;
+    titleTemplate: string;
+    description: string;
+    keywords: string[];
+    ogImage: string;
+  };
   hero: {
     eyebrow: string;
     titleLine1: string;
@@ -11,6 +19,7 @@ export type SiteContent = {
     stats: { value: string; label: string }[];
   };
   services: { title: string; text: string }[];
+  homeSections: { id: string; enabled: boolean }[];
   contacts: {
     phone: string;
     email: string;
@@ -43,10 +52,30 @@ export type SiteContent = {
   };
 };
 
+export { HOME_SECTIONS } from "./homeSections";
+
 const FILE = path.join(process.cwd(), "data", "site-content.json");
 
 export const DEFAULT_CONTENT: SiteContent = {
   announcement: "Безкоштовна доставка Новою Поштою від 3 000 ₴ · Оригінал гарантовано",
+  seo: {
+    siteName: "Mania Group",
+    defaultTitle: "Mania Group — брендовий одяг, взуття та аксесуари",
+    titleTemplate: "%s — Mania Group",
+    description:
+      "Інтернет-магазин оригінального брендового одягу, взуття та аксесуарів: EA7 Emporio Armani, Moschino, Antony Morato, MC2 Saint Barth, Harmont & Blaine та інші. Доставка Новою Поштою по всій Україні.",
+    keywords: [
+      "брендовий одяг",
+      "інтернет-магазин одягу",
+      "EA7 Emporio Armani",
+      "Moschino",
+      "Antony Morato",
+      "MC2 Saint Barth",
+      "Harmont & Blaine",
+      "оригінальний одяг Україна",
+    ],
+    ogImage: "/images/hero.webp",
+  },
   hero: {
     eyebrow: "Колекція SS'26 · Україна",
     titleLine1: "Гардероб, що",
@@ -64,6 +93,15 @@ export const DEFAULT_CONTENT: SiteContent = {
     { title: "Доставка по Україні", text: "Новою Поштою — безкоштовно від 3 000 ₴" },
     { title: "Обмін і повернення", text: "14 днів, щоб ухвалити рішення" },
     { title: "Підтримка щодня", text: "+38 (096) 343-60-35 · 9:00–20:00" },
+  ],
+  homeSections: [
+    { id: "hero", enabled: true },
+    { id: "marquee", enabled: true },
+    { id: "categories", enabled: true },
+    { id: "newArrivals", enabled: true },
+    { id: "editorial", enabled: true },
+    { id: "services", enabled: true },
+    { id: "newsletter", enabled: true },
   ],
   contacts: {
     phone: "+38 (096) 343-60-35",

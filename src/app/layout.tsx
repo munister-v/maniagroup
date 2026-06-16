@@ -21,63 +21,59 @@ const jost = Jost({
 });
 
 const SITE_URL = "https://maniagroup.munister.com.ua";
-const SITE_NAME = "Mania Group";
-const SITE_DESCRIPTION =
-  "Інтернет-магазин оригінального брендового одягу, взуття та аксесуарів: EA7 Emporio Armani, Moschino, Antony Morato, MC2 Saint Barth, Harmont & Blaine та інші. Доставка Новою Поштою по всій Україні.";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: {
-    default: `${SITE_NAME} — брендовий одяг, взуття та аксесуари`,
-    template: `%s — ${SITE_NAME}`,
-  },
-  description: SITE_DESCRIPTION,
-  keywords: [
-    "брендовий одяг",
-    "інтернет-магазин одягу",
-    "EA7 Emporio Armani",
-    "Moschino",
-    "Antony Morato",
-    "MC2 Saint Barth",
-    "Harmont & Blaine",
-    "оригінальний одяг Україна",
-  ],
-  alternates: { canonical: "/" },
-  robots: { index: true, follow: true },
-  openGraph: {
-    type: "website",
-    locale: "uk_UA",
-    siteName: SITE_NAME,
-    title: `${SITE_NAME} — брендовий одяг, взуття та аксесуари`,
-    description: SITE_DESCRIPTION,
+export async function generateMetadata(): Promise<Metadata> {
+  const { seo } = await getSiteContent();
+  const ogImg = seo.ogImage || "/images/hero.webp";
+  return {
+    metadataBase: new URL(SITE_URL),
+    title: {
+      default: seo.defaultTitle,
+      template: seo.titleTemplate,
+    },
+    description: seo.description,
+    keywords: seo.keywords,
+    alternates: { canonical: "/" },
+    robots: { index: true, follow: true },
+    openGraph: {
+      type: "website",
+      locale: "uk_UA",
+      siteName: seo.siteName,
+      title: seo.defaultTitle,
+      description: seo.description,
+      url: SITE_URL,
+      images: [{ url: ogImg, width: 1200, height: 800, alt: seo.siteName }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: seo.defaultTitle,
+      description: seo.description,
+      images: [ogImg],
+    },
+  };
+}
+
+async function orgJsonLd() {
+  const { seo, contacts } = await getSiteContent();
+  const sameAs = [contacts.instagram, contacts.telegram, contacts.facebook].filter(Boolean);
+  return {
+    "@context": "https://schema.org",
+    "@type": "ClothingStore",
+    name: seo.siteName,
     url: SITE_URL,
-    images: [{ url: "/images/hero.webp", width: 1200, height: 800, alt: SITE_NAME }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: `${SITE_NAME} — брендовий одяг, взуття та аксесуари`,
-    description: SITE_DESCRIPTION,
-    images: ["/images/hero.webp"],
-  },
-};
-
-const ORG_JSON_LD = {
-  "@context": "https://schema.org",
-  "@type": "ClothingStore",
-  name: SITE_NAME,
-  url: SITE_URL,
-  logo: `${SITE_URL}/favicon.ico`,
-  image: `${SITE_URL}/images/hero.webp`,
-  telephone: "+380963436035",
-  description: SITE_DESCRIPTION,
-  address: { "@type": "PostalAddress", addressCountry: "UA" },
-  sameAs: ["https://instagram.com/maniagroup.ua", "https://t.me/maniagroup_ua"],
-  potentialAction: {
-    "@type": "SearchAction",
-    target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/catalog?q={search_term_string}` },
-    "query-input": "required name=search_term_string",
-  },
-};
+    logo: `${SITE_URL}/favicon.ico`,
+    image: `${SITE_URL}${seo.ogImage || "/images/hero.webp"}`,
+    telephone: contacts.phone.replace(/[^\d+]/g, "") || "+380963436035",
+    description: seo.description,
+    address: { "@type": "PostalAddress", addressCountry: "UA" },
+    sameAs: sameAs.length ? sameAs : ["https://instagram.com/maniagroup.ua", "https://t.me/maniagroup_ua"],
+    potentialAction: {
+      "@type": "SearchAction",
+      target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/catalog?q={search_term_string}` },
+      "query-input": "required name=search_term_string",
+    },
+  };
+}
 
 async function AnnouncementBar() {
   const content = await getSiteContent();
@@ -91,11 +87,12 @@ async function AnnouncementBar() {
   );
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const jsonLd = await orgJsonLd();
   return (
     <html
       lang="uk"
@@ -104,7 +101,7 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col font-sans">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORG_JSON_LD) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <AnnouncementBar />
         <Header />
