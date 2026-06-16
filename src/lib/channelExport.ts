@@ -138,7 +138,7 @@ function toProm(rows: ExportRow[]): Buffer {
     r.price,
     CURRENCY,
     "шт.",
-    r.stock,
+    r.stock > 0 ? r.stock : "",            // empty ⇒ Prom drives listing by Наявність
     r.available ? "+" : "-",
     r.brand,
     r.image,
@@ -170,8 +170,7 @@ function toRozetkaYml(rows: ExportRow[]): string {
         <currencyId>${CURRENCY}</currencyId>
         <categoryId>${catId.get(r.category) ?? 1}</categoryId>
         ${r.image ? `<picture>${xmlEscape(r.image)}</picture>` : ""}
-        <vendor>${xmlEscape(r.brand)}</vendor>
-        <stock_quantity>${r.stock}</stock_quantity>
+        <vendor>${xmlEscape(r.brand)}</vendor>${r.stock > 0 ? `\n        <stock_quantity>${r.stock}</stock_quantity>` : ""}
         <name>${xmlEscape(r.name)}</name>
         <param name="Артикул">${xmlEscape(r.sku)}</param>
 ${sizesParam}
