@@ -55,6 +55,26 @@ export function ContentStudio({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSaved = useRef<string>(JSON.stringify(content));
   const reloadAfterSave = useRef(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const pendingScroll = useRef<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Smooth, same-origin reload that keeps the scroll position so editing feels
+  // continuous instead of jumping to the top on every keystroke-driven save.
+  const reloadPreview = useCallback(() => {
+    const win = iframeRef.current?.contentWindow;
+    setRefreshing(true);
+    try {
+      if (win) {
+        pendingScroll.current = win.scrollY;
+        win.location.reload();
+        return;
+      }
+    } catch {
+      /* cross-origin guard — fall through to remount */
+    }
+    setIframeKey((k) => k + 1);
+  }, []);
 
   // ── Draft autosave (debounced) ─────────────────────────────────────────
   const saveDraft = useCallback(async (c: SiteContent, thenReload: boolean) => {
@@ -69,13 +89,13 @@ export function ContentStudio({
       lastSaved.current = JSON.stringify(c);
       setSave("saved");
       setDirty(false);
-      if (thenReload) setIframeKey((k) => k + 1);
+      if (thenReload) reloadPreview();
       setTimeout(() => setSave((s) => (s === "saved" ? "idle" : s)), 2000);
     } catch {
       setSave("error");
       setTimeout(() => setSave((s) => (s === "error" ? "idle" : s)), 3000);
     }
-  }, []);
+  }, [reloadPreview]);
 
   useEffect(() => {
     const json = JSON.stringify(content);
@@ -84,7 +104,7 @@ export function ContentStudio({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       saveDraft(content, reloadAfterSave.current && previewOn);
-    }, 700);
+    }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -94,6 +114,22 @@ export function ContentStudio({
   useEffect(() => {
     reloadAfterSave.current = previewOn;
   }, [previewOn]);
+
+  // Enter the studio → immediately show the live draft; leave → stop previewing
+  // so the admin doesn't keep seeing unpublished content while browsing the site.
+  useEffect(() => {
+    fetch("/api/admin/content/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ on: true }),
+    }).then(() => { setPreviewOn(true); setIframeKey((k) => k + 1); }).catch(() => {});
+    return () => {
+      fetch("/api/admin/content/preview", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on: false }),
+      }).catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Preview toggle ─────────────────────────────────────────────────────
   async function togglePreview(on: boolean) {
@@ -174,9 +210,9 @@ export function ContentStudio({
   const deviceW = DEVICES.find((d) => d.id === device)!.w;
 
   return (
-    <div className="flex flex-col gap-4 xl:flex-row xl:gap-6">
+    <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
       {/* ── Editor column ── */}
-      <div className="min-w-0 xl:w-[clamp(380px,42%,560px)] xl:shrink-0">
+      <div className="min-w-0 lg:w-[clamp(360px,40%,520px)] lg:shrink-0">
         {/* Action bar */}
         <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e8e4de] bg-white p-2">
           <button
@@ -305,7 +341,7 @@ export function ContentStudio({
 
             <div className="ml-auto flex items-center gap-1.5">
               <button
-                onClick={() => setIframeKey((k) => k + 1)}
+                onClick={reloadPreview}
                 title="Оновити"
                 aria-label="Оновити перегляд"
                 className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f]"
@@ -327,14 +363,27 @@ export function ContentStudio({
           {/* Device frame */}
           <div className="flex justify-center overflow-hidden rounded-[4px] border border-[#e8e4de] bg-[#e8e4de] p-3">
             <div
-              className="overflow-hidden rounded-[3px] bg-white shadow-sm transition-all duration-300"
+              className="relative overflow-hidden rounded-[3px] bg-white shadow-sm transition-all duration-300"
               style={{ width: device === "desktop" ? "100%" : deviceW, maxWidth: "100%" }}
             >
               <iframe
                 key={iframeKey}
+                ref={iframeRef}
                 src={page}
                 title="Перегляд сайту"
+                onLoad={() => {
+                  setRefreshing(false);
+                  const win = iframeRef.current?.contentWindow;
+                  if (win && pendingScroll.current != null) {
+                    try { win.scrollTo(0, pendingScroll.current); } catch { /* noop */ }
+                    pendingScroll.current = null;
+                  }
+                }}
                 className="block h-[72vh] w-full border-0"
+              />
+              {/* live-update shimmer — subtle, no white flash */}
+              <div
+                className={`pointer-events-none absolute left-0 top-0 h-0.5 bg-[#17130f] transition-all duration-300 ${refreshing ? "w-full opacity-100" : "w-0 opacity-0"}`}
               />
             </div>
           </div>

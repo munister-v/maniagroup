@@ -70,7 +70,12 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [cardsInitial, setCardsInitial] = useState<{ kind: "new" } | { kind: "edit"; id: string } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function openFullNew() { setCardsInitial({ kind: "new" }); setMode("cards"); }
+  function openFullCard(id: string) { setCardsInitial({ kind: "edit", id }); setMode("cards"); }
 
   const dirtyCount = Object.keys(edits).length;
 
@@ -219,8 +224,8 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
   if (mode === "cards") {
     return (
       <div>
-        <ModeToggle mode={mode} setMode={setMode} />
-        <AdminProducts onToast={onToast} />
+        <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} />
+        <AdminProducts onToast={onToast} initialOpen={cardsInitial} />
       </div>
     );
   }
@@ -230,7 +235,25 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
 
   return (
     <div className="flex flex-col">
-      <ModeToggle mode={mode} setMode={setMode} onImport={onImport} />
+      <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} />
+
+      {/* Intro / how-to */}
+      <div className="mb-3 flex items-start gap-3 rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2.5">
+        <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-[#9c8f7d]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
+        <div className="min-w-0 flex-1 text-[12px] leading-relaxed text-[#6b6253]">
+          <b className="text-[#17130f]">Таблиця</b> — швидке редагування: клікніть будь-яку клітинку (ціна, наявність, статус…), змініть і натисніть <b>«Зберегти всі»</b>.
+          {" "}Кнопка <b>«Картка»</b> у рядку відкриє повну картку товару з фото та описом.
+          {" "}<b>«Картки + фото»</b> — режим з великими зображеннями. <b>«Імпорт XLS»</b> — масове оновлення каталогу з файлу.
+          {helpOpen && (
+            <span className="mt-1 block text-[#9c8f7d]">
+              Фільтри (пошук / наявність / бренд) і сортування за стовпцями звужують список; експорт і масові дії (опублікувати, в обране, видалити) працюють із обраними рядками або з усім списком за фільтром.
+            </span>
+          )}
+        </div>
+        <button onClick={() => setHelpOpen((v) => !v)} className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">
+          {helpOpen ? "Згорнути" : "Докладніше"}
+        </button>
+      </div>
 
       {/* Toolbar */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -337,14 +360,15 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
                   ) : c.label}
                 </th>
               ))}
+              <th className="w-20 px-2 py-2" />
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={COLS.length + 2} className="px-3 py-10 text-center text-[#9c8f7d]">Завантаження…</td></tr>
+              <tr><td colSpan={COLS.length + 3} className="px-3 py-10 text-center text-[#9c8f7d]">Завантаження…</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={COLS.length + 2} className="px-3 py-10 text-center text-[#9c8f7d]">Нічого не знайдено</td></tr>
+              <tr><td colSpan={COLS.length + 3} className="px-3 py-10 text-center text-[#9c8f7d]">Нічого не знайдено</td></tr>
             )}
             {!loading && rows.map((row) => {
               const rowDirty = !!edits[row.id];
@@ -385,6 +409,12 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
                       )}
                     </td>
                   ))}
+                  <td className="px-2 py-0.5 text-right align-middle">
+                    <button onClick={() => openFullCard(row.id)}
+                      className="rounded-[3px] border border-[#e8e4de] px-2 py-1 text-[10px] uppercase tracking-[0.08em] text-[#17130f] transition-colors hover:border-[#17130f]">
+                      Картка
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -406,7 +436,7 @@ export function CatalogGrid({ onToast, onImport }: { onToast?: (m: string) => vo
   );
 }
 
-function ModeToggle({ mode, setMode, onImport }: { mode: "grid" | "cards"; setMode: (m: "grid" | "cards") => void; onImport?: () => void }) {
+function ModeToggle({ mode, setMode, onImport, onNew }: { mode: "grid" | "cards"; setMode: (m: "grid" | "cards") => void; onImport?: () => void; onNew?: () => void }) {
   return (
     <div className="mb-4 flex items-center gap-2">
       <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e8e4de] p-0.5">
@@ -419,13 +449,22 @@ function ModeToggle({ mode, setMode, onImport }: { mode: "grid" | "cards"; setMo
           Картки + фото
         </button>
       </div>
-      {onImport && (
-        <button onClick={onImport}
-          className="ml-auto flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          Імпорт XLS
-        </button>
-      )}
+      <div className="ml-auto flex items-center gap-2">
+        {onNew && (
+          <button onClick={onNew}
+            className="flex h-8 items-center gap-1.5 rounded-[3px] bg-[#17130f] px-3 text-[11px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-85">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+            Новий товар
+          </button>
+        )}
+        {onImport && (
+          <button onClick={onImport}
+            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Імпорт XLS
+          </button>
+        )}
+      </div>
     </div>
   );
 }

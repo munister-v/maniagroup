@@ -104,7 +104,10 @@ function draftToPayload(d: Draft) {
   };
 }
 
-export function AdminProducts({ onToast }: { onToast?: (msg: string) => void }) {
+export function AdminProducts({ onToast, initialOpen }: {
+  onToast?: (msg: string) => void;
+  initialOpen?: { kind: "new" } | { kind: "edit"; id: string } | null;
+}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -184,6 +187,15 @@ export function AdminProducts({ onToast }: { onToast?: (msg: string) => void }) 
     setDraft(EMPTY_DRAFT);
     setEditorId("new");
   }
+
+  // Open a product (or the new-product form) immediately when asked to by a parent
+  // — e.g. clicking "Повна картка" on a row in the catalog grid.
+  useEffect(() => {
+    if (!initialOpen) return;
+    if (initialOpen.kind === "new") openNew();
+    else openEdit(initialOpen.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpen]);
 
   async function save() {
     if (!draft.name.trim() || !draft.regular_price) { setError("Вкажіть назву та ціну"); return; }
