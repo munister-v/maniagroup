@@ -77,6 +77,8 @@ export type CatalogQuery = {
   inStock?: boolean;
   minPrice?: number;
   maxPrice?: number;
+  /** Storefront default: only show products that have a photo. Pass false to include photoless. */
+  requireImage?: boolean;
   orderby?: "price" | "date";
   order?: "asc" | "desc";
   page?: number;
@@ -125,8 +127,11 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   if (params.minPrice)      conds.push(`price >= ${p(params.minPrice)}`);
   if (params.maxPrice)      conds.push(`price <= ${p(params.maxPrice)}`);
 
-  const where = conds.join(" AND ");
   const hasImg = `(images IS NOT NULL AND images::text NOT IN ('[]','null',''))`;
+  // Storefront only shows photographed products by default ("свіжі і з фото скрізь").
+  if (params.requireImage !== false) conds.push(hasImg);
+
+  const where = conds.join(" AND ");
   const order =
     params.orderby === "price"
       ? `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, price ${(params.order ?? "asc").toUpperCase() === "DESC" ? "DESC" : "ASC"}`
@@ -310,6 +315,7 @@ export async function getCatalogProducts(
 export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
   const rows = await q(
     `SELECT * FROM products WHERE featured AND status = 'publish'
+       AND images IS NOT NULL AND images::text NOT IN ('[]','null','')
      ORDER BY is_in_stock DESC, id DESC LIMIT $1`,
     [limit],
   );
