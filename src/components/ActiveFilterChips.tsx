@@ -5,6 +5,7 @@ import { type ActiveFilters, catalogHref, hasAnyFilter } from "@/lib/catalogFilt
 import { colorLabel, swatchBackground, colorInfo } from "@/lib/colors";
 
 const GENDER_LABEL: Record<string, string> = { women: "Жінкам", men: "Чоловікам" };
+const SEASON_LABEL: Record<string, string> = { summer: "☀ Літо", winter: "❄ Зима" };
 
 type Chip = { key: string; label: string; href: string; swatch?: string; ring?: boolean };
 
@@ -57,6 +58,13 @@ export function ActiveFilterChips({
       href: catalogHref(active, { sizes: active.sizes.filter((s) => s !== slug) }),
     });
   }
+  for (const slug of active.seasons) {
+    chips.push({
+      key: `season-${slug}`,
+      label: SEASON_LABEL[slug] ?? slug,
+      href: catalogHref(active, { seasons: active.seasons.filter((s) => s !== slug) }),
+    });
+  }
   if (active.inStock) {
     chips.push({ key: "stock", label: "В наявності", href: catalogHref(active, { inStock: false }) });
   }
@@ -75,6 +83,7 @@ export function ActiveFilterChips({
     gender: undefined,
     colors: [],
     sizes: [],
+    seasons: [],
     inStock: false,
     min: undefined,
     max: undefined,

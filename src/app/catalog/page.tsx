@@ -4,7 +4,7 @@ import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
 import { ActiveFilterChips } from "@/components/ActiveFilterChips";
 import { CatalogSort } from "@/components/CatalogSort";
-import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets, dbPriceRange, resolveBrandSlugs } from "@/lib/productSource";
+import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets, dbSeasonFacets, dbPriceRange, resolveBrandSlugs } from "@/lib/productSource";
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
 export const metadata = {
@@ -44,6 +44,7 @@ export default async function CatalogPage({
     sort?: string;
     size?: string;
     sizes?: string;
+    seasons?: string;
     min?: string;
     max?: string;
     page?: string;
@@ -60,6 +61,7 @@ export default async function CatalogPage({
   const brandSlugs = Array.from(new Set([...parseList(sp.brands), ...(sp.brand ? [sp.brand] : [])]));
   const colorNames = Array.from(new Set([...parseList(sp.colors), ...(sp.color ? [sp.color] : [])]));
   const sizeSlugs = Array.from(new Set([...parseList(sp.sizes), ...(sp.size ? [sp.size] : [])]));
+  const seasonSlugs = parseList(sp.seasons).filter((s) => s === "summer" || s === "winter");
   const inStock = sp.inStock === "1";
 
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
@@ -80,6 +82,7 @@ export default async function CatalogPage({
     brandGroup,
     gender: gender === "women" || gender === "men" ? gender : undefined,
     colors: colorNames,
+    seasons: seasonSlugs,
     q,
     sizes: sizeSlugs,
     inStock,
@@ -94,6 +97,7 @@ export default async function CatalogPage({
   // ── Size + color + price facets ──────────────────────────────────────────
   const sizes = await dbSizeFacets({ categorySlug, q });
   const colors = await dbColorFacets({ categorySlug, gender });
+  const seasons = await dbSeasonFacets({ categorySlug, gender });
   const priceRange = await dbPriceRange({ categorySlug, gender });
 
   // ── Pagination ────────────────────────────────────────────────────────
@@ -104,7 +108,7 @@ export default async function CatalogPage({
     .slice(0, 20)
     .map((c) => ({ name: c.name, slug: c.slug }));
 
-  const facets: Facets = { brands, categories: categoryFacets, sizes, colors, priceRange };
+  const facets: Facets = { brands, categories: categoryFacets, sizes, colors, seasons, priceRange };
   const brandGroupTitle = brandGroup
     ? brandGroup.charAt(0).toUpperCase() + brandGroup.slice(1)
     : undefined;
@@ -123,6 +127,7 @@ export default async function CatalogPage({
     gender,
     colors: colorNames,
     sizes: sizeSlugs,
+    seasons: seasonSlugs,
     inStock,
     q,
     sort: sortKey,
@@ -138,6 +143,7 @@ export default async function CatalogPage({
     if (gender) p.gender = gender;
     if (colorNames.length) p.colors = colorNames.join(",");
     if (sizeSlugs.length) p.sizes = sizeSlugs.join(",");
+    if (seasonSlugs.length) p.seasons = seasonSlugs.join(",");
     if (inStock) p.inStock = "1";
     if (q) p.q = q;
     if (min) p.min = min;

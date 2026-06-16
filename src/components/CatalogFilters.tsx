@@ -18,6 +18,7 @@ export type Facets = {
   categories?: { name: string; slug: string }[];
   sizes: { slug: string; name: string }[];
   colors?: { name: string; count?: number }[];
+  seasons?: { slug: string; name: string; count?: number }[];
   priceRange?: { min: number; max: number };
 };
 
@@ -177,8 +178,40 @@ export function CatalogFilters({
         </div>
       )}
 
+      {facets.seasons && facets.seasons.length > 0 && (
+        <div>
+          <h3 className="text-[11px] uppercase tracking-luxe text-muted">Сезон</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {facets.seasons.map((s) => {
+              const selected = active.seasons.includes(s.slug);
+              return (
+                <button
+                  key={s.slug}
+                  onClick={() => go({ seasons: toggleInList(active.seasons, s.slug) })}
+                  className={`flex h-9 items-center gap-1.5 border px-4 text-[11px] uppercase tracking-luxe transition-colors ${
+                    selected ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
+                  }`}
+                >
+                  {s.slug === "summer" ? "☀" : "❄"} {s.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div>
         <h3 className="text-[11px] uppercase tracking-luxe text-muted">Ціна, ₴</h3>
+        {range && range.max > range.min && (
+          <PriceSlider
+            min={range.min}
+            max={range.max}
+            lo={min ? Math.max(range.min, Number(min)) : range.min}
+            hi={max ? Math.min(range.max, Number(max)) : range.max}
+            onInput={(lo, hi) => { setMin(String(lo)); setMax(String(hi)); }}
+            onCommit={(lo, hi) => go({ min: lo > range.min ? String(lo) : undefined, max: hi < range.max ? String(hi) : undefined })}
+          />
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -225,6 +258,7 @@ export function CatalogFilters({
               gender: undefined,
               colors: [],
               sizes: [],
+              seasons: [],
               inStock: false,
               min: undefined,
               max: undefined,
@@ -284,5 +318,73 @@ export function CatalogFilters({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Dual-handle price range slider. Two overlaid range inputs share a track;
+ * `onInput` fires live (to update the numeric fields), `onCommit` on release
+ * (to navigate). Values are clamped so the handles can't cross.
+ */
+function PriceSlider({
+  min,
+  max,
+  lo,
+  hi,
+  onInput,
+  onCommit,
+}: {
+  min: number;
+  max: number;
+  lo: number;
+  hi: number;
+  onInput: (lo: number, hi: number) => void;
+  onCommit: (lo: number, hi: number) => void;
+}) {
+  const span = Math.max(1, max - min);
+  const step = Math.max(1, Math.round(span / 100));
+  const loPct = ((lo - min) / span) * 100;
+  const hiPct = ((hi - min) / span) * 100;
+
+  return (
+    <div className="mt-4 px-1">
+      <div className="relative h-5">
+        {/* track */}
+        <div className="absolute top-1/2 h-[3px] w-full -translate-y-1/2 rounded-full bg-line" />
+        {/* active fill */}
+        <div
+          className="absolute top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-ink"
+          style={{ left: `${loPct}%`, right: `${100 - hiPct}%` }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={lo}
+          onChange={(e) => onInput(Math.min(Number(e.target.value), hi - step), hi)}
+          onMouseUp={(e) => onCommit(Math.min(Number((e.target as HTMLInputElement).value), hi - step), hi)}
+          onTouchEnd={(e) => onCommit(Math.min(Number((e.target as HTMLInputElement).value), hi - step), hi)}
+          className="price-thumb pointer-events-none absolute top-0 h-5 w-full appearance-none bg-transparent"
+          aria-label="Мінімальна ціна"
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={hi}
+          onChange={(e) => onInput(lo, Math.max(Number(e.target.value), lo + step))}
+          onMouseUp={(e) => onCommit(lo, Math.max(Number((e.target as HTMLInputElement).value), lo + step))}
+          onTouchEnd={(e) => onCommit(lo, Math.max(Number((e.target as HTMLInputElement).value), lo + step))}
+          className="price-thumb pointer-events-none absolute top-0 h-5 w-full appearance-none bg-transparent"
+          aria-label="Максимальна ціна"
+        />
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] tabular-nums text-muted">
+        <span>{lo.toLocaleString("uk-UA")} ₴</span>
+        <span>{hi.toLocaleString("uk-UA")} ₴</span>
+      </div>
+    </div>
   );
 }

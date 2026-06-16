@@ -70,6 +70,7 @@ export type CatalogQuery = {
   gender?: string;
   color?: string;
   colors?: string[];
+  seasons?: string[];
   q?: string;
   size?: string;
   sizes?: string[];
@@ -108,6 +109,13 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   if (params.color)         conds.push(`color = ${p(params.color)}`);
   if (params.colors && params.colors.length)
     conds.push(`color = ANY(${p(params.colors)})`);
+  if (params.seasons && params.seasons.length) {
+    // Group slugs → ILIKE patterns over the messy raw season values.
+    const ors = params.seasons
+      .map((s) => (s === "summer" ? "season ILIKE '%Лето%'" : s === "winter" ? "season ILIKE '%Зима%'" : null))
+      .filter(Boolean) as string[];
+    if (ors.length) conds.push(`(${ors.join(" OR ")})`);
+  }
   if (params.size)          conds.push(`attributes::text LIKE ${p('%"slug":"' + params.size + '"%')}`);
   if (params.sizes && params.sizes.length) {
     const ors = params.sizes.map((s) => `attributes::text LIKE ${p('%"slug":"' + s + '"%')}`);
@@ -230,6 +238,27 @@ export async function dbColorFacets(filters?: { categorySlug?: string; gender?: 
     bind,
   );
   return rows.map((r) => ({ name: r.color, count: Number(r.n) }));
+}
+
+// ── Season facets ────────────────────────────────────────────────────────────
+
+/** Group the messy raw season values into Літо / Зима with live counts. */
+export async function dbSeasonFacets(filters?: { categorySlug?: string; gender?: string }): Promise<{ slug: string; name: string; count: number }[]> {
+  const conds = ["is_in_stock = TRUE", "status = 'publish'"];
+  const bind: unknown[] = [];
+  if (filters?.categorySlug) { bind.push(filters.categorySlug); conds.push(`category_slug = $${bind.length}`); }
+  if (filters?.gender === "women" || filters?.gender === "men") { bind.push(filters.gender); conds.push(`gender = $${bind.length}`); }
+
+  const row = await q1<{ summer: string; winter: string }>(
+    `SELECT COUNT(*) FILTER (WHERE season ILIKE '%Лето%') AS summer,
+            COUNT(*) FILTER (WHERE season ILIKE '%Зима%') AS winter
+     FROM products WHERE ${conds.join(" AND ")}`,
+    bind,
+  );
+  return [
+    { slug: "summer", name: "Літо", count: Number(row?.summer ?? 0) },
+    { slug: "winter", name: "Зима", count: Number(row?.winter ?? 0) },
+  ].filter((s) => s.count > 0);
 }
 
 // ── Price range ──────────────────────────────────────────────────────────────

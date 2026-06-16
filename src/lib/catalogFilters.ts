@@ -10,6 +10,7 @@ export type ActiveFilters = {
   gender?: string;
   colors: string[];
   sizes: string[];
+  seasons: string[];
   inStock: boolean;
   q?: string;
   sort: string;
@@ -30,6 +31,7 @@ export function catalogHref(active: ActiveFilters, patch: FilterPatch = {}): str
   if (next.gender) p.set("gender", next.gender);
   if (next.colors.length) p.set("colors", next.colors.join(","));
   if (next.sizes.length) p.set("sizes", next.sizes.join(","));
+  if (next.seasons.length) p.set("seasons", next.seasons.join(","));
   if (next.inStock) p.set("inStock", "1");
   if (next.q) p.set("q", next.q);
   if (next.min) p.set("min", next.min);
@@ -50,6 +52,7 @@ export function activeCount(a: ActiveFilters): number {
     a.brands.length +
     a.colors.length +
     a.sizes.length +
+    a.seasons.length +
     (a.category ? 1 : 0) +
     (a.brandGroup ? 1 : 0) +
     (a.gender ? 1 : 0) +

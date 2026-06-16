@@ -169,3 +169,28 @@ body {
     animation: none;
   }
 }
+
+/* Dual-handle price slider thumbs (overlaid range inputs share a track) */
+.price-thumb::-webkit-slider-thumb {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: var(--color-paper, #fff);
+  border: 2px solid var(--color-ink, #17130f);
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.price-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 9999px;
+  background: #fff;
+  border: 2px solid var(--color-ink, #17130f);
+  cursor: pointer;
+}
+.price-thumb::-webkit-slider-runnable-track { background: transparent; }
+.price-thumb::-moz-range-track { background: transparent; }
