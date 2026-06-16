@@ -19,21 +19,31 @@ export type StoreSettings = {
   free_ship_threshold: string;
   store_phone: string;
   store_email: string;
+  telegram_enabled: string;
+  telegram_bot_token: string;
+  telegram_chat_id: string;
 };
 
 const DEFAULTS: StoreSettings = {
   free_ship_threshold: "3000",
   store_phone: "+38 (096) 343-60-35",
   store_email: "",
+  telegram_enabled: "",
+  telegram_bot_token: "",
+  telegram_chat_id: "",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
   const rows = await q<{ key: string; val: string }>("SELECT key, val FROM store_settings");
   const map = new Map(rows.map((r) => [r.key, r.val]));
+  const get = (k: keyof StoreSettings) => map.get(k) ?? DEFAULTS[k];
   return {
-    free_ship_threshold: map.get("free_ship_threshold") ?? DEFAULTS.free_ship_threshold,
-    store_phone: map.get("store_phone") ?? DEFAULTS.store_phone,
-    store_email: map.get("store_email") ?? DEFAULTS.store_email,
+    free_ship_threshold: get("free_ship_threshold"),
+    store_phone: get("store_phone"),
+    store_email: get("store_email"),
+    telegram_enabled: get("telegram_enabled"),
+    telegram_bot_token: get("telegram_bot_token"),
+    telegram_chat_id: get("telegram_chat_id"),
   };
 }
 

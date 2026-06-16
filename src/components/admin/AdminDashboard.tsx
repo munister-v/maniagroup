@@ -1556,12 +1556,33 @@ function SettingsSection() {
   const [pwd, setPwd] = useState({ current: "", next: "", next2: "" });
   const [pwdStatus, setPwdStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [pwdError, setPwdError] = useState("");
+  const [tg, setTg] = useState({ telegram_enabled: "", telegram_bot_token: "", telegram_chat_id: "" });
+  const [tgStatus, setTgStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [tgTest, setTgTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
 
   useEffect(() => {
-    fetch("/api/admin/settings").then((r) => r.json()).then((d) =>
-      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "" }),
-    );
+    fetch("/api/admin/settings").then((r) => r.json()).then((d) => {
+      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "" });
+      setTg({ telegram_enabled: d.telegram_enabled ?? "", telegram_bot_token: d.telegram_bot_token ?? "", telegram_chat_id: d.telegram_chat_id ?? "" });
+    });
   }, []);
+
+  async function saveTg() {
+    setTgStatus("saving");
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tg) });
+    setTgStatus("saved");
+    setTimeout(() => setTgStatus("idle"), 2500);
+  }
+
+  async function testTg() {
+    setTgTest({ state: "testing", msg: "" });
+    const res = await fetch("/api/admin/notify/test", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: tg.telegram_bot_token, chatId: tg.telegram_chat_id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setTgTest({ state: "idle", msg: res.ok ? "✓ Повідомлення надіслано" : `✕ ${data.error ?? "Помилка"}` });
+  }
 
   async function saveStore() {
     setStoreStatus("saving");
@@ -1618,6 +1639,36 @@ function SettingsSection() {
             {pwdStatus === "saving" ? "Зберігаємо…" : pwdStatus === "saved" ? "✓ Пароль змінено" : "Змінити пароль"}
           </button>
         </form>
+      </Card>
+
+      <Card title="Сповіщення · Telegram" subtitle="Миттєвий пінг у Telegram при новому замовленні та зміні статусу">
+        <label className="mb-4 flex items-center gap-2.5">
+          <button onClick={() => setTg({ ...tg, telegram_enabled: tg.telegram_enabled ? "" : "1" })}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${tg.telegram_enabled ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}
+            aria-label="Увімкнути">
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${tg.telegram_enabled ? "left-[18px]" : "left-0.5"}`} />
+          </button>
+          <span className="text-[13px] text-[#17130f]">Надсилати сповіщення</span>
+        </label>
+        <div className="space-y-4">
+          <label className="block"><span className={lbl}>Bot Token</span>
+            <input className={inp} value={tg.telegram_bot_token} onChange={(e) => setTg({ ...tg, telegram_bot_token: e.target.value })} placeholder="123456:ABC-DEF…" /></label>
+          <label className="block"><span className={lbl}>Chat ID</span>
+            <input className={inp} value={tg.telegram_chat_id} onChange={(e) => setTg({ ...tg, telegram_chat_id: e.target.value })} placeholder="-1001234567890 або ваш user id" /></label>
+          <p className="text-[11px] leading-relaxed text-[#9c8f7d]">
+            Створіть бота через <span className="text-[#17130f]">@BotFather</span> → отримайте токен. Chat ID свого акаунта дізнайтеся у <span className="text-[#17130f]">@userinfobot</span>, або додайте бота в групу й візьміть її id.
+          </p>
+        </div>
+        <div className="mt-5 flex items-center gap-3">
+          <button onClick={saveTg} disabled={tgStatus === "saving"} className={btn}>
+            {tgStatus === "saving" ? "Зберігаємо…" : tgStatus === "saved" ? "✓ Збережено" : "Зберегти"}
+          </button>
+          <button onClick={testTg} disabled={tgTest.state === "testing" || !tg.telegram_bot_token || !tg.telegram_chat_id}
+            className="h-10 rounded-[3px] border border-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+            {tgTest.state === "testing" ? "Надсилаємо…" : "Тест"}
+          </button>
+          {tgTest.msg && <span className={`text-[12px] ${tgTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#b3392c]"}`}>{tgTest.msg}</span>}
+        </div>
       </Card>
 
       <Card title="Інфраструктура">

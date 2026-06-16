@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { listOrders, updateOrderStatus, setOrderTracking, type Order } from "@/lib/orders";
+import { listOrders, updateOrderStatus, setOrderTracking, getOrder, type Order } from "@/lib/orders";
+import { notifyStatusChange } from "@/lib/notify";
 
 export function serializeOrder(o: Order) {
   return {
@@ -68,6 +69,8 @@ export async function PATCH(req: Request) {
       await setOrderTracking(Number(body.id), body.ttn);
     } else if (body.status) {
       await updateOrderStatus(Number(body.id), body.status);
+      const order = await getOrder(Number(body.id));
+      if (order) await notifyStatusChange(order, body.status);
     } else {
       return NextResponse.json({ error: "Нічого оновлювати" }, { status: 400 });
     }

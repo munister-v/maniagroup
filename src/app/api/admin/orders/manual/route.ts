@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { createManualOrder, type ManualOrderInput } from "@/lib/orders";
+import { createManualOrder, getOrder, type ManualOrderInput } from "@/lib/orders";
+import { notifyNewOrder } from "@/lib/notify";
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
@@ -21,6 +22,8 @@ export async function POST(req: Request) {
       paymentMethod: body.paymentMethod ?? "cod",
       items: body.items ?? [],
     });
+    const order = await getOrder(res.id);
+    if (order) await notifyNewOrder(order);
     return NextResponse.json({ ok: true, ...res });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 400 });
