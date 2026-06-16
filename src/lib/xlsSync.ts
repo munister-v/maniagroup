@@ -13,7 +13,7 @@ import { pool, q } from "./pg";
 // ── parsed shapes ─────────────────────────────────────────────────────────────
 
 export type MgEntry = { brand: string; name: string; base: number; sale: number; gender: string; color: string; composition: string };
-export type WpEntry = { name: string; regular: number; sale: number; category: string; sizes: string[] };
+export type WpEntry = { name: string; regular: number; sale: number; category: string; sizes: string[]; sizeQty: Record<string, number> };
 
 export function parseMg(buf: Buffer): Map<string, MgEntry> {
   const wb = XLSX.read(buf, { type: "buffer", codepage: 1251 });
@@ -56,12 +56,16 @@ export function parseWp(buf: Buffer): Map<string, WpEntry> {
         sale:     sale > 0 && sale < regular ? sale : 0,
         category: String(r["Categories"] ?? "").split(",")[0].trim(),
         sizes:    [],
+        sizeQty:  {},
       };
       map.set(id, p);
     }
     const size = String(r["Attribute 1 Value(s)"] ?? "").trim();
     const qty  = Number(r["In Stock?"]) || 0;
-    if (size && qty > 0 && !p.sizes.includes(size)) p.sizes.push(size);
+    if (size && qty > 0) {
+      if (!p.sizes.includes(size)) p.sizes.push(size);
+      p.sizeQty[size] = (p.sizeQty[size] ?? 0) + qty;   // sum duplicate rows per size
+    }
   }
   return map;
 }
@@ -78,9 +82,11 @@ export type DiffItem = {
 export type DiffCounts = {
   total: number; new_products: number; price_up: number; price_down: number;
   now_in_stock: number; now_out: number; unchanged: number; db_total: number;
+  wp_with_qty: number;   // WP products that carry per-size quantities
+  wp_units: number;      // total units across all WP sizes
 };
 
-type DbRow = { sku: string; name: string; brand: string; price: number; is_in_stock: boolean };
+type DbRow = { id: number; sku: string; name: string; brand: string; price: number; is_in_stock: boolean };
 
 function xlsPriceFor(sku: string, mg: Map<string, MgEntry>, wp: Map<string, WpEntry>): number {
   const w = wp.get(sku);
@@ -92,7 +98,7 @@ function xlsPriceFor(sku: string, mg: Map<string, MgEntry>, wp: Map<string, WpEn
 
 export async function computeDiff(mg: Map<string, MgEntry>, wp: Map<string, WpEntry>) {
   const dbRows = await q<DbRow>(
-    `SELECT sku, name, brand, price::int AS price, is_in_stock FROM products WHERE status = 'publish'`,
+    `SELECT id::int AS id, sku, name, brand, price::int AS price, is_in_stock FROM products WHERE status = 'publish'`,
   );
   const dbMap = new Map(dbRows.map((r) => [r.sku, r]));
 
@@ -134,6 +140,8 @@ export async function computeDiff(mg: Map<string, MgEntry>, wp: Map<string, WpEn
     now_out:      diff.filter((d) => d.change === "now_out").length,
     unchanged:    diff.filter((d) => d.change === "unchanged").length,
     db_total:     dbMap.size,
+    wp_with_qty:  [...wp.values()].filter((w) => Object.keys(w.sizeQty).length > 0).length,
+    wp_units:     [...wp.values()].reduce((s, w) => s + Object.values(w.sizeQty).reduce((a, b) => a + b, 0), 0),
   };
 
   return { diff, counts, dbCount: dbMap.size };
@@ -154,10 +162,11 @@ function slugify(s: string): string {
 }
 
 export type ApplyOptions = {
-  prices?: boolean;    // update price/regular/sale where they differ (in-stock products)
-  stockIn?: boolean;   // mark products present in WP as in-stock
-  stockOut?: boolean;  // mark products absent from WP as out-of-stock
-  newItems?: boolean;  // insert products that exist in XLS but not the DB (no photos)
+  prices?: boolean;     // update price/regular/sale where they differ (in-stock products)
+  stockIn?: boolean;    // mark products present in WP as in-stock
+  stockOut?: boolean;   // mark products absent from WP as out-of-stock
+  newItems?: boolean;   // insert products that exist in XLS but not the DB (no photos)
+  quantities?: boolean; // seed per-size unit counts (product_variants.stock_qty) from WP
 };
 
 export type ApplyResult = {
@@ -165,6 +174,8 @@ export type ApplyResult = {
   markedInStock: number;
   markedOutOfStock: number;
   newInserted: number;
+  quantitiesSet: number;       // variant rows whose stock_qty was set
+  productsRecounted: number;   // products whose mirror stock_qty was recomputed
 };
 
 /**
@@ -177,10 +188,10 @@ export async function applySync(
   wp: Map<string, WpEntry>,
   opts: ApplyOptions,
 ): Promise<ApplyResult> {
-  const result: ApplyResult = { pricesUpdated: 0, markedInStock: 0, markedOutOfStock: 0, newInserted: 0 };
+  const result: ApplyResult = { pricesUpdated: 0, markedInStock: 0, markedOutOfStock: 0, newInserted: 0, quantitiesSet: 0, productsRecounted: 0 };
 
   const dbRows = await q<DbRow>(
-    `SELECT sku, name, brand, price::int AS price, is_in_stock FROM products WHERE status = 'publish'`,
+    `SELECT id::int AS id, sku, name, brand, price::int AS price, is_in_stock FROM products WHERE status = 'publish'`,
   );
   const dbMap = new Map(dbRows.map((r) => [r.sku, r]));
   const now = new Date().toISOString();
@@ -265,6 +276,56 @@ export async function applySync(
           ],
         );
         result.newInserted++;
+      }
+    }
+
+    // 5. Seed per-size unit counts (product_variants.stock_qty) from WP, then
+    //    recompute the products mirror. Logs one summary movement per product.
+    if (opts.quantities) {
+      // Refresh the id map to include products inserted in step 4 this transaction.
+      const idRows = (await client.query<{ id: number; sku: string }>(
+        "SELECT id::int AS id, sku FROM products WHERE status = 'publish'",
+      )).rows;
+      const idBySku = new Map(idRows.map((r) => [r.sku, r.id]));
+
+      for (const [sku, w] of wp) {
+        const pid = idBySku.get(sku);
+        if (!pid) continue;
+        const sizes = Object.entries(w.sizeQty);
+        if (!sizes.length) continue;
+
+        const prevRow = await client.query<{ t: number }>(
+          "SELECT COALESCE(SUM(stock_qty),0)::int AS t FROM product_variants WHERE product_id = $1 AND active", [pid],
+        );
+        const prevTotal = prevRow.rows[0]?.t ?? 0;
+
+        for (const [size, qty] of sizes) {
+          await client.query(
+            `INSERT INTO product_variants (product_id, size, stock_qty, updated_at, updated_by)
+             VALUES ($1, $2, $3, now(), 'wp-sync')
+             ON CONFLICT (product_id, size)
+             DO UPDATE SET stock_qty = EXCLUDED.stock_qty, active = TRUE, updated_at = now(), updated_by = 'wp-sync'`,
+            [pid, size, qty],
+          );
+          result.quantitiesSet++;
+        }
+
+        const recount = await client.query<{ total: number }>(
+          `UPDATE products p SET stock_qty = s.total, is_in_stock = (s.total > 0), updated_at = now()
+             FROM (SELECT COALESCE(SUM(stock_qty),0)::int AS total FROM product_variants WHERE product_id = $1 AND active) s
+            WHERE p.id = $1 RETURNING p.stock_qty AS total`,
+          [pid],
+        );
+        const newTotal = recount.rows[0]?.total ?? 0;
+        result.productsRecounted++;
+
+        if (newTotal !== prevTotal) {
+          await client.query(
+            `INSERT INTO stock_movements (product_id, variant_id, size, type, delta, qty_after, note, author)
+             VALUES ($1, NULL, '', 'import', $2, $3, 'Синхронізація кількостей з WP', 'wp-sync')`,
+            [pid, newTotal - prevTotal, newTotal],
+          );
+        }
       }
     }
 

@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   } catch {
     opts = {};
   }
-  if (!opts.prices && !opts.stockIn && !opts.stockOut && !opts.newItems) {
+  if (!opts.prices && !opts.stockIn && !opts.stockOut && !opts.newItems && !opts.quantities) {
     return NextResponse.json({ error: "Не вибрано жодного типу змін для застосування" }, { status: 400 });
   }
 

@@ -19,6 +19,7 @@ type OverviewData = {
 type DiffCounts = {
   total: number; new_products: number; price_up: number; price_down: number;
   now_in_stock: number; now_out: number; unchanged: number; db_total: number;
+  wp_with_qty: number; wp_units: number;
 };
 type DiffItem = {
   sku: string; name: string; brand: string;
@@ -479,8 +480,8 @@ function ImportTab() {
 
 type DiffFilter = "all" | "new" | "price_up" | "price_down" | "now_in_stock" | "now_out";
 
-type ApplyOpts = { prices: boolean; stockIn: boolean; stockOut: boolean; newItems: boolean };
-type ApplyResult = { pricesUpdated: number; markedInStock: number; markedOutOfStock: number; newInserted: number };
+type ApplyOpts = { prices: boolean; stockIn: boolean; stockOut: boolean; newItems: boolean; quantities: boolean };
+type ApplyResult = { pricesUpdated: number; markedInStock: number; markedOutOfStock: number; newInserted: number; quantitiesSet: number; productsRecounted: number };
 type SyncLogEntry = { at: string; type: string; applied: Partial<ApplyOpts>; result: ApplyResult; ms: number };
 
 function SyncTab() {
@@ -493,7 +494,7 @@ function SyncTab() {
   const [dragOver, setDragOver] = useState(false);
 
   // apply state
-  const [apply, setApply] = useState<ApplyOpts>({ prices: true, stockIn: true, stockOut: true, newItems: true });
+  const [apply, setApply] = useState<ApplyOpts>({ prices: true, stockIn: true, stockOut: true, newItems: true, quantities: true });
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState<ApplyResult | null>(null);
   const [confirmApply, setConfirmApply] = useState(false);
@@ -550,7 +551,8 @@ function SyncTab() {
     (apply.prices ? result.counts.price_up + result.counts.price_down : 0) +
     (apply.stockIn ? result.counts.now_in_stock : 0) +
     (apply.stockOut ? result.counts.now_out : 0) +
-    (apply.newItems ? result.counts.new_products : 0)
+    (apply.newItems ? result.counts.new_products : 0) +
+    (apply.quantities ? result.counts.wp_with_qty : 0)
   ) : 0;
 
   const fileSlot2 = (label: string, file: File | null, onSet: (f: File | null) => void, hint: string) => (
@@ -614,12 +616,13 @@ function SyncTab() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M9 12l2 2 4-4M22 12A10 10 0 112 12a10 10 0 0120 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
             Синхронізацію застосовано до бази
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {[
               { l: "Оновлено цін", v: applied.pricesUpdated },
               { l: "Стало в наявн.", v: applied.markedInStock },
               { l: "Стало немає", v: applied.markedOutOfStock },
               { l: "Додано нових", v: applied.newInserted },
+              { l: "Кількості розмірів", v: applied.quantitiesSet },
             ].map((s) => (
               <div key={s.l} className="rounded-[3px] border border-emerald-200 bg-white p-3 text-center">
                 <p className="text-[18px] font-semibold tabular-nums text-emerald-700">{N(s.v)}</p>
@@ -668,10 +671,11 @@ function SyncTab() {
             <p className="mb-4 text-[11px] text-[#9c8f7d]">Оберіть, які типи змін записати. Працює напряму по SKU — швидко, без перезапису всього каталогу.</p>
             <div className="grid grid-cols-2 gap-2.5">
               {([
-                { key: "prices",   label: "Оновити ціни",        desc: `${result.counts.price_up + result.counts.price_down} товарів`, color: "amber" },
-                { key: "stockIn",  label: "Позначити в наявності", desc: `${result.counts.now_in_stock} товарів`, color: "emerald" },
-                { key: "stockOut", label: "Позначити «немає»",    desc: `${result.counts.now_out} товарів`, color: "red" },
-                { key: "newItems", label: "Додати нові товари",   desc: `${result.counts.new_products} (без фото)`, color: "blue" },
+                { key: "prices",     label: "Оновити ціни",        desc: `${result.counts.price_up + result.counts.price_down} товарів`, color: "amber" },
+                { key: "stockIn",    label: "Позначити в наявності", desc: `${result.counts.now_in_stock} товарів`, color: "emerald" },
+                { key: "stockOut",   label: "Позначити «немає»",    desc: `${result.counts.now_out} товарів`, color: "red" },
+                { key: "newItems",   label: "Додати нові товари",   desc: `${result.counts.new_products} (без фото)`, color: "blue" },
+                { key: "quantities", label: "Оновити кількості розмірів", desc: `${N(result.counts.wp_with_qty)} товарів · ${N(result.counts.wp_units)} од з WP`, color: "violet" },
               ] as const).map((opt) => (
                 <label key={opt.key}
                   className={`flex cursor-pointer items-start gap-3 rounded-[3px] border p-3 transition-all ${apply[opt.key] ? "border-[#17130f] bg-white" : "border-[#e8e4de] bg-white/40"}`}>
@@ -765,12 +769,13 @@ function SyncTab() {
           <h3 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Журнал синхронізацій</h3>
           <div className="space-y-2">
             {log.map((e, i) => {
-              const total = e.result.pricesUpdated + e.result.markedInStock + e.result.markedOutOfStock + e.result.newInserted;
+              const total = e.result.pricesUpdated + e.result.markedInStock + e.result.markedOutOfStock + e.result.newInserted + (e.result.quantitiesSet ?? 0);
               const parts = [
                 e.result.pricesUpdated    ? `${e.result.pricesUpdated} цін`      : "",
                 e.result.markedInStock    ? `+${e.result.markedInStock} в наявн.` : "",
                 e.result.markedOutOfStock ? `−${e.result.markedOutOfStock} немає` : "",
                 e.result.newInserted      ? `${e.result.newInserted} нових`       : "",
+                e.result.quantitiesSet    ? `${e.result.quantitiesSet} к-стей`    : "",
               ].filter(Boolean).join(" · ");
               return (
                 <div key={i} className="flex items-center justify-between rounded-[3px] border border-[#f0ece5] px-3 py-2 text-[12px]">
