@@ -7,6 +7,7 @@ export const HOME_SECTIONS: { id: string; label: string }[] = [
   { id: "hero",        label: "Hero (перший екран)" },
   { id: "marquee",     label: "Стрічка брендів" },
   { id: "categories",  label: "Категорії (3 плитки)" },
+  { id: "featured",    label: "Обране (кураторський вибір)" },
   { id: "newArrivals", label: "Новинки" },
   { id: "editorial",   label: "Editorial-блок" },
   { id: "services",    label: "Переваги (4 картки)" },

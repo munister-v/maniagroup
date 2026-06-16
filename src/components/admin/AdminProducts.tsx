@@ -18,6 +18,7 @@ type Row = {
   is_in_stock: boolean;
   status: string;
   image_src: string;
+  featured?: boolean;
 };
 
 type FullProduct = Row & {
@@ -115,7 +116,34 @@ export function AdminProducts({ onToast }: { onToast?: (msg: string) => void }) 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showRule, setShowRule] = useState(false);
+  const [ruleBrands, setRuleBrands] = useState<{ brand: string; count: number }[]>([]);
+  const [rule, setRule] = useState({ scope: "", percent: "" });
+  const [ruleBusy, setRuleBusy] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function openPriceRule() {
+    setShowRule((v) => !v);
+    if (ruleBrands.length === 0) {
+      const res = await fetch("/api/admin/products/price-rule");
+      if (res.ok) setRuleBrands((await res.json()).brands ?? []);
+    }
+  }
+
+  async function applyRule(clear: boolean) {
+    if (!rule.scope) { onToast?.("Оберіть бренд"); return; }
+    if (!clear && !Number(rule.percent)) { onToast?.("Вкажіть відсоток"); return; }
+    setRuleBusy(true);
+    try {
+      const res = await fetch("/api/admin/products/price-rule", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: { brand: rule.scope }, percent: clear ? 0 : Number(rule.percent) }),
+      });
+      const data = await res.json();
+      if (res.ok) { onToast?.(clear ? `Знижку знято з ${data.count} тов.` : `Знижку застосовано до ${data.count} тов.`); load(1, search, stock); }
+      else onToast?.(data.error ?? "Помилка");
+    } finally { setRuleBusy(false); }
+  }
 
   const load = useCallback(async (p: number, q: string, st: string) => {
     setLoading(true);
@@ -213,11 +241,44 @@ export function AdminProducts({ onToast }: { onToast?: (msg: string) => void }) 
         <div className="flex items-center gap-2">
           <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Назва, бренд, SKU…"
             className="h-10 w-64 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+          <button onClick={openPriceRule} className="h-10 shrink-0 border border-[#e5ded3] bg-white px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+            Знижки
+          </button>
           <button onClick={openNew} className="h-10 shrink-0 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85">
             + Додати
           </button>
         </div>
       </div>
+
+      {showRule && (
+        <div className="mb-4 rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] p-4">
+          <p className="mb-3 text-[11px] uppercase tracking-wider text-[#9c8f7d]">Масова знижка на бренд</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1">
+              <span className={lbl}>Бренд</span>
+              <select value={rule.scope} onChange={(e) => setRule({ ...rule, scope: e.target.value })}
+                className="h-10 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none">
+                <option value="">— оберіть —</option>
+                {ruleBrands.map((b) => <option key={b.brand} value={b.brand}>{b.brand} ({b.count})</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={lbl}>Знижка, %</span>
+              <input type="number" min="0" max="95" value={rule.percent} onChange={(e) => setRule({ ...rule, percent: e.target.value })}
+                placeholder="20" className="h-10 w-24 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+            </label>
+            <button onClick={() => applyRule(false)} disabled={ruleBusy}
+              className="h-10 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+              {ruleBusy ? "…" : "Застосувати"}
+            </button>
+            <button onClick={() => applyRule(true)} disabled={ruleBusy}
+              className="h-10 border border-[#e5ded3] bg-white px-4 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+              Зняти знижку
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-[#9c8f7d]">Встановлює акційну ціну = звичайна × (1 − %). «Зняти знижку» повертає звичайну ціну.</p>
+        </div>
+      )}
 
       {/* Stock filter tabs */}
       <div className="mb-4 flex gap-1.5">
@@ -240,6 +301,8 @@ export function AdminProducts({ onToast }: { onToast?: (msg: string) => void }) 
           <BulkBtn onClick={() => bulk("unpublish", "Знято з публікації")}>Сховати</BulkBtn>
           <BulkBtn onClick={() => bulk("in_stock", "В наявності")}>В наявності</BulkBtn>
           <BulkBtn onClick={() => bulk("out_of_stock", "Немає в наявності")}>Немає</BulkBtn>
+          <BulkBtn onClick={() => bulk("feature", "Додано в обране")}>★ В обране</BulkBtn>
+          <BulkBtn onClick={() => bulk("unfeature", "Прибрано з обраного")}>З обраного</BulkBtn>
           <BulkBtn onClick={() => bulk("delete", "Видалено")} danger>Видалити</BulkBtn>
           <button onClick={() => setSelected(new Set())} className="ml-auto text-[11px] uppercase tracking-wider text-white/50 hover:text-white">Скинути</button>
         </div>
@@ -263,7 +326,7 @@ export function AdminProducts({ onToast }: { onToast?: (msg: string) => void }) 
                   {p.image_src && <img src={p.image_src} alt="" className="h-full w-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] text-[#17130f]">{p.name}{p.status !== "publish" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] uppercase text-amber-700">чернетка</span>}</p>
+                  <p className="truncate text-[13px] text-[#17130f]">{p.featured && <span title="В обраному" className="mr-1 text-[#bf9b30]">★</span>}{p.name}{p.status !== "publish" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] uppercase text-amber-700">чернетка</span>}</p>
                   <p className="text-[11px] text-[#9c8f7d]">{p.brand} · {p.category}{p.sku ? ` · ${p.sku}` : ""}</p>
                 </div>
                 {!p.is_in_stock && <span className="rounded bg-[#f5f5f5] px-2 py-0.5 text-[10px] text-[#9c8f7d]">немає</span>}

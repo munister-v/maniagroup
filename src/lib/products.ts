@@ -61,7 +61,7 @@ export async function listAdminProducts(opts: { q?: string; page?: number; perPa
   const rows = await q(
     `SELECT id::text AS id, name, slug, sku, brand, category, category_slug, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
-            price::float AS price, is_in_stock, status, image_src
+            price::float AS price, is_in_stock, status, image_src, featured
      FROM products ${where} ORDER BY id DESC LIMIT ${perPage} OFFSET ${offset}`,
     bind,
   );
@@ -154,7 +154,7 @@ export async function deleteAdminProduct(id: string): Promise<void> {
   await q("DELETE FROM products WHERE id = $1", [Number(id)]);
 }
 
-export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "delete";
+export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "delete";
 
 export async function bulkProducts(ids: string[], action: BulkAction): Promise<number> {
   const nums = ids.map(Number).filter(Number.isFinite);
@@ -168,10 +168,59 @@ export async function bulkProducts(ids: string[], action: BulkAction): Promise<n
       await q("UPDATE products SET is_in_stock = TRUE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
     case "out_of_stock":
       await q("UPDATE products SET is_in_stock = FALSE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
+    case "feature":
+      await q("UPDATE products SET featured = TRUE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
+    case "unfeature":
+      await q("UPDATE products SET featured = FALSE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
     case "delete":
       await q("DELETE FROM products WHERE id = ANY($1)", [nums]); break;
     default:
       throw new Error("Невідома дія");
   }
   return nums.length;
+}
+
+export type PriceRuleScope = { brand?: string; categorySlug?: string; ids?: string[] };
+
+/**
+ * Bulk price adjustment. percent>0 sets a sale price = regular × (1 − percent/100);
+ * percent=0 clears the sale (back to regular). Scoped by brand, category, or ids.
+ */
+export async function applyPriceRule(scope: PriceRuleScope, percent: number): Promise<number> {
+  const conds: string[] = ["regular_price > 0"];
+  const bind: unknown[] = [];
+  if (scope.brand) { bind.push(scope.brand); conds.push(`brand = $${bind.length}`); }
+  if (scope.categorySlug) { bind.push(scope.categorySlug); conds.push(`category_slug = $${bind.length}`); }
+  if (scope.ids && scope.ids.length) {
+    bind.push(scope.ids.map(Number).filter(Number.isFinite));
+    conds.push(`id = ANY($${bind.length})`);
+  }
+  const where = conds.join(" AND ");
+
+  if (percent > 0) {
+    bind.push(1 - percent / 100);
+    const rows = await q(
+      `UPDATE products
+         SET sale_price = round(regular_price * $${bind.length}),
+             price = round(regular_price * $${bind.length}),
+             updated_at = now()
+       WHERE ${where} RETURNING id`,
+      bind,
+    );
+    return rows.length;
+  }
+  // Clear sale: back to regular price.
+  const rows = await q(
+    `UPDATE products SET sale_price = NULL, price = regular_price, updated_at = now() WHERE ${where} RETURNING id`,
+    bind,
+  );
+  return rows.length;
+}
+
+/** Distinct brand list with product counts (for price-rule + filters). */
+export async function listBrandsWithCounts(): Promise<{ brand: string; count: number }[]> {
+  return q<{ brand: string; count: number }>(
+    `SELECT brand, count(*)::int AS count FROM products
+     WHERE brand <> '' GROUP BY brand ORDER BY count DESC, brand ASC`,
+  );
 }

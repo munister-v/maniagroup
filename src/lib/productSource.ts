@@ -234,6 +234,16 @@ export async function getCatalogProducts(
   return runQuery(params);
 }
 
+/** Curated products flagged `featured` for the homepage. In-stock first. */
+export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
+  const rows = await q(
+    `SELECT * FROM products WHERE featured AND status = 'publish'
+     ORDER BY is_in_stock DESC, id DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map((r) => rowToProduct(r));
+}
+
 /** Fetch a set of products by id, preserving the input order. */
 export async function getProductsByIds(ids: string[]): Promise<Product[]> {
   const numeric = ids.map((s) => Number(s)).filter((n) => Number.isFinite(n));

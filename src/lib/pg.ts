@@ -218,6 +218,10 @@ CREATE TABLE IF NOT EXISTS customer_tags (
   PRIMARY KEY (account_id, tag)
 );
 
+-- ── Catalog: homepage curation ──
+ALTER TABLE products ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_products_featured ON products(featured) WHERE featured;
+
 -- ── Marketing: discount coupons ──
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;
