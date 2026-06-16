@@ -10,7 +10,7 @@ import { AdminCustomers } from "./AdminCustomers";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "catalog" | "products" | "orders" | "customers" | "subscribers" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "orders" | "customers" | "subscribers" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -60,6 +60,11 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "content",
     label: "Контент",
     d: "M4 6h16M4 12h10M4 18h16",
+  },
+  {
+    id: "media",
+    label: "Медіа",
+    d: "M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z",
   },
   {
     id: "catalog",
@@ -292,6 +297,7 @@ export function AdminDashboard({
           {section === "content" && (
             <ContentSection content={content} update={update} />
           )}
+          {section === "media" && <MediaSection onToast={showToast} />}
           {section === "catalog" && <CatalogImportSection />}
           {section === "products" && <AdminProducts onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
@@ -1021,6 +1027,128 @@ function ContentSection({
 /* ─── Subscribers ─── */
 
 type Subscriber = { id: string; email: string; source: string; created_at: string };
+
+/* ─── Media library ─── */
+
+type MediaFile = { url: string; name: string; size: number; mtime: number };
+
+function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
+  const [files, setFiles] = useState<MediaFile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/media");
+      const data = await res.json();
+      setFiles(data.files ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, []);
+
+  async function upload(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setUploading(true);
+    let ok = 0;
+    for (const file of Array.from(list)) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+      if (res.ok) ok++;
+      else {
+        const d = await res.json().catch(() => ({}));
+        onToast?.(d.error ?? `Не вдалося завантажити ${file.name}`);
+      }
+    }
+    setUploading(false);
+    if (inputRef.current) inputRef.current.value = "";
+    if (ok) onToast?.(`Завантажено: ${ok}`);
+    load();
+  }
+
+  async function copy(url: string) {
+    const full = `${location.origin}${url}`;
+    try {
+      await navigator.clipboard.writeText(full);
+      onToast?.("Посилання скопійовано");
+    } catch {
+      onToast?.(full);
+    }
+  }
+
+  async function remove(name: string) {
+    if (!confirm(`Видалити «${name}»? Якщо файл десь використовується — зображення зникне.`)) return;
+    const res = await fetch(`/api/admin/media?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (res.ok) {
+      setFiles((fs) => fs.filter((f) => f.name !== name));
+      onToast?.("Видалено");
+    } else {
+      onToast?.("Не вдалося видалити");
+    }
+  }
+
+  const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.round(b / 1024)} КБ` : `${(b / 1024 / 1024).toFixed(1)} МБ`);
+
+  return (
+    <div className="max-w-4xl">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-[#17130f]">Медіа-бібліотека</h2>
+          <p className="text-[12px] text-[#9c8f7d]">{files.length} зображень · jpg, png, webp, avif, gif · до 8 МБ</p>
+        </div>
+        <input ref={inputRef} type="file" accept="image/*" multiple hidden
+          onChange={(e) => upload(e.target.files)} />
+        <button onClick={() => inputRef.current?.click()} disabled={uploading}
+          className="flex h-10 items-center gap-2 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+            <path d="M12 4v12m0-12l-4 4m4-4l4 4M4 20h16" />
+          </svg>
+          {uploading ? "Завантаження…" : "Завантажити"}
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {[1,2,3,4,5,6,7,8].map((i) => <div key={i} className="aspect-square animate-pulse bg-[#f3efe8]" />)}
+        </div>
+      ) : files.length === 0 ? (
+        <div className="rounded-[3px] border border-dashed border-[#d8d2c8] bg-white px-4 py-16 text-center text-sm text-[#9c8f7d]">
+          Бібліотека порожня. Завантажте перше зображення.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {files.map((f) => (
+            <div key={f.name} className="group relative overflow-hidden rounded-[3px] border border-[#eceae6] bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={f.url} alt={f.name} className="aspect-square w-full object-cover" loading="lazy" />
+              <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+                <span className="truncate text-[10px] text-[#9c8f7d]" title={f.name}>{fmtSize(f.size)}</span>
+                <div className="flex shrink-0 gap-1">
+                  <button onClick={() => copy(f.url)} title="Копіювати посилання"
+                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#9c8f7d] hover:bg-[#f5f1ea] hover:text-[#17130f]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                      <path d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
+                    </svg>
+                  </button>
+                  <button onClick={() => remove(f.name)} title="Видалити"
+                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#9c8f7d] hover:bg-[#fdecec] hover:text-[#c62828]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                      <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m1 0v12a1 1 0 01-1 1H8a1 1 0 01-1-1V7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SubscribersSection() {
   const [rows, setRows] = useState<Subscriber[]>([]);
