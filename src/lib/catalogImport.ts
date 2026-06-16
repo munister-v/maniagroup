@@ -16,7 +16,7 @@
  */
 
 import * as XLSX from "xlsx";
-import { replaceCatalog, setMeta, type ProductRow } from "./db";
+import { replaceCatalog, insertVariants, setMeta, type ProductRow } from "./db";
 
 const STORE_API = "https://maniagroup.com.ua/wp-json/wc/store/products";
 
@@ -110,6 +110,7 @@ type WpRow = {
   id: string; name: string; regular: number; sale: number; category: string;
   sizes: string[]; season: string; color: string; country: string; article: string;
   qty: number; // total units in stock across all size variations ("In Stock?")
+  sizeQty: Record<string, number>; // per-size units (for ERP variants)
 };
 
 function parseWp(buf: Buffer): Map<string, WpRow> {
@@ -134,6 +135,7 @@ function parseWp(buf: Buffer): Map<string, WpRow> {
         country: String(r["Страна производитель"] ?? "").trim(),
         article: String(r["Артикул"] ?? "").trim(),
         qty: 0,
+        sizeQty: {},
       };
       map.set(id, p);
     }
@@ -141,6 +143,7 @@ function parseWp(buf: Buffer): Map<string, WpRow> {
     // "In Stock?" is the actual unit count for this size, not a 0/1 flag.
     const qty = Number(r["In Stock?"]) || 0;
     if (size && qty > 0 && !p.sizes.includes(size)) p.sizes.push(size);
+    if (size && qty > 0) p.sizeQty[size] = (p.sizeQty[size] ?? 0) + qty;
     if (qty > 0) p.qty += qty;
   }
   return map;
@@ -218,6 +221,7 @@ export async function importCatalog(opts: {
     const now = new Date().toISOString();
     type Row = Record<string, unknown>;
     const rows: Row[] = [];
+    const variants: { product_id: number; size: string; stock_qty: number }[] = [];
     const categories = new Map<string, { name: string; slug: string; count: number }>();
     let withImages = 0;
 
@@ -227,6 +231,11 @@ export async function importCatalog(opts: {
       const entry = store.get(id);
       const pid = entry?.postId ?? SYNTH_OFFSET + Number(id);
       if (entry?.images.length) withImages++;
+
+      // Per-size variants for the ERP warehouse core (real units from WP).
+      for (const [size, qty] of Object.entries(w.sizeQty)) {
+        variants.push({ product_id: pid, size, stock_qty: qty });
+      }
 
       const brand = m?.brand || "Mania Group";
       const gender = m?.gender || "";
@@ -286,6 +295,9 @@ export async function importCatalog(opts: {
     onProgress(`Запис у БД: ${rows.length} товарів…`);
 
     await replaceCatalog(rows as unknown as ProductRow[], Array.from(categories.values()));
+
+    onProgress(`Запис розмірів (варіанти): ${variants.length}…`);
+    await insertVariants(variants);
 
     const inStock = rows.filter((r) => r.is_in_stock === true).length;
     const archived = rows.length - inStock;

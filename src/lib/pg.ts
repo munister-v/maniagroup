@@ -253,6 +253,40 @@ CREATE TABLE IF NOT EXISTS expenses (
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(spent_on DESC);
 
+-- ── ERP: warehouse core (size-matrix variants + stock movement ledger) ──
+-- The admin/ERP becomes the system of record for assortment & stock. A product
+-- breaks into per-size variants (= the bookkeeper's "size present ⇒ available"
+-- model). products.stock_qty is kept as a mirror (sum of variant stock) so the
+-- storefront/cart/orders keep working during the transition.
+CREATE TABLE IF NOT EXISTS product_variants (
+  id         BIGSERIAL PRIMARY KEY,
+  product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  size       TEXT NOT NULL DEFAULT '',
+  barcode    TEXT NOT NULL DEFAULT '',
+  stock_qty  INTEGER NOT NULL DEFAULT 0,
+  price      NUMERIC,                       -- NULL ⇒ inherit product price
+  active     BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by TEXT NOT NULL DEFAULT '',
+  UNIQUE (product_id, size)
+);
+CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id);
+
+-- Every stock change, for a full audit trail ("Оновлено / Ким оновлено").
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id         BIGSERIAL PRIMARY KEY,
+  product_id BIGINT NOT NULL,
+  variant_id BIGINT,
+  size       TEXT NOT NULL DEFAULT '',
+  type       TEXT NOT NULL DEFAULT 'adjust', -- import|receipt|sale|return|adjust|writeoff
+  delta      INTEGER NOT NULL DEFAULT 0,      -- signed change in units
+  qty_after  INTEGER,                         -- resulting stock for that variant
+  note       TEXT NOT NULL DEFAULT '',
+  author     TEXT NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_movements_product ON stock_movements(product_id, created_at DESC);
+
 -- ── Marketing: discount coupons ──
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;

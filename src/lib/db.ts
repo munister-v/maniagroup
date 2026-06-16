@@ -126,3 +126,41 @@ export async function replaceCatalog(
     client.release();
   }
 }
+
+/**
+ * Bulk-replace per-size variants after a full catalog import. The TRUNCATE in
+ * replaceCatalog already cascaded product_variants empty (FK ON DELETE CASCADE),
+ * so this just inserts the fresh per-size rows. Logs one 'import' movement per
+ * variant so the ledger reflects the import baseline.
+ */
+export async function insertVariants(
+  variants: { product_id: number; size: string; stock_qty: number }[],
+): Promise<void> {
+  if (!variants.length) return;
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const CHUNK = 500;
+    for (let i = 0; i < variants.length; i += CHUNK) {
+      const slice = variants.slice(i, i + CHUNK);
+      const vals: unknown[] = [];
+      const tuples = slice.map((v, idx) => {
+        const b = idx * 3;
+        vals.push(v.product_id, v.size, v.stock_qty);
+        return `($${b + 1},$${b + 2},$${b + 3})`;
+      });
+      await client.query(
+        `INSERT INTO product_variants (product_id, size, stock_qty) VALUES ${tuples.join(",")}
+         ON CONFLICT (product_id, size) DO UPDATE SET stock_qty = EXCLUDED.stock_qty, updated_at = now()`,
+        vals,
+      );
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
