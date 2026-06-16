@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ErpOverview } from "./ErpOverview";
 import { ErpReceiving } from "./ErpReceiving";
+import { ErpStocktake } from "./ErpStocktake";
 import { ErpSuppliers } from "./ErpSuppliers";
 import { ErpChannels } from "./ErpChannels";
 
@@ -42,7 +43,7 @@ const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px]
 
 /* ── root ───────────────────────────────────────────────────────────────── */
 
-type ErpSection = "overview" | "products" | "receiving" | "suppliers" | "channels";
+type ErpSection = "overview" | "products" | "receiving" | "stocktake" | "suppliers" | "channels";
 
 export function ErpWorkspace() {
   const [section, setSection] = useState<ErpSection>("overview");
@@ -56,6 +57,7 @@ export function ErpWorkspace() {
             ["overview", "Огляд"],
             ["products", "Товари"],
             ["receiving", "Прихід"],
+            ["stocktake", "Інвентаризація"],
             ["suppliers", "Постачальники"],
             ["channels", "Канали / Вигрузки"],
           ] as const).map(([id, label]) => (
@@ -70,6 +72,7 @@ export function ErpWorkspace() {
       {section === "overview" && <ErpOverview onGoto={setSection} />}
       {section === "products" && (selected ? <ProductCard id={selected} onBack={() => setSelected(null)} /> : <ProductList onOpen={setSelected} />)}
       {section === "receiving" && <ErpReceiving />}
+      {section === "stocktake" && <ErpStocktake />}
       {section === "suppliers" && <ErpSuppliers />}
       {section === "channels" && <ErpChannels />}
     </div>

@@ -327,6 +327,31 @@ CREATE TABLE IF NOT EXISTS suppliers (
 );
 ALTER TABLE receipts ADD COLUMN IF NOT EXISTS supplier_id BIGINT;
 
+-- ── ERP: stocktaking (інвентаризація) — physical count vs expected ──
+-- Posting sets each counted variant's stock_qty to the physical count, logs an
+-- 'adjust' movement for the variance, and recomputes the products mirror.
+CREATE TABLE IF NOT EXISTS stocktakes (
+  id         BIGSERIAL PRIMARY KEY,
+  note       TEXT NOT NULL DEFAULT '',
+  scope      TEXT NOT NULL DEFAULT '',
+  status     TEXT NOT NULL DEFAULT 'draft',   -- draft | posted
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  posted_at  TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS stocktake_items (
+  id           BIGSERIAL PRIMARY KEY,
+  stocktake_id BIGINT NOT NULL REFERENCES stocktakes(id) ON DELETE CASCADE,
+  product_id   BIGINT NOT NULL,
+  variant_id   BIGINT NOT NULL,
+  name         TEXT NOT NULL DEFAULT '',
+  brand        TEXT NOT NULL DEFAULT '',
+  size         TEXT NOT NULL DEFAULT '',
+  expected     INTEGER NOT NULL DEFAULT 0,    -- variant stock_qty snapshot at add time
+  counted      INTEGER,                       -- NULL until physically counted
+  UNIQUE (stocktake_id, variant_id)
+);
+CREATE INDEX IF NOT EXISTS idx_stocktake_items_doc ON stocktake_items(stocktake_id);
+
 -- ── Marketing: discount coupons ──
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;
