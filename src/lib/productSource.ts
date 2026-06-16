@@ -126,10 +126,11 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   if (params.maxPrice)      conds.push(`price <= ${p(params.maxPrice)}`);
 
   const where = conds.join(" AND ");
+  const hasImg = `(images IS NOT NULL AND images::text NOT IN ('[]','null',''))`;
   const order =
     params.orderby === "price"
-      ? `ORDER BY is_in_stock DESC, price ${(params.order ?? "asc").toUpperCase() === "DESC" ? "DESC" : "ASC"}`
-      : "ORDER BY is_in_stock DESC, id DESC";
+      ? `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, price ${(params.order ?? "asc").toUpperCase() === "DESC" ? "DESC" : "ASC"}`
+      : `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, id DESC`;
 
   const limit = params.perPage ?? 24;
   const offset = ((params.page ?? 1) - 1) * limit;
