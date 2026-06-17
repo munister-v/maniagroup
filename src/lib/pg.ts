@@ -229,6 +229,9 @@ CREATE INDEX IF NOT EXISTS idx_products_featured ON products(featured) WHERE fea
 --   3. global markup / base-pct (store_settings: finance_markup_pct, finance_cost_basis)
 ALTER TABLE products    ADD COLUMN IF NOT EXISTS cost_price  NUMERIC;          -- NULL ⇒ derive
 ALTER TABLE products    ADD COLUMN IF NOT EXISTS cost_source TEXT NOT NULL DEFAULT ''; -- 'manual'|'import'|''
+-- Photo storage core: TRUE once images were pulled off WordPress into the
+-- server's own /public/catalog storage (self-contained catalog, no WP dependency).
+ALTER TABLE products    ADD COLUMN IF NOT EXISTS photos_migrated BOOLEAN NOT NULL DEFAULT FALSE;
 -- Snapshot the cost into each order line at order time so historical profit
 -- stays correct even when cost settings change later.
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS cost_price  NUMERIC NOT NULL DEFAULT 0;

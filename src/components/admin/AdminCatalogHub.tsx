@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -798,7 +798,7 @@ function SyncTab() {
 
 // ── Main hub ──────────────────────────────────────────────────────────────────
 
-type HubTab = "overview" | "import" | "diff";
+type HubTab = "overview" | "import" | "diff" | "photos";
 
 const HUB_TABS: { id: HubTab; label: string; icon: string }[] = [
   {
@@ -815,6 +815,11 @@ const HUB_TABS: { id: HubTab; label: string; icon: string }[] = [
     id: "diff",
     label: "Синхронізація",
     icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15",
+  },
+  {
+    id: "photos",
+    label: "Фото на сервер",
+    icon: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
   },
 ];
 
@@ -842,6 +847,122 @@ export function AdminCatalogHub() {
       {tab === "overview" && <OverviewTab />}
       {tab === "import"   && <ImportTab  />}
       {tab === "diff"     && <SyncTab    />}
+      {tab === "photos"   && <PhotosTab  />}
+    </div>
+  );
+}
+
+/* ── Photos: migrate WordPress images → server storage ──────────────────────── */
+
+type PhotoStatusT = { migrated: number; pending: number; withPhotos: number; external: number };
+
+function PhotosTab() {
+  const [status, setStatus] = useState<PhotoStatusT | null>(null);
+  const [running, setRunning] = useState(false);
+  const [log, setLog] = useState<string[]>([]);
+  const [totals, setTotals] = useState({ downloaded: 0, failed: 0 });
+  const stop = useRef(false);
+
+  const loadStatus = useCallback(() => {
+    fetch("/api/admin/photos").then((r) => r.json()).then(setStatus).catch(() => {});
+  }, []);
+  useEffect(() => { loadStatus(); }, [loadStatus]);
+
+  async function run() {
+    setRunning(true); stop.current = false; setLog([]); setTotals({ downloaded: 0, failed: 0 });
+    let dl = 0, fail = 0;
+    for (;;) {
+      if (stop.current) break;
+      const res = await fetch("/api/admin/photos", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "batch", limit: 80 }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setLog((l) => [`✗ ${d.error ?? "помилка"}`, ...l].slice(0, 100)); break; }
+      dl += d.downloaded; fail += d.failed;
+      setTotals({ downloaded: dl, failed: fail });
+      setLog((l) => [`Партія: ${d.processed} товарів · +${d.downloaded} фото${d.failed ? ` · ${d.failed} помилок` : ""} · лишилось ${d.remaining}`, ...l].slice(0, 100));
+      loadStatus();
+      if (d.processed === 0 || d.remaining === 0) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    setRunning(false);
+    loadStatus();
+  }
+
+  async function retry() {
+    const res = await fetch("/api/admin/photos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "retry" }) });
+    const d = await res.json();
+    setLog((l) => [`Повернуто в чергу: ${d.requeued}`, ...l].slice(0, 100));
+    loadStatus();
+  }
+
+  const total = status ? status.migrated + status.pending : 0;
+  const pct = total > 0 ? Math.round((status!.migrated / total) * 100) : 0;
+
+  return (
+    <div className="max-w-3xl space-y-5">
+      <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+        <h2 className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Фото з WordPress → на свій сервер</h2>
+        <p className="mb-4 text-[12px] text-[#b9ae9b]">Завантажує всі фото товарів із maniagroup.com.ua у власне сховище сервера (/catalog) і переписує базу на локальні шляхи. Каталог стає незалежним від WordPress. Можна зупиняти й продовжувати — процес відновлюваний.</p>
+
+        {status && (
+          <>
+            <div className="mb-2 flex h-2.5 overflow-hidden rounded-full bg-[#f0ece6]">
+              <div className="bg-emerald-600 transition-all" style={{ width: `${pct}%` }} />
+            </div>
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              {[
+                { l: "На сервері", v: status.migrated, cls: "text-emerald-700" },
+                { l: "Залишилось", v: status.pending, cls: status.pending > 0 ? "text-amber-600" : "text-[#9c8f7d]" },
+                { l: "Ще на WP (img)", v: status.external, cls: "text-[#9c8f7d]" },
+              ].map((s) => (
+                <div key={s.l} className="rounded-[3px] border border-[#eee7db] bg-[#faf8f5] p-3 text-center">
+                  <p className={`text-[18px] font-semibold tabular-nums ${s.cls}`}>{N(s.v)}</p>
+                  <p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#9c8f7d]">{s.l}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex items-center gap-3">
+          {!running ? (
+            <button onClick={run} disabled={!status || status.pending === 0}
+              className="inline-flex h-10 items-center gap-2 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.14em] text-white hover:opacity-90 disabled:opacity-35">
+              {status && status.pending === 0 ? "Усі фото на сервері ✓" : "Почати міграцію фото"}
+            </button>
+          ) : (
+            <button onClick={() => { stop.current = true; }}
+              className="inline-flex h-10 items-center gap-2 rounded-[3px] bg-amber-600 px-6 text-[11px] uppercase tracking-[0.14em] text-white hover:opacity-90">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              Зупинити (після партії)
+            </button>
+          )}
+          {status && status.external > 0 && !running && (
+            <button onClick={retry} className="text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">Повторити невдалі</button>
+          )}
+          {running && <span className="text-[12px] text-[#9c8f7d]">+{N(totals.downloaded)} фото{totals.failed ? ` · ${totals.failed} помилок` : ""}</span>}
+        </div>
+
+        {log.length > 0 && (
+          <div className="mt-4 max-h-44 overflow-y-auto rounded-[3px] bg-[#17130f] px-4 py-3 font-mono text-[11px] leading-relaxed">
+            {log.map((m, i) => <p key={i} className="text-emerald-400"><span className="mr-2 text-emerald-700">›</span>{m}</p>)}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5 text-[12px] text-[#9c8f7d]">
+        <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[#17130f]">Як це працює</p>
+        <ul className="space-y-1.5">
+          {[
+            "Фото зберігаються у /public/catalog/<id>/ на сервері (переживають деплой).",
+            "База переписується на локальні шляхи /catalog/… — WordPress більше не потрібен.",
+            "Нові товари вантажать фото одразу локально (через завантаження в картці).",
+            "Якщо якесь фото не завантажилось — лишається на WP; «Повторити невдалі» поверне їх у чергу.",
+          ].map((t) => <li key={t} className="flex gap-2"><span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-[#b9ae9b]" />{t}</li>)}
+        </ul>
+      </div>
     </div>
   );
 }

@@ -49,3 +49,5 @@ data/*.db-wal
 
 # user-uploaded product images (served at /uploads)
 /public/uploads/
+# product photos migrated off WordPress (served at /catalog)
+/public/catalog/
