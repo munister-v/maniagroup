@@ -1,4 +1,5 @@
-import { getStoreSettings } from "./settings";
+import { getStoreSettings, getSetting } from "./settings";
+import { q } from "./pg";
 import type { Order } from "./orders";
 
 /**
@@ -56,6 +57,33 @@ export async function notifyNewOrder(order: Order): Promise<void> {
     `\n${items}\n\n` +
     `💰 <b>${order.total.toLocaleString("uk-UA")} ₴</b> · ${order.payment_method === "prepay" ? "передоплата" : "накладений платіж"}`;
   try { await sendTelegram(text); } catch { /* best-effort */ }
+}
+
+/**
+ * After a sale, auto-alert the owner about the just-sold sizes that are now low
+ * or out of stock — so reordering happens without anyone watching the dashboard.
+ * Threshold from settings `low_stock_threshold` (default 2). Best-effort.
+ */
+export async function notifyLowStockForOrder(orderId: number): Promise<void> {
+  if (!(await enabled())) return;
+  const t = Number(await getSetting("low_stock_threshold"));
+  const threshold = Number.isFinite(t) && t > 0 ? t : 2;
+  try {
+    const rows = await q<{ name: string; brand: string; size: string; stock_qty: number }>(
+      `SELECT p.name, p.brand, v.size, v.stock_qty
+         FROM order_items oi
+         JOIN product_variants v ON v.product_id = oi.product_id AND v.size = oi.variation AND v.active
+         JOIN products p ON p.id = oi.product_id
+        WHERE oi.order_id = $1 AND v.stock_qty <= $2
+        ORDER BY v.stock_qty ASC`,
+      [orderId, threshold],
+    );
+    if (!rows.length) return;
+    const lines = rows.map((r) =>
+      `• ${esc(r.name)} ${esc(r.brand)} — ${esc(r.size)}: <b>${r.stock_qty === 0 ? "немає" : r.stock_qty + " шт"}</b>`,
+    ).join("\n");
+    await sendTelegram(`⚠️ <b>Закінчується на складі</b> (після продажу)\n\n${lines}\n\nВарто запланувати закупівлю.`);
+  } catch { /* best-effort */ }
 }
 
 /** Fire a status-change message. Non-blocking. */

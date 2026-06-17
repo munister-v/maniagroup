@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readCartToken } from "@/lib/cart";
 import { createOrder, getOrder } from "@/lib/orders";
-import { notifyNewOrder } from "@/lib/notify";
+import { notifyNewOrder, notifyLowStockForOrder } from "@/lib/notify";
 import { getSessionAccount } from "@/lib/accountAuth";
 
 type CheckoutBody = {
@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     });
     const order = await getOrder(id);
     if (order) await notifyNewOrder(order);
+    await notifyLowStockForOrder(id);
     return NextResponse.json({ ok: true, orderId: id, number, status: "pending" });
   } catch (e) {
     return NextResponse.json(

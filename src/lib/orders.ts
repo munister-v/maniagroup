@@ -117,27 +117,70 @@ export function npTrackingUrl(ttn: string): string {
   return clean ? `https://novaposhta.ua/tracking/?cargo_number=${clean}` : "";
 }
 
-type StockLine = { product_id: number | string; quantity: number };
+type StockLine = { product_id: number | string; quantity: number; variation?: string };
+
+type PgClient = { query: <R = unknown>(t: string, p?: unknown[]) => Promise<{ rows: R[] }> };
 
 /**
- * Adjust inventory for a set of lines. dir = -1 reserves stock (new order),
- * +1 releases it (cancellation). Only touches rows with a known stock_qty so
- * we never falsely flip an unmanaged product to out-of-stock.
+ * Adjust inventory for a set of order lines — fully automatic, size-aware.
+ * dir = -1 reserves stock on a sale, +1 releases it on cancellation.
+ *
+ * Per line: if the order line carries a size (variation) that matches an active
+ * product_variant, that variant's stock_qty is changed, a 'sale'/'return' stock
+ * movement is logged, and the product mirror is recomputed from its variants —
+ * so the warehouse stays correct with zero manual work. If there is no variant
+ * match (unmanaged product / no size), it falls back to the product mirror only,
+ * never flipping an unmanaged product (NULL stock_qty) to out-of-stock.
  */
 async function adjustStock(
-  client: { query: (t: string, p?: unknown[]) => Promise<unknown> },
+  client: PgClient,
   lines: StockLine[],
   dir: -1 | 1,
+  ctx?: { note?: string },
 ): Promise<void> {
+  const moveType = dir < 0 ? "sale" : "return";
+  const note = ctx?.note ?? "";
   for (const l of lines) {
-    await client.query(
-      `UPDATE products
-         SET stock_qty = GREATEST(0, COALESCE(stock_qty,0) + $1::int * $2::int),
-             is_in_stock = GREATEST(0, COALESCE(stock_qty,0) + $1::int * $2::int) > 0,
-             updated_at = now()
-       WHERE id = $3::bigint AND stock_qty IS NOT NULL`,
-      [dir, l.quantity, Number(l.product_id)],
-    );
+    const pid = Number(l.product_id);
+    const size = (l.variation ?? "").trim();
+    let handledByVariant = false;
+
+    if (size) {
+      const res = await client.query<{ id: number; stock_qty: number }>(
+        `UPDATE product_variants
+           SET stock_qty = GREATEST(0, stock_qty + $1::int * $2::int),
+               updated_at = now(), updated_by = 'order'
+         WHERE product_id = $3::bigint AND size = $4 AND active
+         RETURNING id, stock_qty`,
+        [dir, l.quantity, pid, size],
+      );
+      if (res.rows.length) {
+        const v = res.rows[0];
+        await client.query(
+          `INSERT INTO stock_movements (product_id, variant_id, size, type, delta, qty_after, note, author)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'system')`,
+          [pid, v.id, size, moveType, dir * l.quantity, v.stock_qty, note],
+        );
+        await client.query(
+          `UPDATE products p SET stock_qty = s.total, is_in_stock = (s.total > 0), updated_at = now()
+             FROM (SELECT COALESCE(SUM(stock_qty),0) AS total FROM product_variants WHERE product_id = $1 AND active) s
+            WHERE p.id = $1`,
+          [pid],
+        );
+        handledByVariant = true;
+      }
+    }
+
+    if (!handledByVariant) {
+      await client.query(
+        `UPDATE products
+           SET stock_qty = GREATEST(0, COALESCE(stock_qty,0) + $1::int * $2::int),
+               is_in_stock = GREATEST(0, COALESCE(stock_qty,0) + $1::int * $2::int) > 0,
+               updated_at = now()
+         WHERE id = $3::bigint AND stock_qty IS NOT NULL`,
+        [dir, l.quantity, pid],
+      );
+    }
   }
 }
 
@@ -225,7 +268,7 @@ export async function createOrder(input: OrderInput): Promise<{ id: number; numb
     }
 
     // Reserve inventory and mark the order so a later cancellation can release it.
-    await adjustStock(client, cart.items, -1);
+    await adjustStock(client, cart.items, -1, { note: `Продаж · ${number}` });
     await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
     const createdMsg = `Замовлення ${number} створено · ${total.toLocaleString("uk-UA")} ₴`
       + (discount > 0 ? ` (знижка ${discount.toLocaleString("uk-UA")} ₴, код ${couponCode})` : "");
@@ -311,7 +354,7 @@ export async function createManualOrder(input: ManualOrderInput): Promise<{ id: 
         [id, l.product_id, l.name, l.brand, l.slug, l.image_src, l.variation, l.price, l.quantity, l.line_total, costs.get(String(l.product_id)) ?? 0],
       );
     }
-    await adjustStock(client, snapshot, -1);
+    await adjustStock(client, snapshot, -1, { note: `Продаж · ${number}` });
     await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
     await client.query(
       "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'created',$2,'admin')",
@@ -425,8 +468,8 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
     const applied = cur.rows[0].stock_applied as boolean;
     if (prev === status) { await client.query("ROLLBACK"); return; }
 
-    const items = await client.query<{ product_id: string; quantity: number }>(
-      "SELECT product_id::text AS product_id, quantity FROM order_items WHERE order_id = $1",
+    const items = await client.query<{ product_id: string; quantity: number; variation: string }>(
+      "SELECT product_id::text AS product_id, quantity, variation FROM order_items WHERE order_id = $1",
       [id],
     );
     const releasing = STOCK_RELEASING.has(status);
@@ -434,11 +477,11 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
 
     // Release stock when moving into cancelled/refunded; re-reserve when leaving it.
     if (releasing && applied) {
-      await adjustStock(client, items.rows, 1);
+      await adjustStock(client, items.rows, 1, { note: `Повернення · замовлення #${id}` });
       await client.query("UPDATE orders SET stock_applied = FALSE WHERE id = $1", [id]);
       await client.query("INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'stock','Залишки повернено на склад','system')", [id]);
     } else if (wasReleasing && !releasing && !applied) {
-      await adjustStock(client, items.rows, -1);
+      await adjustStock(client, items.rows, -1, { note: `Резерв · замовлення #${id}` });
       await client.query("UPDATE orders SET stock_applied = TRUE WHERE id = $1", [id]);
       await client.query("INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'stock','Залишки знову зарезервовано','system')", [id]);
     }
