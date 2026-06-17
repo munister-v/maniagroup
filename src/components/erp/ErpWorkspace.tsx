@@ -7,6 +7,7 @@ import { ErpReceiving } from "./ErpReceiving";
 import { ErpStocktake } from "./ErpStocktake";
 import { ErpSuppliers } from "./ErpSuppliers";
 import { ErpChannels } from "./ErpChannels";
+import { ErpProductCreate } from "./ErpProductCreate";
 
 /* ── types ──────────────────────────────────────────────────────────────── */
 
@@ -65,7 +66,8 @@ const NAV: { title?: string; items: { id: ErpSection; label: string }[] }[] = [
 export function ErpWorkspace() {
   const [section, setSection] = useState<ErpSection>("overview");
   const [selected, setSelected] = useState<string | null>(null);
-  const go = (s: ErpSection) => { setSection(s); setSelected(null); };
+  const [creating, setCreating] = useState(false);
+  const go = (s: ErpSection) => { setSection(s); setSelected(null); setCreating(false); };
 
   return (
     <div className="flex h-full">
@@ -115,7 +117,13 @@ export function ErpWorkspace() {
       {/* ── Main content ── */}
       <main className="min-w-0 flex-1 overflow-y-auto">
         {section === "overview" && <ErpOverview onGoto={go} />}
-        {section === "products" && (selected ? <ProductCard id={selected} onBack={() => setSelected(null)} /> : <ProductList onOpen={setSelected} />)}
+        {section === "products" && (
+          creating
+            ? <ErpProductCreate onDone={(id) => { setCreating(false); if (id) setSelected(id); }} onCancel={() => setCreating(false)} />
+            : selected
+              ? <ProductCard id={selected} onBack={() => setSelected(null)} />
+              : <ProductList onOpen={setSelected} onAddNew={() => setCreating(true)} />
+        )}
         {section === "receiving" && <ErpReceiving />}
         {section === "stocktake" && <ErpStocktake />}
         {section === "suppliers" && <ErpSuppliers />}
@@ -127,7 +135,7 @@ export function ErpWorkspace() {
 
 /* ── product list ───────────────────────────────────────────────────────── */
 
-function ProductList({ onOpen }: { onOpen: (id: string) => void }) {
+function ProductList({ onOpen, onAddNew }: { onOpen: (id: string) => void; onAddNew: () => void }) {
   const [q, setQ] = useState("");
   const [stock, setStock] = useState<"" | "in" | "out">("");
   const [page, setPage] = useState(1);
@@ -163,10 +171,10 @@ function ProductList({ onOpen }: { onOpen: (id: string) => void }) {
       {/* Page header — WooCommerce "Add New" pattern */}
       <div className="mb-4 flex items-center gap-3">
         <h1 className="text-[22px] font-light tracking-tight">Товари</h1>
-        <Link href="/admin" className="flex h-7 items-center gap-1 rounded-[3px] border border-[#17130f] px-2.5 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:bg-[#17130f] hover:text-white">
+        <button onClick={onAddNew} className="flex h-7 items-center gap-1 rounded-[3px] border border-[#17130f] px-2.5 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:bg-[#17130f] hover:text-white">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
           Додати товар
-        </Link>
+        </button>
       </div>
 
       {/* Status filter links (WC subsubsub) + search */}

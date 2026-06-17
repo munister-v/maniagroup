@@ -79,6 +79,102 @@ function sizesFromAttributes(attributes: unknown): string[] {
   }
 }
 
+const ADMIN_ID_FLOOR = 900_000_000;
+
+function slugify(s: string): string {
+  return s.toLowerCase().trim().replace(/[^a-z0-9а-яіїєґ]+/gi, "-").replace(/^-+|-+$/g, "");
+}
+function sizeAttributesJson(sizes: string[]): string {
+  if (!sizes.length) return "[]";
+  return JSON.stringify([{
+    taxonomy: "pa_size", name: "Розмір",
+    terms: sizes.map((s) => ({ name: s, slug: slugify(s) || s })),
+  }]);
+}
+
+export type ErpProductInput = {
+  name: string; brand?: string; category?: string; gender?: string;
+  sku?: string; color?: string; composition?: string; season?: string;
+  description?: string;
+  regular_price: number; sale_price?: number | null; cost_price?: number | null;
+  images?: string[];                       // local /uploads urls
+  sizes?: { size: string; qty: number }[]; // creates variants with real stock
+};
+
+/**
+ * Create a product the warehouse way (E-add): product row + per-size variants
+ * WITH real quantities + manual cost + recomputed mirror + an opening 'receipt'
+ * movement. One transaction. Manual ids live ≥ 900M so they never collide with
+ * imported ids. This is the convenient "add a new unit" entry point for the ERP.
+ */
+export async function createErpProduct(input: ErpProductInput): Promise<{ id: string }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const idRow = await client.query<{ next: string }>(
+      "SELECT (GREATEST(COALESCE(MAX(id),0), $1) + 1)::text AS next FROM products", [ADMIN_ID_FLOOR],
+    );
+    const id = Number(idRow.rows[0].next);
+    const slug = String(id);
+    const sale = input.sale_price && input.sale_price > 0 && input.sale_price < input.regular_price ? input.sale_price : null;
+    const price = sale ?? input.regular_price;
+    const category = input.category?.trim() || "Одяг";
+    const catSlug = slugify(category) || "tovar";
+    const sizes = (input.sizes ?? []).filter((s) => s.size.trim());
+    const images = (input.images ?? []).filter(Boolean);
+    const imagesJson = JSON.stringify(images.map((src) => ({ src, thumbnail: src, alt: "" })));
+
+    await client.query(
+      `INSERT INTO products
+        (id, sku, name, slug, brand, category, category_slug, gender,
+         price, regular_price, sale_price, is_in_stock, status,
+         image_src, images, attributes, description, short_description,
+         color, country, season, collection, composition,
+         cost_price, cost_source, photos_migrated)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,FALSE,'publish',
+         $12,$13::jsonb,$14::jsonb,$15,'',
+         $16,'',$17,'',$18,
+         $19,$20,TRUE)`,
+      [
+        id, input.sku ?? "", input.name.trim(), slug, input.brand?.trim() || "Mania Group",
+        category, catSlug, input.gender ?? "",
+        price, input.regular_price, sale,
+        images[0] ?? "", imagesJson, sizeAttributesJson(sizes.map((s) => s.size)),
+        input.description ?? "",
+        input.color ?? "", input.season ?? "", input.composition ?? "",
+        input.cost_price && input.cost_price > 0 ? input.cost_price : null,
+        input.cost_price && input.cost_price > 0 ? "manual" : "",
+      ],
+    );
+
+    for (const s of sizes) {
+      await client.query(
+        `INSERT INTO product_variants (product_id, size, stock_qty, updated_by)
+         VALUES ($1,$2,$3,'erp-new')
+         ON CONFLICT (product_id, size) DO UPDATE SET stock_qty = EXCLUDED.stock_qty`,
+        [id, s.size.trim(), Math.max(0, Math.round(s.qty) || 0)],
+      );
+    }
+
+    const total = await recomputeProductStock(client, id);
+    if (total > 0) {
+      await client.query(
+        `INSERT INTO stock_movements (product_id, variant_id, size, type, delta, qty_after, note, author)
+         VALUES ($1, NULL, '', 'receipt', $2, $2, 'Новий товар (ERP)', 'erp')`,
+        [id, total],
+      );
+    }
+
+    await client.query("COMMIT");
+    return { id: String(id) };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 /** Recompute the products.stock_qty / is_in_stock mirror from its variants. */
 async function recomputeProductStock(client: PoolClient, productId: number): Promise<number> {
   const r = await client.query<{ total: string }>(
