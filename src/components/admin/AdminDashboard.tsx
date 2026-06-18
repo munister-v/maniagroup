@@ -224,6 +224,13 @@ export function AdminDashboard({
 
         <div className="space-y-0.5 border-t border-white/10 px-2 py-3">
           <a
+            href="/erp"
+            className="flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-white/35 transition-colors hover:text-white/55"
+          >
+            <SvgIcon d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
+            ERP
+          </a>
+          <a
             href="/"
             target="_blank"
             className="flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-white/35 transition-colors hover:text-white/55"
@@ -323,6 +330,9 @@ function OverviewSection({
 
   return (
     <div className="space-y-7">
+      {/* Today's tasks */}
+      <TodayBlock stats={stats} onNavigate={onNavigate} />
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Виручка · 30 днів" value={loading ? "…" : fmtUah(stats!.revenue_30d)} sub={loading ? "" : `за 7 днів ${fmtUah(stats!.revenue_7d)}`} accent />
@@ -437,6 +447,72 @@ function OverviewSection({
 
       {/* Catalog source status (Postgres, fed by the XLS import) */}
       <SyncCard sync={sync} onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+type ErpSnapshot = { low_stock: { id: string; name: string; brand: string; size: string; qty: number }[]; reconciliation: { drift: number } };
+
+function TodayBlock({ stats, onNavigate }: { stats: Stats | null; onNavigate: (s: Section) => void }) {
+  const [erp, setErp] = useState<ErpSnapshot | null>(null);
+
+  useEffect(() => {
+    fetch("/api/erp/overview")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setErp({ low_stock: d.low_stock ?? [], reconciliation: d.reconciliation ?? { drift: 0 } }))
+      .catch(() => null);
+  }, []);
+
+  const pendingOrders = stats ? stats.pending + stats.processing : 0;
+  const lowStockCount = erp?.low_stock.length ?? 0;
+  const driftCount = erp?.reconciliation.drift ?? 0;
+  const hasAnyTask = pendingOrders > 0 || lowStockCount > 0 || driftCount > 0;
+
+  return (
+    <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Що зробити сьогодні</h2>
+        {hasAnyTask && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c0392b] px-1.5 text-[10px] tabular-nums text-white">{pendingOrders + lowStockCount + driftCount}</span>}
+      </div>
+      {!hasAnyTask && stats !== null && erp !== null ? (
+        <p className="py-2 text-[13px] text-[#9c8f7d]">✓ Все гаразд — термінових задач немає</p>
+      ) : (
+        <div className="space-y-2">
+          {pendingOrders > 0 && (
+            <button onClick={() => onNavigate("orders")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fdf0ee] text-[14px]">📦</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-[#17130f]">{pendingOrders} замовлень чекають обробки</p>
+                <p className="text-[11px] text-[#9c8f7d]">{stats!.pending} нових · {stats!.processing} в обробці</p>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
+          {lowStockCount > 0 && (
+            <a href="/erp?section=products" className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff8e6] text-[14px]">⚠️</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-[#17130f]">{lowStockCount} варіантів на межі запасу</p>
+                <p className="text-[11px] text-[#9c8f7d]">Залишок ≤ порогу — потрібне поповнення</p>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </a>
+          )}
+          {driftCount > 0 && (
+            <a href="/erp?section=stocktake" className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[14px]">🔄</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-[#17130f]">{driftCount} позицій — розбіжність залишків</p>
+                <p className="text-[11px] text-[#9c8f7d]">Дані магазину розходяться з ERP — потрібна звірка</p>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </a>
+          )}
+          {(stats === null || erp === null) && !hasAnyTask && (
+            <p className="py-2 text-[13px] text-[#b9ae9b]">Завантаження…</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2079,7 +2155,7 @@ function CatalogImportSection() {
 /* ─── Settings ─── */
 
 function SettingsSection() {
-  const [store, setStore] = useState({ free_ship_threshold: "", store_phone: "", store_email: "" });
+  const [store, setStore] = useState({ free_ship_threshold: "", store_phone: "", store_email: "", low_stock_threshold: "" });
   const [storeStatus, setStoreStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [pwd, setPwd] = useState({ current: "", next: "", next2: "" });
   const [pwdStatus, setPwdStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -2090,7 +2166,7 @@ function SettingsSection() {
 
   useEffect(() => {
     fetch("/api/admin/settings").then((r) => r.json()).then((d) => {
-      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "" });
+      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "", low_stock_threshold: d.low_stock_threshold ?? "" });
       setTg({ telegram_enabled: d.telegram_enabled ?? "", telegram_bot_token: d.telegram_bot_token ?? "", telegram_chat_id: d.telegram_chat_id ?? "" });
     });
   }, []);
@@ -2144,9 +2220,11 @@ function SettingsSection() {
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block"><span className={lbl}>Безкоштовна доставка від, ₴</span>
             <input type="number" className={inp} value={store.free_ship_threshold} onChange={(e) => setStore({ ...store, free_ship_threshold: e.target.value })} /></label>
+          <label className="block"><span className={lbl}>Поріг залишку (ERP), шт</span>
+            <input type="number" min="1" className={inp} value={store.low_stock_threshold} onChange={(e) => setStore({ ...store, low_stock_threshold: e.target.value })} placeholder="3" /></label>
           <label className="block"><span className={lbl}>Телефон магазину</span>
             <input className={inp} value={store.store_phone} onChange={(e) => setStore({ ...store, store_phone: e.target.value })} /></label>
-          <label className="block sm:col-span-2"><span className={lbl}>Email магазину</span>
+          <label className="block"><span className={lbl}>Email магазину</span>
             <input type="email" className={inp} value={store.store_email} onChange={(e) => setStore({ ...store, store_email: e.target.value })} placeholder="hello@maniagroup.com.ua" /></label>
         </div>
         <button onClick={saveStore} disabled={storeStatus === "saving"} className={`mt-5 ${btn}`}>

@@ -22,6 +22,7 @@ export type StoreSettings = {
   telegram_enabled: string;
   telegram_bot_token: string;
   telegram_chat_id: string;
+  low_stock_threshold: string;
 };
 
 const DEFAULTS: StoreSettings = {
@@ -31,6 +32,7 @@ const DEFAULTS: StoreSettings = {
   telegram_enabled: "",
   telegram_bot_token: "",
   telegram_chat_id: "",
+  low_stock_threshold: "3",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
@@ -44,6 +46,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     telegram_enabled: get("telegram_enabled"),
     telegram_bot_token: get("telegram_bot_token"),
     telegram_chat_id: get("telegram_chat_id"),
+    low_stock_threshold: get("low_stock_threshold"),
   };
 }
 

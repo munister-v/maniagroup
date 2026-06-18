@@ -8,6 +8,7 @@ type Dashboard = {
   coverage: { from_receipt: number; from_manual: number; derived: number; total: number };
   purchases: { receipts_month: number; spent_month: number; units_month: number; spent_total: number };
   reconciliation: { drift: number };
+  purchasing: { draft: number; sent: number; open_value: number };
   low_stock: { id: string; name: string; brand: string; size: string; qty: number }[];
   movements: { id: number; type: string; delta: number; qty_after: number | null; size: string; name: string; brand: string; created_at: string }[];
   top_suppliers: { id: number; name: string; total: number; units: number }[];
@@ -21,7 +22,7 @@ const MOVE_LABEL: Record<string, string> = {
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
 function n(v: number) { return v.toLocaleString("uk-UA"); }
 
-export function ErpOverview({ onGoto }: { onGoto?: (s: "products" | "receiving" | "suppliers" | "channels") => void }) {
+export function ErpOverview({ onGoto }: { onGoto?: (s: "products" | "receiving" | "suppliers" | "channels" | "purchasing" | "replenishment") => void }) {
   const [d, setD] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,6 +64,35 @@ export function ErpOverview({ onGoto }: { onGoto?: (s: "products" | "receiving" 
             <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#9c8f7d]">{k.l}</p>
           </div>
         ))}
+      </div>
+
+      {/* Purchasing strip */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <button onClick={() => onGoto?.("replenishment")}
+          className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4 text-left transition-colors hover:border-[#17130f]">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Поповнення</p>
+            <p className="mt-0.5 text-[13px] text-[#17130f]">Що докупити →</p>
+          </div>
+          <span className="text-[20px]">📈</span>
+        </button>
+        <button onClick={() => onGoto?.("purchasing")}
+          className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4 text-left transition-colors hover:border-[#17130f]">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Відкриті замовлення</p>
+            <p className="mt-0.5 text-[18px] font-light tabular-nums text-[#17130f]">{n(d.purchasing.draft + d.purchasing.sent)}</p>
+            <p className="text-[11px] text-[#9c8f7d]">{d.purchasing.draft} чернеток · {d.purchasing.sent} відправлено</p>
+          </div>
+          <span className="text-[20px]">🧾</span>
+        </button>
+        <div className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">У замовленнях (закупка)</p>
+            <p className="mt-0.5 text-[18px] font-light tabular-nums text-[#17130f]">{uah(d.purchasing.open_value)}</p>
+            <p className="text-[11px] text-[#9c8f7d]">очікує отримання</p>
+          </div>
+          <span className="text-[20px]">💳</span>
+        </div>
       </div>
 
       {/* Alerts: reconciliation + cost coverage */}
@@ -117,8 +147,9 @@ export function ErpOverview({ onGoto }: { onGoto?: (s: "products" | "receiving" 
       {/* Low stock + movements */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="rounded-[4px] border border-[#e2ddd5] bg-white">
-          <div className="border-b border-[#f0ece6] px-4 py-2.5">
-            <h2 className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Закінчується (1–3 шт)</h2>
+          <div className="flex items-center justify-between border-b border-[#f0ece6] px-4 py-2.5">
+            <h2 className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Закінчується</h2>
+            <button onClick={() => onGoto?.("replenishment")} className="text-[11px] text-[#5b8def] hover:underline">Поповнити →</button>
           </div>
           {d.low_stock.length === 0 ? (
             <p className="px-4 py-8 text-center text-[12px] text-[#9c8f7d]">Немає позицій із малим залишком</p>

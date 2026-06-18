@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { parseImportSmart, previewImport, applyImport } from "@/lib/stockImport";
+import { q } from "@/lib/pg";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
+
+/** GET — last 8 import sessions from stock_movements */
+export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rows = await q<{ filename: string; movements: string; started_at: string }>(
+    `SELECT
+       CASE WHEN note LIKE $1 THEN trim(substring(note from 9)) ELSE note END AS filename,
+       COUNT(*)::text AS movements,
+       MIN(created_at)::text AS started_at
+     FROM stock_movements
+     WHERE type = 'import'
+     GROUP BY 1, date_trunc('minute', created_at)
+     ORDER BY started_at DESC
+     LIMIT 8`,
+    ["Імпорт:%"],
+  );
+  return NextResponse.json({ history: rows });
+}
 
 /**
  * "Завантажити товари" — upload a price/stock file (Intertop prices.csv or MG

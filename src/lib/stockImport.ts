@@ -39,6 +39,19 @@ export type Parsed =
   | { kind: "master"; filename: string; rows: MasterRow[] }
   | { kind: "unknown"; filename: string; rows: never[] };
 
+export type PreviewItem = {
+  name: string;
+  sku?: string;
+  size?: string;
+  oldQty: number | null;
+  newQty: number | null;
+  oldPrice: number | null;
+  newPrice: number | null;
+  discountPrice: number | null;
+  isNew: boolean;
+};
+export type UnmatchedItem = { key: string; size?: string };
+
 /* ── parsing ─────────────────────────────────────────────────────────────── */
 
 const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
@@ -212,13 +225,17 @@ export type ImportPreview = {
   kind: ImportKind;
   filename: string;
   totalRows: number;
-  matchedRows: number;        // rows linked to an existing product
+  matchedRows: number;
   unmatchedRows: number;
   affectedProducts: number;
-  newVariants: number;        // size rows that would be created
-  stockChanges: number;       // variants whose qty would change
-  priceChanges: number;       // variants/products whose price would change
+  newVariants: number;
+  stockChanges: number;
+  priceChanges: number;
+  items: PreviewItem[];
+  unmatched: UnmatchedItem[];
+  /** @deprecated kept for old consumers — mirrors first 12 items as text */
   sample: { name: string; size?: string; detail: string }[];
+  /** @deprecated kept for old consumers — first 8 unmatched as strings */
   unmatchedSample: string[];
 };
 
@@ -287,30 +304,48 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   const base: ImportPreview = {
     kind: parsed.kind, filename: parsed.filename, totalRows: parsed.rows.length,
     matchedRows: 0, unmatchedRows: 0, affectedProducts: 0, newVariants: 0,
-    stockChanges: 0, priceChanges: 0, sample: [], unmatchedSample: [],
+    stockChanges: 0, priceChanges: 0, items: [], unmatched: [], sample: [], unmatchedSample: [],
   };
   if (parsed.kind === "unknown" || parsed.rows.length === 0) return base;
 
   if (parsed.kind === "master") {
     const rows = parsed.rows;
     const skus = [...new Set(rows.map((r) => r.kod))];
-    const prods = await q<{ id: string; sku: string }>("SELECT id::text, sku FROM products WHERE sku = ANY($1)", [skus]);
-    const skuToId = new Map(prods.map((p) => [p.sku, Number(p.id)]));
+    const prods = await q<{ id: string; sku: string; name: string; regular_price: string }>(
+      "SELECT id::text, sku, name, COALESCE(regular_price,0)::float::text AS regular_price FROM products WHERE sku = ANY($1)", [skus],
+    );
+    const skuMap = new Map(prods.map((p) => [p.sku, p]));
     const affected = new Set<number>();
     for (const r of rows) {
-      const pid = skuToId.get(r.kod);
-      if (!pid) { base.unmatchedRows++; if (base.unmatchedSample.length < 8) base.unmatchedSample.push(`${r.kod} ${r.name}`); continue; }
+      const p = skuMap.get(r.kod);
+      if (!p) {
+        base.unmatchedRows++;
+        if (base.unmatched.length < 30) base.unmatched.push({ key: `${r.kod} ${r.name}` });
+        if (base.unmatchedSample.length < 8) base.unmatchedSample.push(`${r.kod} ${r.name}`);
+        continue;
+      }
+      const pid = Number(p.id);
       base.matchedRows++; affected.add(pid);
       const units = Object.values(r.sizes).reduce((a, b) => a + b, 0);
       if (units > 0) base.stockChanges += Object.keys(r.sizes).length;
       if (r.base_price > 0) base.priceChanges++;
+      if (base.items.length < 120) {
+        base.items.push({
+          name: r.name || p.name || r.kod, sku: r.kod,
+          oldQty: null, newQty: units || null,
+          oldPrice: Number(p.regular_price) || null,
+          newPrice: r.base_price > 0 ? r.base_price : null,
+          discountPrice: r.sale_price > 0 ? r.sale_price : null,
+          isNew: false,
+        });
+      }
       if (base.sample.length < 12) base.sample.push({
         name: r.name || r.kod,
         detail: `арт. ${r.factory_article || "—"}${units ? ` · ${units} од (${Object.keys(r.sizes).length} розм.)` : ""}${r.base_price > 0 ? ` · ${Math.round(r.base_price)}₴` : ""}`,
       });
     }
     base.affectedProducts = affected.size;
-    base.newVariants = base.stockChanges; // upserts (existing or new)
+    base.newVariants = base.stockChanges;
     return base;
   }
 
@@ -322,7 +357,13 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   const { byId, variantsByProduct } = await loadProducts(ids);
   const affected = new Set<number>();
   for (const { r, pid } of matched) {
-    if (!pid) { base.unmatchedRows++; if (base.unmatchedSample.length < 8) base.unmatchedSample.push(`${r.factory_article || r.offer_code || r.external_id} ${r.size}`); continue; }
+    if (!pid) {
+      base.unmatchedRows++;
+      const ukey = r.factory_article || r.offer_code || r.external_id;
+      if (base.unmatched.length < 30) base.unmatched.push({ key: ukey, size: r.size });
+      if (base.unmatchedSample.length < 8) base.unmatchedSample.push(`${ukey} ${r.size}`);
+      continue;
+    }
     base.matchedRows++; affected.add(pid);
     const p = byId.get(String(pid));
     const variants = variantsByProduct.get(String(pid)) ?? [];
@@ -331,6 +372,18 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
     if (r.quantity != null && (!v || v.stock_qty !== r.quantity)) base.stockChanges++;
     const curPrice = v?.price ?? Number(p?.regular_price ?? 0);
     if (r.base_price > 0 && Math.abs(r.base_price - (curPrice || 0)) > 1) base.priceChanges++;
+    if (base.items.length < 120) {
+      base.items.push({
+        name: p?.name ?? String(pid), sku: p?.sku,
+        size: r.size,
+        oldQty: v ? v.stock_qty : null,
+        newQty: r.quantity,
+        oldPrice: curPrice || null,
+        newPrice: r.base_price > 0 ? r.base_price : null,
+        discountPrice: r.discount_price > 0 ? r.discount_price : null,
+        isNew: !v,
+      });
+    }
     if (base.sample.length < 12) base.sample.push({
       name: p?.name ?? String(pid), size: r.size,
       detail: `${r.base_price > 0 ? `${Math.round(r.base_price)}₴` : ""}${r.discount_price > 0 ? ` (акц. ${Math.round(r.discount_price)}₴)` : ""}${r.quantity != null ? ` · ${r.quantity} од` : ""}`,
@@ -349,6 +402,7 @@ export type ApplyResult = {
 export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
   const res: ApplyResult = { kind: parsed.kind, matchedRows: 0, unmatchedRows: 0, productsUpdated: 0, variantsUpserted: 0, stockMovements: 0 };
   if (parsed.kind === "unknown" || parsed.rows.length === 0) return res;
+  const importNote = `Імпорт: ${parsed.filename}`;
   const client = await pool.connect();
   const affected = new Set<number>();
   try {
@@ -380,7 +434,7 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
         res.productsUpdated++;
         // Stock from "Размеры со всех складов" (only if the column had data).
         for (const [size, qty] of Object.entries(r.sizes)) {
-          res.stockMovements += await upsertVariantStock(client, pid, size, qty, r.base_price || null);
+          res.stockMovements += await upsertVariantStock(client, pid, size, qty, r.base_price || null, undefined, undefined, importNote);
           res.variantsUpserted++;
         }
       }
@@ -396,6 +450,7 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
         res.stockMovements += await upsertVariantStock(
           client, pid, r.size, r.quantity, r.base_price > 0 ? r.base_price : null, sale,
           { barcode: r.barcode || undefined, offer_code: r.offer_code || undefined },
+          importNote,
         );
         res.variantsUpserted++;
         // backfill factory_article on the product if we have it and it's empty
@@ -441,6 +496,7 @@ async function upsertVariantStock(
   productId: number, size: string, qty: number | null,
   price: number | null, sale?: number | null,
   meta?: { barcode?: string; offer_code?: string },
+  importNote = "Імпорт цін/залишків",
 ): Promise<number> {
   if (!size.trim()) return 0;
   const cur = await client.query<{ id: string; stock_qty: number }>(
@@ -471,8 +527,8 @@ async function upsertVariantStock(
     if (after !== before) {
       await client.query(
         `INSERT INTO stock_movements (product_id, variant_id, size, type, delta, qty_after, note, author)
-         VALUES ($1, $2, $3, 'import', $4, $5, 'Імпорт цін/залишків', 'import')`,
-        [productId, variantId, size.trim(), after - before, after],
+         VALUES ($1, $2, $3, 'import', $4, $5, $6, 'import')`,
+        [productId, variantId, size.trim(), after - before, after, importNote],
       );
       movement = 1;
     }

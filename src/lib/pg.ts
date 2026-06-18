@@ -369,6 +369,37 @@ CREATE TABLE IF NOT EXISTS stocktake_items (
 );
 CREATE INDEX IF NOT EXISTS idx_stocktake_items_doc ON stocktake_items(stocktake_id);
 
+-- ── ERP: purchasing (закупівлі) — purchase orders to suppliers ──
+-- A PO is the PLAN (what we intend to buy); receiving a PO creates a receipt
+-- (the FACT) via the proven receiving engine → stock + weighted-average cost.
+-- Lifecycle: draft → sent → received | cancelled.
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id          BIGSERIAL PRIMARY KEY,
+  supplier_id BIGINT,
+  supplier    TEXT NOT NULL DEFAULT '',        -- snapshot name (frozen on the doc)
+  status      TEXT NOT NULL DEFAULT 'draft',   -- draft | sent | received | cancelled
+  note        TEXT NOT NULL DEFAULT '',
+  expected_at DATE,                            -- очікувана дата поставки
+  receipt_id  BIGINT,                          -- the receipt created on "receive"
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_at     TIMESTAMPTZ,
+  received_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+  id         BIGSERIAL PRIMARY KEY,
+  po_id      BIGINT NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  product_id BIGINT NOT NULL,
+  variant_id BIGINT,
+  size       TEXT NOT NULL DEFAULT '',
+  name       TEXT NOT NULL DEFAULT '',
+  brand      TEXT NOT NULL DEFAULT '',
+  qty        INTEGER NOT NULL DEFAULT 0,       -- ordered units
+  unit_cost  NUMERIC NOT NULL DEFAULT 0        -- expected purchase cost / unit
+);
+CREATE INDEX IF NOT EXISTS idx_po_items_po ON purchase_order_items(po_id);
+
 -- ── Marketing: discount coupons ──
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount NUMERIC NOT NULL DEFAULT 0;
@@ -413,6 +444,23 @@ CREATE TABLE IF NOT EXISTS brand_logos (
   source     TEXT NOT NULL DEFAULT 'manual', -- 'manual' | 'auto'
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ── ERP Grid: bulk-edit snapshots for rollback ──
+CREATE TABLE IF NOT EXISTS grid_snapshots (
+  id         BIGSERIAL PRIMARY KEY,
+  label      TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS grid_snapshot_items (
+  id          BIGSERIAL PRIMARY KEY,
+  snapshot_id BIGINT NOT NULL REFERENCES grid_snapshots(id) ON DELETE CASCADE,
+  variant_id  BIGINT NOT NULL,
+  product_id  BIGINT NOT NULL,
+  size        TEXT NOT NULL DEFAULT '',
+  qty_before  INTEGER NOT NULL DEFAULT 0,
+  qty_after   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_grid_snap_items ON grid_snapshot_items(snapshot_id);
 `;
 
 /** Idempotent schema creation. Awaited by every data-layer call via withDb(). */

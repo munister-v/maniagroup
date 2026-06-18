@@ -12,39 +12,60 @@
  */
 import { q } from "./pg";
 import { BRAND_LOGO_BY_DBNAME } from "./catalog";
+import { downloadLogoForBrand, hasLocalLogo, localLogoUrl } from "./logoDownloader";
 
 export type BrandLogoRow = { brand: string; logo_url: string; source: "manual" | "auto" };
 
 /** Curated domains for well-known brands in the catalog (best-effort). */
 const BRAND_DOMAINS: Record<string, string> = {
+  // Armani family
   EA7: "armani.com",
   "EA7 Swim": "armani.com",
+  "EA7 underwear": "armani.com",
   "ARMANI JEANS": "armani.com",
-  "HARMONT&BLAINE": "harmontblaine.com",
-  PINKO: "pinko.com",
+  "ARMANI EXCHANGE": "armaniexchange.com",
+  // Moschino family
   "MOSCHINO Love": "moschino.com",
   "MOSCHINO u.wear": "moschino.com",
   "MOSCHINO beach.wear": "moschino.com",
   "MOSCHINO JEANS": "moschino.com",
-  "FRED MELLO": "fredmello.com",
-  KOCCA: "kocca.it",
-  "TWIN SET": "twinset.com",
-  "TWIN SET MILANO": "twinset.com",
+  // Trussardi family
   "TRUSSARDI JEANS": "trussardi.com",
   "TRUSSARDI ACTION": "trussardi.com",
+  "TRU TRUSSARDI": "trussardi.com",
+  // Richmond family
+  "JOHN RICHMOND": "johnrichmond.com",
+  "RICHMOND X": "johnrichmond.com",
+  // Versace / Cavalli
+  "VERSACE JEANS": "versace.com",
+  "VERSACE SPORT": "versace.com",
+  "JUST CAVALLI": "robertocavalli.com",
+  "CLASS CAVALLI": "robertocavalli.com",
+  // Twin Set / Bikkembergs
+  "TWIN SET": "twinset.com",
+  "TWIN SET MILANO": "twinset.com",
+  BIKKEMBERGS: "bikkembergs.com",
+  "DIRK BIKKEMBERGS": "bikkembergs.com",
+  // D&G
+  "D&G": "dolcegabbana.com",
+  "DOLCE&GABBANA": "dolcegabbana.com",
+  // Ferre
+  "GF FERRE": "gianfrancoferre.com",
+  "FERRE COLLEZIONI": "gianfrancoferre.com",
+  // Single entries
+  "HARMONT&BLAINE": "harmontblaine.com",
+  PINKO: "pinko.com",
+  "FRED MELLO": "fredmello.com",
+  KOCCA: "kocca.it",
   "MC2 SAINT BARTH": "mc2saintbarth.com",
   "ANTONY MORATO": "antonymorato.com",
   LANCASTER: "lancaster-paris.com",
   "ICE ICEBERG": "iceberg.com",
-  "JOHN RICHMOND": "johnrichmond.com",
-  "RICHMOND X": "johnrichmond.com",
+  "ICE PLAY": "iceplay.com",
   BOMBOOGIE: "bomboogie.com",
   BLUGIRL: "blumarine.com",
-  "D&G": "dolcegabbana.com",
-  "DOLCE&GABBANA": "dolcegabbana.com",
   DSQUARED: "dsquared2.com",
   "MISSONI M": "missoni.com",
-  "JUST CAVALLI": "robertocavalli.com",
   INVICTA: "invicta.it",
   "MARINA YACHTING": "marinayachting.it",
   "VALENTINO RED": "valentino.com",
@@ -56,11 +77,47 @@ const BRAND_DOMAINS: Record<string, string> = {
   "K K.LAGERFELD": "karl.com",
   "Jean's PAUL GAULTIER": "jeanpaulgaultier.com",
   GALLIANO: "maisonmargiela.com",
+  "ARMATA DI MARE": "armatadimare.it",
+  SFIZIO: "sfizio.it",
+  NOSECRETS: "nosecrets.it",
+  MANGANO: "mangano.it",
+  "AFTER LABEL": "afterlabel.it",
+  BLAUER: "blauerusa.com",
+  IBLUES: "iblues.com",
+  DUVETICA: "duvetica.com",
+  "FRANKIE MORELLO": "frankiemorello.com",
+  GEOSPIRIT: "geospirit.it",
+  KONTATTO: "kontatto.it",
+  PARASUCO: "parasuco.com",
+  "PARASUCO CULT": "parasuco.com",
+  "Y-3": "y-3.com",
+  FENDI: "fendi.com",
+  GUCCI: "gucci.com",
+  PRADA: "prada.com",
+  "PRADA sport": "prada.com",
+  "MISS SIXTY": "misssixty.com",
+  BARBATI: "barbati.it",
+  BAGUTTA: "bagutta.it",
+  DIADORA: "diadora.com",
+  UGG: "ugg.com",
+  BELSTAFF: "belstaff.com",
+  "EMILIO PUCCI": "emiliopucci.com",
+  REFRIGIWEAR: "refrigiwear.com",
+  "SCUOLA NAUTICA ITALIANA": "scuolanauticaitaliana.it",
+  "DIOR u.wear": "dior.com",
+  "SEVEN 7": "seven7.com",
+  "J.B4 (Just Before)": "jb4italy.com",
+  "VDP sport": "vdp.it",
+  "UP TO BE": "uptobe.it",
+  MARVILLE: "marville-marine.com",
+  "SUNS BOARDS": "sunsboards.com",
+  CNC: "costumenational.com",
+  EMU: "emuaustralia.com",
 };
 
-/** Build a logo CDN URL for a domain (Clearbit). */
-export function cdnLogoUrl(domain: string): string {
-  return `https://logo.clearbit.com/${domain}?size=200`;
+/** @deprecated Clearbit is shut down — use downloadLogoForBrand instead. */
+export function cdnLogoUrl(_domain: string): string {
+  return "";
 }
 
 /** All stored brand logos as a {brand: url} map. */
@@ -106,20 +163,61 @@ export async function deleteBrandLogo(brand: string): Promise<void> {
 }
 
 /**
- * Auto-fill logos from the CDN for the given brands that have a known domain
- * and no manual logo yet. Returns how many were set. Does NOT overwrite manual.
+ * Downloads logos locally for the given brands and saves them to disk.
+ * Stores the local `/uploads/brands/…` path in DB instead of an external URL.
+ * Does NOT overwrite manual logos. Returns { attempted, saved }.
  */
 export async function autoFillBrandLogos(brands: string[]): Promise<number> {
   const existing = await q<{ brand: string; source: string }>("SELECT brand, source FROM brand_logos");
   const manual = new Set(existing.filter((e) => e.source === "manual").map((e) => e.brand));
   let n = 0;
   for (const brand of brands) {
-    if (manual.has(brand)) continue;          // never clobber a hand-picked logo
-    if (BRAND_LOGO_BY_DBNAME[brand]) continue; // keep the bundled hand-made PNG
+    if (manual.has(brand)) continue;
+    if (BRAND_LOGO_BY_DBNAME[brand]) continue;
     const domain = BRAND_DOMAINS[brand];
-    if (!domain) continue;                     // unknown brand → leave as text
-    await setBrandLogo(brand, cdnLogoUrl(domain), "auto");
-    n++;
+    if (!domain) continue;
+    const url = await downloadLogoForBrand(brand, domain);
+    if (url) {
+      await setBrandLogo(brand, url, "auto");
+      n++;
+    }
   }
   return n;
+}
+
+/**
+ * Downloads all known-domain brands locally (including those with stale/broken
+ * external URLs). Overwrites auto-sourced entries; never touches manual logos.
+ * Returns counts: { attempted, saved, skipped }.
+ */
+export async function downloadAllBrandLogos(): Promise<{ attempted: number; saved: number; skipped: number }> {
+  const existing = await q<{ brand: string; source: string; logo_url: string }>(
+    "SELECT brand, source, logo_url FROM brand_logos",
+  );
+  const manualSet = new Set(existing.filter((e) => e.source === "manual").map((e) => e.brand));
+
+  let attempted = 0;
+  let saved = 0;
+  let skipped = 0;
+
+  for (const [brand, domain] of Object.entries(BRAND_DOMAINS)) {
+    if (manualSet.has(brand)) { skipped++; continue; }
+    if (BRAND_LOGO_BY_DBNAME[brand]) { skipped++; continue; }
+    attempted++;
+
+    // If already cached locally, just make sure DB entry is correct
+    if (hasLocalLogo(brand)) {
+      await setBrandLogo(brand, localLogoUrl(brand), "auto");
+      saved++;
+      continue;
+    }
+
+    const url = await downloadLogoForBrand(brand, domain);
+    if (url) {
+      await setBrandLogo(brand, url, "auto");
+      saved++;
+    }
+  }
+
+  return { attempted, saved, skipped };
 }

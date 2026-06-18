@@ -7,8 +7,11 @@ import { ErpReceiving } from "./ErpReceiving";
 import { ErpStocktake } from "./ErpStocktake";
 import { ErpSuppliers } from "./ErpSuppliers";
 import { ErpChannels } from "./ErpChannels";
+import { ErpPurchasing } from "./ErpPurchasing";
+import { ErpReplenishment } from "./ErpReplenishment";
 import { ErpProductCreate } from "./ErpProductCreate";
 import { ErpImport } from "./ErpImport";
+import { ErpGrid } from "./ErpGrid";
 import { aiAutofill, aiDescription } from "./aiAssist";
 
 /* ── types ──────────────────────────────────────────────────────────────── */
@@ -90,26 +93,37 @@ const BULK_ACTIONS: { status: ErpStatus; label: string }[] = [
 
 /* ── root ───────────────────────────────────────────────────────────────── */
 
-type ErpSection = "overview" | "products" | "receiving" | "stocktake" | "suppliers" | "channels";
+type ErpSection = "overview" | "products" | "grid" | "import" | "receiving" | "stocktake" | "suppliers" | "channels" | "purchasing" | "replenishment";
 
 const ICONS: Record<ErpSection, string> = {
-  overview:  "M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10",
-  products:  "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
-  stocktake: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-5 8l1.5 1.5L15 11",
-  receiving: "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-3l-2 3H9l-2-3H4",
-  suppliers: "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1a4 4 0 100-8 4 4 0 000 8z",
-  channels:  "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4-4 4M12 2v13",
+  overview:     "M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10",
+  products:     "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+  grid:         "M3 3h7v7H3zm11 0h7v7h-7zM3 14h7v7H3zm11 0h7v7h-7z",
+  import:       "M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2",
+  stocktake:    "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-5 8l1.5 1.5L15 11",
+  receiving:    "M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-3l-2 3H9l-2-3H4",
+  suppliers:    "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1a4 4 0 100-8 4 4 0 000 8z",
+  channels:     "M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M16 6l-4-4-4 4M12 2v13",
+  purchasing:   "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
+  replenishment: "M3 3v18h18M7 14l4-4 3 3 5-6",
 };
 
 const NAV: { title?: string; items: { id: ErpSection; label: string }[] }[] = [
   { items: [{ id: "overview", label: "Огляд" }] },
-  { title: "Каталог",   items: [{ id: "products", label: "Товари" }, { id: "stocktake", label: "Інвентаризація" }] },
-  { title: "Закупівлі", items: [{ id: "receiving", label: "Прихід" }, { id: "suppliers", label: "Постачальники" }] },
+  { title: "Каталог",    items: [{ id: "products", label: "Товари" }, { id: "grid", label: "Таблиця" }, { id: "import", label: "Завантажити файл" }, { id: "stocktake", label: "Інвентаризація" }] },
+  { title: "Закупівлі", items: [{ id: "replenishment", label: "Поповнення" }, { id: "purchasing", label: "Замовлення" }, { id: "receiving", label: "Прихід" }, { id: "suppliers", label: "Постачальники" }] },
   { title: "Продажі",   items: [{ id: "channels", label: "Канали / Вигрузки" }] },
 ];
 
 export function ErpWorkspace() {
-  const [section, setSection] = useState<ErpSection>("overview");
+  const [section, setSection] = useState<ErpSection>(() => {
+    if (typeof window !== "undefined") {
+      const s = new URLSearchParams(window.location.search).get("section") as ErpSection | null;
+      const valid: ErpSection[] = ["overview", "products", "grid", "import", "receiving", "stocktake", "suppliers", "channels", "purchasing", "replenishment"];
+      if (s && valid.includes(s)) return s;
+    }
+    return "overview";
+  });
   const [selected, setSelected] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -161,8 +175,10 @@ export function ErpWorkspace() {
       </aside>
 
       {/* ── Main content ── */}
-      <main className="min-w-0 flex-1 overflow-y-auto">
+      <main className={`min-w-0 flex-1 ${section === "grid" ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>
         {section === "overview" && <ErpOverview onGoto={go} />}
+        {section === "grid" && <ErpGrid />}
+        {section === "import" && <ErpImport onBack={() => go("products")} />}
         {section === "products" && (
           creating
             ? <ErpProductCreate onDone={(id) => { setCreating(false); if (id) setSelected(id); }} onCancel={() => setCreating(false)} />
@@ -170,8 +186,10 @@ export function ErpWorkspace() {
               ? <ErpImport onBack={() => setImporting(false)} />
               : selected
                 ? <ProductCard id={selected} onBack={() => setSelected(null)} />
-                : <ProductList onOpen={setSelected} onAddNew={() => setCreating(true)} onUpload={() => setImporting(true)} />
+                : <ProductList onOpen={setSelected} onAddNew={() => setCreating(true)} onUpload={() => go("import")} />
         )}
+        {section === "replenishment" && <ErpReplenishment onCreated={() => go("purchasing")} />}
+        {section === "purchasing" && <ErpPurchasing />}
         {section === "receiving" && <ErpReceiving />}
         {section === "stocktake" && <ErpStocktake />}
         {section === "suppliers" && <ErpSuppliers />}
@@ -726,6 +744,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
                     <th className="px-3 py-2 text-right">Базова ціна</th>
                     <th className="px-3 py-2 text-right">Акційна ціна</th>
                     <th className="px-3 py-2 text-center">Наявність</th>
+                    <th className="px-3 py-2 text-left hidden xl:table-cell">Оновлено</th>
                     <th className="px-3 py-2 text-center w-24">Швидко</th>
                     <th className="px-3 py-2 w-8" />
                   </tr>
@@ -734,7 +753,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
                   {variants.map((v) => (
                     <VariantRow key={v.id} v={v} onPut={variantPut} onDelete={() => delSize(v.id)} />
                   ))}
-                  {variants.length === 0 && <tr><td colSpan={9} className="py-6 text-center text-[12px] text-[#9c8f7d]">Пропозицій ще немає</td></tr>}
+                  {variants.length === 0 && <tr><td colSpan={10} className="py-6 text-center text-[12px] text-[#9c8f7d]">Пропозицій ще немає</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -820,6 +839,13 @@ function VariantRow({ v, onPut, onDelete }: {
           onBlur={() => { const n = Number(qty); if (n !== v.stock_qty) onPut({ variantId: v.id, setQty: n, type: "adjust", note: "Ручне коригування" }); }}
           onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
           className={cell + " w-16 text-center text-[13px] tabular-nums"} />
+      </td>
+      <td className="px-3 py-2 hidden xl:table-cell">
+        <span className="text-[11px] text-[#9c8f7d]" title={v.updated_by || ""}>
+          {v.updated_at ? new Date(v.updated_at).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" }) : "—"}
+          {v.updated_by && v.updated_by !== "import" ? <span className="ml-1 text-[#c8c0b4]">· {v.updated_by}</span> : null}
+          {v.updated_by === "import" ? <span className="ml-1 text-[#c2a878]">· імпорт</span> : null}
+        </span>
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center justify-center gap-1">
