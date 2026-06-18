@@ -210,7 +210,7 @@ function BrandMarquee({
 function CategoryTrio() {
   return (
     <section className="wrap py-16 md:py-24">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {CATEGORIES.map((cat, i) => (
           <Reveal key={cat.href} delay={i * 80}>
             <Link

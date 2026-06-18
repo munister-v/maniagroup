@@ -95,8 +95,12 @@ export type CatalogResult = {
 
 // ── Core query ─────────────────────────────────────────────────────────
 
+// Home-fragrance section was removed from the storefront — these products stay
+// in the DB (visible in ERP/admin) but never surface on the public site.
+const HIDDEN_CATEGORY_SLUG = "aromatizator";
+
 async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
-  const conds: string[] = ["status = 'publish'"];
+  const conds: string[] = ["status = 'publish'", `category_slug <> '${HIDDEN_CATEGORY_SLUG}'`];
   const bind: unknown[] = [];
   const p = (v: unknown) => { bind.push(v); return `$${bind.length}`; };
 
@@ -203,7 +207,8 @@ export async function dbSizeFacets(params: { categorySlug?: string; q?: string }
 
 export async function getCatalogCategories(): Promise<WcCategory[]> {
   const rows = await q<WcCategory>(
-    "SELECT id, name, slug, parent, count FROM categories ORDER BY count DESC, name ASC",
+    "SELECT id, name, slug, parent, count FROM categories WHERE slug <> $1 ORDER BY count DESC, name ASC",
+    [HIDDEN_CATEGORY_SLUG],
   );
   return rows.map((c) => ({ ...c, name: ukrainianize(c.name) }));
 }
@@ -226,6 +231,7 @@ export async function dbProductById(id: string): Promise<DbProductDetail | null>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = await q1<any>("SELECT * FROM products WHERE id = $1", [Number(id)]);
   if (!row) return null;
+  if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null; // home-fragrance section removed
   const sizes = (asAttrs(row.attributes).find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? [])
     .map((t: { name: string }) => t.name);
   const images = asImages(row.images).filter((i) => i?.src);

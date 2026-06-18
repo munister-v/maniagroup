@@ -79,7 +79,6 @@ export const NAV: { label: string; href: string }[] = [
   { label: "Бренди", href: "#brands" },
   { label: "Жінкам", href: "#women" },
   { label: "Чоловікам", href: "#men" },
-  { label: "Аромати для дому", href: "#home" },
   { label: "Доставка", href: "#delivery" },
 ];
 
@@ -103,13 +102,6 @@ export const CATEGORIES: {
     href: "/catalog?category=muzhskoe",
     tone: "#c4bcb0",
     image: "/images/cat-men.webp",
-  },
-  {
-    label: "Аромати для дому",
-    caption: "Дифузори · інтер'єрні парфуми · сашле",
-    href: "/catalog?category=aromatizatory",
-    tone: "#cbb8a4",
-    image: "/images/cat-home.webp",
   },
 ];
 
@@ -209,17 +201,6 @@ export const PRODUCTS: Product[] = [
     gender: "men",
     category: "Одяг",
     tone: "#cfc7bd",
-  },
-  {
-    id: "p10",
-    slug: "moschino-home-diffuser",
-    name: "Дифузор для дому",
-    brand: "Moschino",
-    price: 3400,
-    gender: "home",
-    category: "Аромати для дому",
-    tone: "#dfdbd2",
-    tag: "new",
   },
   {
     id: "p11",
@@ -399,22 +380,6 @@ export const MEGA_MENU: MegaMenu[] = [
       },
     ],
     featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe", href: "/catalog?gender=men", image: "/images/03_dropdown-cholovicha-kolektsiya.webp" },
-  },
-  {
-    label: "Аромати для дому",
-    href: "/catalog?category=aromatizatory",
-    columns: [
-      {
-        title: "Категорії",
-        links: [
-          { label: "Дифузори", slug: "aromadiffuzory" },
-          { label: "Інтер’єрні парфуми", slug: "interyernyye_dukhi" },
-          { label: "Змінні блоки", slug: "smennyye_bloki" },
-          { label: "Сашле", slug: "aromaticheskiye_sashe" },
-        ],
-      },
-    ],
-    featured: { title: "Аромати для дому", caption: "Новинки", tone: "#cbb8a4", slug: "aromatizatory", image: "/images/04_dropdown-aromaty-dlya-domu.webp" },
   },
 ];
 
