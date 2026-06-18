@@ -222,6 +222,13 @@ CREATE TABLE IF NOT EXISTS customer_tags (
 ALTER TABLE products ADD COLUMN IF NOT EXISTS featured BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_products_featured ON products(featured) WHERE featured;
 
+-- ── ERP: factory article (Заводський артикул) ──
+-- The supplier's own article (e.g. 8MG6719 / AL067N020_999), distinct from our
+-- internal sku/код. Present in every Intertop & MG export, shown as a list
+-- column and used to reconcile rows on price/stock import.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS factory_article TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS idx_products_factory_article ON products(factory_article);
+
 -- ── Finance: cost basis for profit/margin ──
 -- The XLS exports carry no purchase cost, so cost is resolved by priority:
 --   1. products.cost_price (manual edit or imported absolute cost)
@@ -267,13 +274,20 @@ CREATE TABLE IF NOT EXISTS product_variants (
   size       TEXT NOT NULL DEFAULT '',
   barcode    TEXT NOT NULL DEFAULT '',
   stock_qty  INTEGER NOT NULL DEFAULT 0,
-  price      NUMERIC,                       -- NULL ⇒ inherit product price
+  price      NUMERIC,                       -- NULL ⇒ inherit product price (base_price)
   active     BOOLEAN NOT NULL DEFAULT TRUE,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_by TEXT NOT NULL DEFAULT '',
   UNIQUE (product_id, size)
 );
 CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants(product_id);
+
+-- ── ERP: trade-offer (торгова пропозиція) extra fields ──
+-- The Intertop/MG exports carry price AND a sale price per offer, plus the
+-- marketplace offer code (mp…). Mirror that on the variant.
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS sale_price NUMERIC;            -- акційна ціна (NULL ⇒ none)
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS offer_code TEXT NOT NULL DEFAULT ''; -- mp-код оффера
+CREATE INDEX IF NOT EXISTS idx_variants_offer_code ON product_variants(offer_code) WHERE offer_code <> '';
 
 -- Every stock change, for a full audit trail ("Оновлено / Ким оновлено").
 CREATE TABLE IF NOT EXISTS stock_movements (

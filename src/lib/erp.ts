@@ -19,12 +19,17 @@ export type Variant = {
   product_id: number;
   size: string;
   barcode: string;
+  offer_code: string;          // mp-код оффера
   stock_qty: number;
-  price: number | null;
+  price: number | null;        // базова ціна (NULL ⇒ за товаром)
+  sale_price: number | null;   // акційна ціна (NULL ⇒ немає)
   active: boolean;
   updated_at: string;
   updated_by: string;
 };
+
+const VARIANT_COLS = `id, product_id, size, barcode, offer_code, stock_qty,
+  price::float AS price, sale_price::float AS sale_price, active, updated_at, updated_by`;
 
 export type Movement = {
   id: number;
@@ -42,15 +47,62 @@ export type ErpProductRow = {
   id: string;
   name: string;
   brand: string;
-  sku: string;
+  sku: string;             // Код товару (internal code)
+  factory_article: string; // Заводський артикул (supplier article)
   category: string;
+  color: string;
+  season: string;
+  status: string;          // draft | moderation | publish | inactive
   price: number;
   image_src: string;
   is_in_stock: boolean;
-  stock_qty: number;     // mirror on products
-  variant_count: number; // size rows defined
-  variant_units: number; // summed variant stock (NULL-safe)
+  stock_qty: number;       // mirror on products
+  variant_count: number;   // size rows defined
+  variant_units: number;   // summed variant stock (NULL-safe)
+  created_at: string;
+  updated_at: string;
 };
+
+/**
+ * Product lifecycle (mirrors the Intertop marketplace partner workflow, in
+ * Mania terms). Only `publish` is visible on the storefront (every storefront
+ * query filters status='publish'), so draft / moderation / inactive auto-hide.
+ *   draft      — Чернетка        (in progress, not submitted)
+ *   moderation — На модерації     (submitted, awaiting review)
+ *   publish    — Активний          (live on the storefront; "Публікувався: Так")
+ *   inactive   — Деактивований     (withdrawn from sale, kept in catalog)
+ */
+export type ErpStatus = "draft" | "moderation" | "publish" | "inactive";
+export const ERP_STATUS_LABEL: Record<ErpStatus, string> = {
+  draft: "Чернетка",
+  moderation: "На модерації",
+  publish: "Активний",
+  inactive: "Деактивований",
+};
+export const ERP_STATUSES: ErpStatus[] = ["draft", "moderation", "publish", "inactive"];
+
+/** Set the lifecycle status on many products at once (bulk action bar). */
+export async function bulkSetStatus(ids: (string | number)[], status: ErpStatus): Promise<number> {
+  if (!ERP_STATUSES.includes(status)) throw new Error("Невідомий статус");
+  const nums = ids.map(Number).filter(Number.isFinite);
+  if (nums.length === 0) return 0;
+  const res = await q(
+    "UPDATE products SET status = $2, updated_at = now() WHERE id = ANY($1)",
+    [nums, status],
+  );
+  // pg returns rowCount on the QueryResult; q() returns rows, so re-count.
+  return nums.length;
+}
+
+/** Per-status product counts for the ERP list filter chips. */
+export async function erpStatusCounts(): Promise<Record<string, number>> {
+  const rows = await q<{ status: string; n: string }>(
+    "SELECT status, COUNT(*)::text AS n FROM products GROUP BY status",
+  );
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.status] = Number(r.n);
+  return out;
+}
 
 export const MOVEMENT_TYPES: Record<string, string> = {
   import: "Імпорт",
@@ -191,28 +243,36 @@ async function recomputeProductStock(client: PoolClient, productId: number): Pro
 
 /** Product list for the ERP grid, with stock summary. */
 export async function listErpProducts(opts: {
-  q?: string; page?: number; perPage?: number; stock?: "in" | "out" | "";
+  q?: string; page?: number; perPage?: number; stock?: "in" | "out" | ""; status?: string;
 }): Promise<{ products: ErpProductRow[]; total: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const perPage = Math.min(100, opts.perPage ?? 50);
-  const conds = ["p.status = 'publish'"];
+  // ERP sees the WHOLE assortment across every lifecycle status (unlike the
+  // storefront, which only ever queries status='publish').
+  const conds: string[] = [];
   const bind: unknown[] = [];
   if (opts.q?.trim()) {
     bind.push("%" + opts.q.trim() + "%");
     conds.push(`(p.name ILIKE $${bind.length} OR p.brand ILIKE $${bind.length} OR p.sku ILIKE $${bind.length})`);
   }
+  if (opts.status && (ERP_STATUSES as string[]).includes(opts.status)) {
+    bind.push(opts.status);
+    conds.push(`p.status = $${bind.length}`);
+  }
   if (opts.stock === "in") conds.push("p.is_in_stock");
   if (opts.stock === "out") conds.push("NOT p.is_in_stock");
-  const where = conds.join(" AND ");
+  const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
 
-  const countRow = await q1<{ n: string }>(`SELECT COUNT(*)::text AS n FROM products p WHERE ${where}`, bind);
+  const countRow = await q1<{ n: string }>(`SELECT COUNT(*)::text AS n FROM products p ${where}`, bind);
   const rows = await q<ErpProductRow & { price: string; stock_qty: string; variant_count: string; variant_units: string }>(
-    `SELECT p.id::text, p.name, p.brand, p.sku, p.category, p.image_src, p.is_in_stock,
+    `SELECT p.id::text, p.name, p.brand, p.sku, p.factory_article, p.category,
+            p.color, p.season, p.status, p.image_src, p.is_in_stock,
             p.price::float::text AS price,
             COALESCE(p.stock_qty,0)::text AS stock_qty,
+            p.created_at, p.updated_at,
             (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id)::text AS variant_count,
             (SELECT COALESCE(SUM(stock_qty),0) FROM product_variants v WHERE v.product_id = p.id)::text AS variant_units
-     FROM products p WHERE ${where}
+     FROM products p ${where}
      ORDER BY p.is_in_stock DESC, p.brand, p.name
      LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`,
     bind,
@@ -220,9 +280,11 @@ export async function listErpProducts(opts: {
   return {
     total: Number(countRow?.n ?? 0),
     products: rows.map((r) => ({
-      id: r.id, name: r.name, brand: r.brand, sku: r.sku, category: r.category,
-      image_src: r.image_src, is_in_stock: r.is_in_stock,
+      id: r.id, name: r.name, brand: r.brand, sku: r.sku, factory_article: r.factory_article,
+      category: r.category, color: r.color, season: r.season,
+      status: r.status, image_src: r.image_src, is_in_stock: r.is_in_stock,
       price: Number(r.price), stock_qty: Number(r.stock_qty),
+      created_at: r.created_at, updated_at: r.updated_at,
       variant_count: Number(r.variant_count), variant_units: Number(r.variant_units),
     })),
   };
@@ -231,8 +293,7 @@ export async function listErpProducts(opts: {
 /** Variants for a product; seed size rows from attributes on first access. */
 export async function getOrSeedVariants(productId: number): Promise<Variant[]> {
   const existing = await q<Variant>(
-    `SELECT id, product_id, size, barcode, stock_qty, price::float AS price, active,
-            updated_at, updated_by
+    `SELECT ${VARIANT_COLS}
        FROM product_variants WHERE product_id = $1 ORDER BY id`,
     [productId],
   );
@@ -252,26 +313,96 @@ export async function getOrSeedVariants(productId: number): Promise<Variant[]> {
     );
   }
   return q<Variant>(
-    `SELECT id, product_id, size, barcode, stock_qty, price::float AS price, active,
-            updated_at, updated_by
+    `SELECT ${VARIANT_COLS}
        FROM product_variants WHERE product_id = $1 ORDER BY id`,
     [productId],
   );
 }
 
+export type ErpProductDetail = {
+  id: string; name: string; brand: string; sku: string; factory_article: string;
+  category: string; gender: string; status: string;
+  price: string; regular_price: string; sale_price: string | null;
+  cost_price: string | null;
+  image_src: string; images: unknown; is_in_stock: boolean; stock_qty: string;
+  color: string; composition: string; season: string; country: string;
+  collection: string; description: string;
+  created_at: string; updated_at: string;
+};
+
 export async function getProduct(productId: number) {
-  return q1<{
-    id: string; name: string; brand: string; sku: string; category: string;
-    price: string; regular_price: string; image_src: string; images: unknown;
-    is_in_stock: boolean; stock_qty: string; color: string; composition: string;
-  }>(
-    `SELECT id::text, name, brand, sku, category,
+  return q1<ErpProductDetail>(
+    `SELECT id::text, name, brand, sku, factory_article, category, gender, status,
             price::float::text AS price, regular_price::float::text AS regular_price,
+            sale_price::float::text AS sale_price, cost_price::float::text AS cost_price,
             image_src, images, is_in_stock, COALESCE(stock_qty,0)::text AS stock_qty,
-            color, composition
+            color, composition, season, country, collection, description,
+            created_at, updated_at
        FROM products WHERE id = $1`,
     [productId],
   );
+}
+
+/**
+ * Edit a product's own fields (the "Товар" tab). Recomputes the effective
+ * `price` (sale ?? regular) and `is_in_stock` is left to the variant mirror.
+ * Only whitelisted columns are touched; `status` drives the lifecycle.
+ */
+export type ErpProductPatch = Partial<{
+  name: string; brand: string; category: string; gender: string;
+  color: string; composition: string; season: string; country: string;
+  collection: string; sku: string; factory_article: string; description: string;
+  regular_price: number; sale_price: number | null; cost_price: number | null;
+  status: ErpStatus;
+}>;
+
+export async function updateErpProduct(productId: number, patch: ErpProductPatch): Promise<void> {
+  const sets: string[] = [];
+  const bind: unknown[] = [];
+  const add = (col: string, val: unknown) => { bind.push(val); sets.push(`${col} = $${bind.length}`); };
+
+  const textCols: (keyof ErpProductPatch)[] = [
+    "name", "brand", "category", "gender", "color", "composition",
+    "season", "country", "collection", "sku", "factory_article", "description",
+  ];
+  for (const c of textCols) if (patch[c] !== undefined) add(c, String(patch[c] ?? "").trim());
+
+  if (patch.status !== undefined) {
+    if (!ERP_STATUSES.includes(patch.status)) throw new Error("Невідомий статус");
+    add("status", patch.status);
+  }
+  if (patch.cost_price !== undefined) {
+    const c = patch.cost_price && patch.cost_price > 0 ? patch.cost_price : null;
+    add("cost_price", c);
+    add("cost_source", c != null ? "manual" : "");
+  }
+  // Price: keep regular/sale/effective consistent. Recompute `price` whenever
+  // either regular or sale changes.
+  const wantPrice = patch.regular_price !== undefined || patch.sale_price !== undefined;
+  if (patch.regular_price !== undefined) add("regular_price", patch.regular_price);
+  if (patch.sale_price !== undefined) {
+    const reg = patch.regular_price;
+    const sale = patch.sale_price && patch.sale_price > 0 ? patch.sale_price : null;
+    const validSale = sale != null && (reg === undefined || sale < reg) ? sale : (sale != null && reg === undefined ? sale : null);
+    add("sale_price", validSale);
+  }
+  if (wantPrice) {
+    // price = COALESCE(new sale, new regular, existing)
+    const cur = await q1<{ regular_price: string; sale_price: string | null }>(
+      "SELECT regular_price::float::text AS regular_price, sale_price::float::text AS sale_price FROM products WHERE id = $1",
+      [productId],
+    );
+    const reg = patch.regular_price ?? Number(cur?.regular_price ?? 0);
+    const saleRaw = patch.sale_price !== undefined
+      ? (patch.sale_price && patch.sale_price > 0 ? patch.sale_price : null)
+      : (cur?.sale_price != null ? Number(cur.sale_price) : null);
+    const sale = saleRaw != null && saleRaw < reg ? saleRaw : null;
+    add("price", sale ?? reg);
+  }
+
+  if (!sets.length) return;
+  bind.push(productId);
+  await q(`UPDATE products SET ${sets.join(", ")}, updated_at = now() WHERE id = $${bind.length}`, bind);
 }
 
 export async function getMovements(productId: number, limit = 50): Promise<Movement[]> {
@@ -282,20 +413,40 @@ export async function getMovements(productId: number, limit = 50): Promise<Movem
   );
 }
 
-/** Update a variant's meta (barcode / price / active) — no stock change. */
+/** Update a variant's meta (barcode / offer_code / price / sale_price / active) — no stock change. */
 export async function updateVariantMeta(
   variantId: number,
-  patch: { barcode?: string; price?: number | null; active?: boolean },
+  patch: { barcode?: string; offer_code?: string; price?: number | null; sale_price?: number | null; active?: boolean },
 ): Promise<void> {
   const sets: string[] = [];
   const bind: unknown[] = [];
   const add = (col: string, val: unknown) => { bind.push(val); sets.push(`${col} = $${bind.length}`); };
   if (patch.barcode !== undefined) add("barcode", patch.barcode);
+  if (patch.offer_code !== undefined) add("offer_code", patch.offer_code);
   if (patch.price !== undefined) add("price", patch.price);
+  if (patch.sale_price !== undefined) add("sale_price", patch.sale_price);
   if (patch.active !== undefined) add("active", patch.active);
   if (!sets.length) return;
   bind.push(variantId);
   await q(`UPDATE product_variants SET ${sets.join(", ")}, updated_at = now() WHERE id = $${bind.length}`, bind);
+  // Toggling `active` changes which variants count toward the product mirror.
+  if (patch.active !== undefined) {
+    await q(
+      `UPDATE products p SET stock_qty = s.total, is_in_stock = (s.total > 0), updated_at = now()
+         FROM (SELECT product_id, COALESCE(SUM(stock_qty),0) AS total
+                 FROM product_variants WHERE active GROUP BY product_id) s
+        WHERE p.id = s.product_id
+          AND p.id = (SELECT product_id FROM product_variants WHERE id = $1)`,
+      [variantId],
+    );
+    // Edge case: last active variant turned off ⇒ no row in the grouped set.
+    await q(
+      `UPDATE products SET stock_qty = 0, is_in_stock = FALSE, updated_at = now()
+        WHERE id = (SELECT product_id FROM product_variants WHERE id = $1)
+          AND NOT EXISTS (SELECT 1 FROM product_variants WHERE product_id = products.id AND active)`,
+      [variantId],
+    );
+  }
 }
 
 /**
@@ -355,8 +506,7 @@ export async function addVariant(productId: number, size: string): Promise<Varia
     [productId, s],
   );
   return q1<Variant>(
-    `SELECT id, product_id, size, barcode, stock_qty, price::float AS price, active, updated_at, updated_by
-       FROM product_variants WHERE product_id = $1 AND size = $2`,
+    `SELECT ${VARIANT_COLS} FROM product_variants WHERE product_id = $1 AND size = $2`,
     [productId, s],
   );
 }
@@ -386,6 +536,6 @@ export async function erpOverview() {
             COUNT(*) FILTER (WHERE NOT is_in_stock)::text AS out_stock,
             COALESCE(SUM(stock_qty),0)::text AS units,
             (SELECT COUNT(*) FROM product_variants)::text AS variants
-       FROM products WHERE status = 'publish'`,
+       FROM products`,
   );
 }

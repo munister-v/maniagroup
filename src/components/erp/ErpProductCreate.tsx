@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { aiAutofill, aiDescription } from "./aiAssist";
 
 const inp = "h-9 w-full rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
 const lbl = "mb-1 block text-[10px] uppercase tracking-wider text-[#9c8f7d]";
@@ -27,7 +28,33 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [ai, setAi] = useState<"" | "fill" | "desc">("");
+  const [aiErr, setAiErr] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── AI assist: infer fields + description from the name (only fills empties). ──
+  async function magicFill() {
+    if (!name.trim()) { setAiErr("Спершу введіть назву"); return; }
+    setAi("fill"); setAiErr("");
+    try {
+      const f = await aiAutofill({ name, brand, category, color, season, composition, gender });
+      if (f.category && !category.trim()) setCategory(f.category);
+      if (f.gender && !gender.trim()) setGender(f.gender);
+      if (f.color && !color.trim()) setColor(f.color);
+      if (f.season && !season.trim()) setSeason(f.season);
+      if (f.composition && !composition.trim()) setComposition(f.composition);
+      if (f.brand && !brand.trim()) setBrand(f.brand);
+      if (f.description && !description.trim()) setDescription(f.description);
+    } catch (e) { setAiErr(e instanceof Error ? e.message : "Помилка ШІ"); }
+    setAi("");
+  }
+  async function genDesc() {
+    if (!name.trim()) { setAiErr("Спершу введіть назву"); return; }
+    setAi("desc"); setAiErr("");
+    try { const t = await aiDescription({ name, brand, category, color, season, composition }); if (t) setDescription(t); }
+    catch (e) { setAiErr(e instanceof Error ? e.message : "Помилка ШІ"); }
+    setAi("");
+  }
 
   useEffect(() => {
     fetch("/api/admin/products/facets").then((r) => r.json()).then((d) =>
@@ -89,7 +116,12 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-[22px] font-light tracking-tight">Новий товар</h1>
         <div className="flex items-center gap-2">
+          {aiErr && <span className="text-[12px] text-red-600">{aiErr}</span>}
           {err && <span className="text-[12px] text-red-600">{err}</span>}
+          <button onClick={magicFill} disabled={ai !== "" || !name.trim()} title="Розпізнати поля та опис із назви"
+            className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#c2a878] px-3 text-[11px] uppercase tracking-[0.1em] text-[#8a6d3b] transition-colors hover:bg-[#faf6ee] disabled:opacity-40">
+            <span>✨</span>{ai === "fill" ? "Аналіз…" : "Заповнити з назви"}
+          </button>
           <button onClick={save} disabled={saving}
             className="h-9 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
             {saving ? "Збереження…" : "Опублікувати"}
@@ -105,11 +137,17 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
               <span className={lbl}>Назва товару *</span>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="напр. Сукня жіноча PINKO" className={inp + " h-10 text-[15px]"} autoFocus />
             </label>
-            <label className="mt-3 block">
-              <span className={lbl}>Опис</span>
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between">
+                <span className={lbl + " mb-0"}>Опис</span>
+                <button onClick={genDesc} disabled={ai !== "" || !name.trim()} type="button"
+                  className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#8a6d3b] hover:text-[#17130f] disabled:opacity-40">
+                  ✨ {ai === "desc" ? "Генерую…" : "Згенерувати"}
+                </button>
+              </div>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4}
                 className="w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#17130f] focus:outline-none" />
-            </label>
+            </div>
           </div>
 
           {/* Photos */}

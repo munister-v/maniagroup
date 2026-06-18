@@ -199,6 +199,49 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text });
   }
 
+  // ── Розумне заповнення картки товару з назви ────────────────────────
+  // Аналізує назву (+ будь-які вже введені поля) і повертає СТРУКТУРОВАНІ
+  // поля + опис. Значення вирівнюються по реальних фасетах каталогу, щоб не
+  // плодити різнобій ("Чорний" vs "черный").
+  if (action === "product-autofill") {
+    if (!product?.name?.trim()) return NextResponse.json({ error: "no name" }, { status: 400 });
+
+    const [cats, colors, seasons, brands] = await Promise.all([
+      q<{ v: string }>("SELECT DISTINCT category AS v FROM products WHERE category <> '' ORDER BY category LIMIT 60"),
+      q<{ v: string }>("SELECT DISTINCT color AS v FROM products WHERE color <> '' AND color <> '<>' ORDER BY color LIMIT 40"),
+      q<{ v: string }>("SELECT DISTINCT season AS v FROM products WHERE season <> '' ORDER BY season LIMIT 20"),
+      q<{ v: string }>("SELECT DISTINCT brand AS v FROM products WHERE brand <> '' ORDER BY brand LIMIT 80"),
+    ]);
+    const list = (rows: { v: string }[]) => rows.map((r) => r.v).join(", ");
+
+    const prompt = `Назва товару: "${product.name}"
+Вже введено — бренд: ${product.brand || "—"}, категорія: ${product.category || "—"}, колір: ${product.color || "—"}, сезон: ${product.season || "—"}, склад: ${product.composition || "—"}, стать: ${product.gender || "—"}.
+
+Каталог уже використовує такі значення (обери з них, якщо підходить; інакше запропонуй коротке нове українською):
+• Категорії: ${list(cats)}
+• Кольори: ${list(colors)}
+• Сезони: ${list(seasons)}
+• Бренди: ${list(brands)}
+
+Проаналізуй назву та поверни ЛИШЕ JSON (без markdown, без пояснень) такого вигляду:
+{"category":"","gender":"women|men|","color":"","season":"","composition":"","brand":"","description":""}
+Правила: gender = "women" якщо жіноче, "men" якщо чоловіче, інакше "". composition (склад тканини) лиши "" якщо не впевнений — НЕ вигадуй. brand — лише якщо явно є в назві. description — продаючий опис 3–4 речення українською, преміум-стиль, без кліше. Зберігай вже введені користувачем значення, якщо вони логічні.`;
+
+    const raw = await orChat([
+      { role: "system", content: "Ти асистент-товарознавець магазину брендового одягу. Відповідаєш виключно валідним JSON українською мовою." },
+      { role: "user", content: prompt },
+    ], { maxTokens: 500, temperature: 0.5 });
+
+    const m = raw.replace(/```json|```/gi, "").match(/\{[\s\S]*\}/);
+    let parsed: Record<string, string> = {};
+    if (m) { try { parsed = JSON.parse(m[0]); } catch { /* fall through */ } }
+    const allow = ["category", "gender", "color", "season", "composition", "brand", "description"];
+    const fields: Record<string, string> = {};
+    for (const k of allow) if (typeof parsed[k] === "string" && parsed[k].trim()) fields[k] = parsed[k].trim();
+    if (fields.gender && !["women", "men"].includes(fields.gender)) delete fields.gender;
+    return NextResponse.json({ fields });
+  }
+
   // ── Покращення контенту (SEO, hero, опис) ───────────────────────────
   if (action === "content-improve") {
     const { field, text, context } = body as { field?: string; text?: string; context?: string };

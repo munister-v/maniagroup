@@ -10,13 +10,15 @@ export async function PUT(req: NextRequest) {
   const b = await req.json() as {
     variantId?: number;
     setQty?: number; delta?: number; type?: string; note?: string;
-    barcode?: string; price?: number | null; active?: boolean;
+    barcode?: string; offer_code?: string; price?: number | null; sale_price?: number | null; active?: boolean;
   };
   const variantId = Number(b.variantId);
   if (!variantId) return NextResponse.json({ error: "variantId required" }, { status: 400 });
 
-  if (b.barcode !== undefined || b.price !== undefined || b.active !== undefined) {
-    await updateVariantMeta(variantId, { barcode: b.barcode, price: b.price, active: b.active });
+  if (b.barcode !== undefined || b.offer_code !== undefined || b.price !== undefined || b.sale_price !== undefined || b.active !== undefined) {
+    await updateVariantMeta(variantId, {
+      barcode: b.barcode, offer_code: b.offer_code, price: b.price, sale_price: b.sale_price, active: b.active,
+    });
   }
   let qty: number | undefined;
   if (b.setQty !== undefined || b.delta !== undefined) {
