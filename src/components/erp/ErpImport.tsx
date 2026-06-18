@@ -10,6 +10,7 @@ type ImportPreview = {
   affectedProducts: number; newVariants: number; stockChanges: number; priceChanges: number;
   sample: { name: string; size?: string; detail: string }[];
   unmatchedSample: string[];
+  aiUsed?: boolean;
 };
 type ApplyResult = {
   kind: string; matchedRows: number; unmatchedRows: number;
@@ -94,6 +95,9 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
         <div className="mt-5 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-[3px] bg-[#17130f] px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-white">{KIND_LABEL[preview.kind]}</span>
+            {preview.aiUsed && (
+              <span className="rounded-[3px] border border-violet-300 bg-violet-50 px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-violet-700">🤖 розпізнано ШІ</span>
+            )}
             <span className="text-[12px] text-[#9c8f7d]">{preview.filename} · {preview.totalRows.toLocaleString("uk-UA")} рядків</span>
           </div>
 

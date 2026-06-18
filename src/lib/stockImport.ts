@@ -20,6 +20,7 @@
 
 import * as XLSX from "xlsx";
 import { pool, q } from "./pg";
+import { aiDetectImport } from "./aiImport";
 
 export type ImportKind = "offers" | "master" | "unknown";
 
@@ -54,7 +55,7 @@ export function parseSizesString(raw: unknown): Record<string, number> {
   return out;
 }
 
-function readGrid(buf: Buffer, filename: string): unknown[][] {
+export function readGrid(buf: Buffer, filename: string): unknown[][] {
   const isXls = /\.xls$/i.test(filename);
   const wb = XLSX.read(buf, { type: "buffer", codepage: isXls ? 1251 : 65001 });
   const sh = wb.Sheets[wb.SheetNames[0]];
@@ -104,6 +105,40 @@ export function parseImport(buf: Buffer, filename: string): Parsed {
   return { kind: "unknown", filename, rows: [] };
 }
 
+/**
+ * Smart parse: fast rule-based first, and if the format is unknown, fall back
+ * to the OpenRouter AI mapper (any column layout / language / new supplier).
+ * Returns `ai: true` when the AI mapping was used.
+ */
+export async function parseImportSmart(buf: Buffer, filename: string): Promise<Parsed & { ai?: boolean }> {
+  const fast = parseImport(buf, filename);
+  if (fast.kind !== "unknown") return fast;
+
+  const grid = readGrid(buf, filename);
+  const mapping = await aiDetectImport(grid);
+  if (!mapping) return fast;
+
+  if (mapping.kind === "offers") {
+    const c = mapping.columns;
+    const idx = {
+      external_id: c.external_id ?? -1, factory_article: c.factory_article ?? -1,
+      barcode: c.barcode ?? -1, size: c.size ?? -1, offer_code: c.offer_code ?? -1,
+      quantity: c.quantity ?? -1, base_price: c.base_price ?? -1, discount_price: c.discount_price ?? -1,
+    } as Record<keyof OfferRow, number>;
+    if (idx.size < 0) return fast;
+    return { kind: "offers", filename, rows: parseOffers(grid, mapping.headerRow + 1, idx), ai: true };
+  }
+
+  const c = mapping.columns;
+  const col: MasterCols = {
+    kod: c.kod ?? -1, fa: c.factory_article ?? -1, brand: c.brand ?? -1, name: c.name ?? -1,
+    sizes: c.sizes ?? -1, base: c.base_price ?? -1, sale: c.sale_price ?? -1,
+    comp: c.composition ?? -1, coll: c.collection ?? -1, color: c.color ?? -1,
+  };
+  if (col.kod < 0) return fast;
+  return { kind: "master", filename, rows: parseMasterRows(grid, mapping.headerRow + 1, col), ai: true };
+}
+
 function parseOffers(grid: unknown[][], from: number, idx: Record<keyof OfferRow, number>): OfferRow[] {
   const at = (r: unknown[], i: number) => (i >= 0 ? String(r[i] ?? "").trim() : "");
   const rows: OfferRow[] = [];
@@ -128,10 +163,12 @@ function parseOffers(grid: unknown[][], from: number, idx: Record<keyof OfferRow
   return rows;
 }
 
+type MasterCols = { kod: number; fa: number; brand: number; name: number; sizes: number; base: number; sale: number; comp: number; coll: number; color: number };
+
 function parseMaster(grid: unknown[][], headerRow: number): MasterRow[] {
   const cells = (grid[headerRow] ?? []).map(norm);
   const find = (pred: (c: string) => boolean) => cells.findIndex(pred);
-  const col = {
+  const col: MasterCols = {
     kod:   find((c) => c === "код"),
     fa:    find((c) => c.startsWith("артикул")),
     brand: find((c) => c.startsWith("бренд")),
@@ -143,9 +180,13 @@ function parseMaster(grid: unknown[][], headerRow: number): MasterRow[] {
     coll:  find((c) => c.startsWith("коллек") || c.startsWith("колекц")),
     color: find((c) => c.startsWith("цвет") || c.startsWith("колір")),
   };
+  return parseMasterRows(grid, headerRow + 1, col);
+}
+
+function parseMasterRows(grid: unknown[][], dataStart: number, col: MasterCols): MasterRow[] {
   const at = (r: unknown[], i: number) => (i >= 0 ? String(r[i] ?? "").trim() : "");
   const rows: MasterRow[] = [];
-  for (let i = headerRow + 1; i < grid.length; i++) {
+  for (let i = dataStart; i < grid.length; i++) {
     const r = grid[i] ?? [];
     const kod = at(r, col.kod).split(".")[0];
     if (!/^\d+$/.test(kod)) continue; // brand sub-headers / blanks
