@@ -214,6 +214,8 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [perPage, setPerPage] = useState(100);
+  const [showFilters, setShowFilters] = useState(false); // ▼ filter toggle (Intertop)
+  const [showExtra, setShowExtra] = useState(false);      // ⚙ extra columns (Склад/Ціна)
 
   const load = useCallback(() => {
     setLoading(true);
@@ -269,14 +271,36 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
           <h1 className="text-[22px] font-light tracking-tight">Список товарів</h1>
           <p className="mt-0.5 text-[12px] text-[#9c8f7d]">Вибрано продуктів {total.toLocaleString("uk-UA")}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={onAddNew} className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#17130f] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:bg-[#17130f] hover:text-white">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button onClick={onAddNew} className="flex h-8 items-center gap-1.5 rounded-[3px] bg-[#13a89e] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-white transition-opacity hover:opacity-90">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
             Створити товар
           </button>
-          <button onClick={onUpload} className="flex h-8 items-center gap-1.5 rounded-[3px] bg-[#17130f] px-3 text-[11px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-85">
+          <button onClick={onUpload} className="flex h-8 items-center gap-1.5 rounded-[3px] bg-[#13a89e] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-white transition-opacity hover:opacity-90">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             Завантажити товари
+          </button>
+          {/* Bulk status actions (act on selected rows) — Intertop toolbar */}
+          {([
+            { label: "Деактивувати", status: "inactive" as ErpStatus, icon: "M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10" },
+            { label: "На модерацію", status: "moderation" as ErpStatus, icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zM16 11V7a4 4 0 00-8 0v4" },
+            { label: "В чернетку", status: "draft" as ErpStatus, icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.83 14.83l-4 1 1-4 8.756-8.244z" },
+          ]).map((b) => (
+            <button key={b.status} disabled={!sel.size || bulkBusy} onClick={() => bulk(b.status)}
+              className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#d8d2c8] bg-white px-3 text-[11px] uppercase tracking-[0.06em] text-[#5c5347] transition-colors hover:border-[#13a89e] hover:text-[#13a89e] disabled:opacity-35 disabled:hover:border-[#d8d2c8] disabled:hover:text-[#5c5347]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3.5 w-3.5"><path d={b.icon} strokeLinecap="round" strokeLinejoin="round" /></svg>
+              {b.label}
+            </button>
+          ))}
+          {/* Icon buttons */}
+          <span className="mx-0.5 h-5 w-px bg-[#e2ddd5]" />
+          <button onClick={() => setShowExtra((v) => !v)} title="Колонки: склад і ціна"
+            className={`flex h-8 w-8 items-center justify-center rounded-[3px] border transition-colors ${showExtra ? "border-[#13a89e] text-[#13a89e]" : "border-[#d8d2c8] text-[#9c8f7d] hover:border-[#13a89e] hover:text-[#13a89e]"}`}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <button onClick={() => setShowFilters((v) => !v)} title="Фільтри"
+            className={`flex h-8 w-8 items-center justify-center rounded-[3px] border transition-colors ${showFilters ? "border-[#13a89e] text-[#13a89e]" : "border-[#d8d2c8] text-[#9c8f7d] hover:border-[#13a89e] hover:text-[#13a89e]"}`}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4"><path d="M3 4h18M6 8h12M10 12h4M11 16h2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
       </div>
@@ -289,7 +313,7 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
           return (
             <button key={t.v || "all"} onClick={() => { setStatus(t.v); setPage(1); }}
               className={`rounded-[3px] border px-2.5 py-1 text-[11px] uppercase tracking-[0.06em] transition-colors ${
-                active ? "border-[#17130f] bg-[#17130f] text-white" : "border-[#e2ddd5] bg-white text-[#7c6f5e] hover:border-[#17130f] hover:text-[#17130f]"
+                active ? "border-[#13a89e] bg-[#13a89e] text-white" : "border-[#e2ddd5] bg-white text-[#7c6f5e] hover:border-[#13a89e] hover:text-[#13a89e]"
               }`}>
               {t.l}{n != null && <span className={active ? "ml-1 text-white/70" : "ml-1 text-[#b9ae9b]"}>({n.toLocaleString("uk-UA")})</span>}
             </button>
@@ -297,14 +321,14 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
         })}
       </div>
 
-      {/* Stock filter links (WC subsubsub) + search */}
+      {/* Search (always) + stock filter links (toggled by the ▼ button) */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1 text-[12px]">
-          {filters.map((f, i) => (
+          {showFilters && filters.map((f, i) => (
             <span key={f.v} className="flex items-center">
               {i > 0 && <span className="mx-1 text-[#d8d2c8]">|</span>}
               <button onClick={() => { setStock(f.v); setPage(1); }}
-                className={`transition-colors ${stock === f.v ? "font-medium text-[#17130f]" : "text-[#7c6f5e] hover:text-[#17130f]"}`}>
+                className={`transition-colors ${stock === f.v ? "font-medium text-[#13a89e]" : "text-[#7c6f5e] hover:text-[#13a89e]"}`}>
                 {f.l} {f.n != null && <span className="text-[#b9ae9b]">({f.n.toLocaleString("uk-UA")})</span>}
               </button>
             </span>
@@ -313,23 +337,16 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
         <div className="relative">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#b9ae9b]"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" /></svg>
           <input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} placeholder="Пошук товарів…"
-            className="h-9 w-64 rounded-[3px] border border-[#e2ddd5] bg-white pl-8 pr-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+            className="h-9 w-64 rounded-[3px] border border-[#e2ddd5] bg-white pl-8 pr-3 text-[13px] focus:border-[#13a89e] focus:outline-none" />
         </div>
       </div>
 
-      {/* Bulk action bar — appears when rows are selected */}
+      {/* Selection indicator (bulk actions live in the toolbar) */}
       {sel.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#17130f]/15 bg-[#faf8f5] px-3 py-2 text-[12px]">
-          <span className="font-medium text-[#17130f]">Вибрано: {sel.size}</span>
-          <span className="text-[#d8d2c8]">|</span>
-          <span className="text-[#7c6f5e]">Змінити статус:</span>
-          {BULK_ACTIONS.map((a) => (
-            <button key={a.status} disabled={bulkBusy} onClick={() => bulk(a.status)}
-              className="rounded-[3px] border border-[#e2ddd5] bg-white px-2.5 py-1 text-[11px] uppercase tracking-[0.06em] text-[#17130f] transition-colors hover:border-[#17130f] disabled:opacity-40">
-              {a.label}
-            </button>
-          ))}
-          <button onClick={() => setSel(new Set())} className="ml-auto text-[11px] uppercase tracking-[0.06em] text-[#9c8f7d] hover:text-[#17130f]">Зняти виділення</button>
+        <div className="mb-3 flex items-center gap-2 rounded-[4px] border border-[#13a89e]/25 bg-[#13a89e]/[0.06] px-3 py-1.5 text-[12px]">
+          <span className="font-medium text-[#0e7f77]">Вибрано: {sel.size}</span>
+          <span className="text-[#7c6f5e]">— застосуйте дію з панелі вгорі</span>
+          <button onClick={() => setSel(new Set())} className="ml-auto text-[11px] uppercase tracking-[0.06em] text-[#9c8f7d] hover:text-[#13a89e]">Зняти виділення</button>
         </div>
       )}
 
@@ -339,37 +356,39 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
           <thead>
             <tr className="border-b border-[#e8e4de] bg-[#f7f5f2] text-[10px] font-medium uppercase tracking-[0.04em] text-[#5c5347]">
               <th className="w-10 px-3 py-2.5 text-center">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-3.5 w-3.5 accent-[#17130f]" />
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-3.5 w-3.5 accent-[#13a89e]" />
               </th>
               <th className="px-3 py-2.5 text-left">ID товару</th>
+              <th className="px-3 py-2.5 text-left">Назва (рос.)</th>
               <th className="px-3 py-2.5 text-left">Зображення</th>
-              <th className="px-3 py-2.5 text-left">Назва</th>
               <th className="px-3 py-2.5 text-left">Категорія</th>
               <th className="px-3 py-2.5 text-left">Код товару</th>
               <th className="px-3 py-2.5 text-left">Заводський артикул</th>
+              <th className="px-3 py-2.5 text-left">Артикул</th>
               <th className="px-3 py-2.5 text-left">Статус</th>
               <th className="px-3 py-2.5 text-center">Публікувався</th>
+              <th className="px-3 py-2.5 text-left">Востаннє змінений</th>
+              <th className="px-3 py-2.5 text-left">Створений</th>
               <th className="px-3 py-2.5 text-left">Колір</th>
               <th className="px-3 py-2.5 text-left">Бренд</th>
               <th className="px-3 py-2.5 text-left">Сезон</th>
-              <th className="px-3 py-2.5 text-center">Склад</th>
-              <th className="px-3 py-2.5 text-right">Ціна</th>
-              <th className="px-3 py-2.5 text-left">Створений</th>
-              <th className="px-3 py-2.5 text-left">Змінений</th>
+              {showExtra && <th className="px-3 py-2.5 text-center">Склад</th>}
+              {showExtra && <th className="px-3 py-2.5 text-right">Ціна</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#f1ede7]">
-            {loading && !rows.length && <tr><td colSpan={16} className="py-14 text-center text-[12px] text-[#9c8f7d]">Завантаження…</td></tr>}
-            {!loading && rows.length === 0 && <tr><td colSpan={16} className="py-14 text-center text-[12px] text-[#9c8f7d]">Нічого не знайдено</td></tr>}
+            {loading && !rows.length && <tr><td colSpan={showExtra ? 17 : 15} className="py-14 text-center text-[12px] text-[#9c8f7d]">Завантаження…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={showExtra ? 17 : 15} className="py-14 text-center text-[12px] text-[#9c8f7d]">Нічого не знайдено</td></tr>}
             {rows.map((r) => {
               const checked = sel.has(r.id);
               const published = r.status === "publish";
               return (
-              <tr key={r.id} onClick={() => onOpen(r.id)} className={`group cursor-pointer hover:bg-[#faf8f5] ${checked ? "bg-[#f7f5f2]" : ""}`}>
+              <tr key={r.id} onClick={() => onOpen(r.id)} className={`group cursor-pointer hover:bg-[#faf8f5] ${checked ? "bg-[#eafaf8]" : ""}`}>
                 <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                  <input type="checkbox" checked={checked} onChange={() => toggleOne(r.id)} className="h-3.5 w-3.5 accent-[#17130f]" />
+                  <input type="checkbox" checked={checked} onChange={() => toggleOne(r.id)} className="h-3.5 w-3.5 accent-[#13a89e]" />
                 </td>
                 <td className="px-3 py-2 font-mono text-[12px] text-[#9c8f7d]">{r.id}</td>
+                <td className="px-3 py-2"><span className="block max-w-[260px] truncate font-medium text-[#13a89e] group-hover:underline">{r.name}</span></td>
                 <td className="px-3 py-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {r.image_src
@@ -378,27 +397,29 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M4 6h16v12H4z" strokeLinecap="round" strokeLinejoin="round" /></svg>
                       </span>}
                 </td>
-                <td className="px-3 py-2"><span className="block max-w-[260px] truncate font-medium text-[#1a4d8f] group-hover:underline">{r.name}</span></td>
-                <td className="px-3 py-2 text-[12px] text-[#5c5347]">{r.category}</td>
-                <td className="px-3 py-2 font-mono text-[12px] text-[#9c8f7d]">{r.sku || "—"}</td>
+                <td className="px-3 py-2 text-[12px] text-[#5c5347]">{r.category || "—"}</td>
+                <td className="px-3 py-2 font-mono text-[12px] text-[#9c8f7d]">mp{r.id}</td>
                 <td className="px-3 py-2 font-mono text-[12px] text-[#9c8f7d]">{r.factory_article || "—"}</td>
+                <td className="px-3 py-2 font-mono text-[12px] text-[#9c8f7d]">{r.sku || "—"}</td>
                 <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
                 <td className="px-3 py-2 text-center">
                   {published
                     ? <span className="text-[12px] font-medium text-green-700">Так</span>
                     : <span className="text-[12px] text-[#b9ae9b]">Ні</span>}
                 </td>
+                <td className="px-3 py-2 text-[12px] text-[#9c8f7d] tabular-nums">{dmy(r.updated_at)}</td>
+                <td className="px-3 py-2 text-[12px] text-[#9c8f7d] tabular-nums">{dmy(r.created_at)}</td>
                 <td className="px-3 py-2 text-[12px] text-[#5c5347]">{r.color || "—"}</td>
                 <td className="px-3 py-2 text-[12px] text-[#5c5347]">{r.brand}</td>
                 <td className="px-3 py-2 text-[12px] text-[#5c5347]">{r.season || "—"}</td>
-                <td className="px-3 py-2 text-center">
-                  {r.is_in_stock
-                    ? <span className="inline-flex items-center gap-1.5 text-[12px] text-green-700"><span className="h-1.5 w-1.5 rounded-full bg-green-500" />{r.stock_qty > 0 ? r.stock_qty : "є"}</span>
-                    : <span className="inline-flex items-center gap-1.5 text-[12px] text-red-600"><span className="h-1.5 w-1.5 rounded-full bg-red-400" />0</span>}
-                </td>
-                <td className="px-3 py-2 text-right tabular-nums text-[#17130f]">{uah(r.price)}</td>
-                <td className="px-3 py-2 text-[12px] text-[#9c8f7d] tabular-nums">{dmy(r.created_at)}</td>
-                <td className="px-3 py-2 text-[12px] text-[#9c8f7d] tabular-nums">{dmy(r.updated_at)}</td>
+                {showExtra && (
+                  <td className="px-3 py-2 text-center">
+                    {r.is_in_stock
+                      ? <span className="inline-flex items-center gap-1.5 text-[12px] text-green-700"><span className="h-1.5 w-1.5 rounded-full bg-green-500" />{r.stock_qty > 0 ? r.stock_qty : "є"}</span>
+                      : <span className="inline-flex items-center gap-1.5 text-[12px] text-red-600"><span className="h-1.5 w-1.5 rounded-full bg-red-400" />0</span>}
+                  </td>
+                )}
+                {showExtra && <td className="px-3 py-2 text-right tabular-nums text-[#17130f]">{uah(r.price)}</td>}
               </tr>
               );
             })}
@@ -426,7 +447,7 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
                 ? <span key={`e${i}`} className="px-1 text-[#b9ae9b]">…</span>
                 : <button key={p} onClick={() => setPage(p)}
                     className={`flex h-7 min-w-7 items-center justify-center rounded-[3px] border px-1.5 tabular-nums ${
-                      p === page ? "border-[#17130f] bg-[#17130f] text-white" : "border-[#e2ddd5] bg-white text-[#5c5347] hover:border-[#17130f]"
+                      p === page ? "border-[#13a89e] bg-[#13a89e] text-white" : "border-[#e2ddd5] bg-white text-[#5c5347] hover:border-[#13a89e]"
                     }`}>{p}</button>
             )}
             <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="flex h-7 w-7 items-center justify-center rounded-[3px] border border-[#e2ddd5] bg-white disabled:opacity-30">›</button>
