@@ -16,7 +16,7 @@ type ReceiptItem = {
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
 function today() { return new Date().toISOString().slice(0, 10); }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 /** Live margin preview: retail price vs the cost being entered. */
 function MarginHint({ retail, cost }: { retail: number; cost: number }) {
@@ -104,7 +104,7 @@ function ReceiptList({ onOpen }: { onOpen: (id: number) => void }) {
           <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Дата</span>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} />
         </label>
-        <button onClick={create} className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Новий прихід</button>
+        <button onClick={create} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Новий прихід</button>
         {suppliers.length === 0 && <span className="self-center text-[11px] text-[#b9ae9b]">Додайте постачальників у вкладці «Постачальники» для аналітики</span>}
       </div>
 
@@ -214,7 +214,7 @@ function ReceiptCard({ id, onBack }: { id: number; onBack: () => void }) {
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-5 p-5">
-      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">‹ До списку</button>
+      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До списку</button>
 
       {/* header */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
@@ -279,7 +279,7 @@ function ReceiptCard({ id, onBack }: { id: number; onBack: () => void }) {
                   <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Закупка / од, ₴</span>
                   <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0" className={inp + " w-32"} />
                 </label>
-                <button onClick={addLine} disabled={!variantId || !Number(qty)} className="h-9 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати</button>
+                <button onClick={addLine} disabled={!variantId || !Number(qty)} className="h-9 rounded-[3px] bg-[#13a89e] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати</button>
               </div>
               {pickedPrice > 0 && (
                 <MarginHint retail={pickedPrice} cost={Number(cost) || 0} />
@@ -331,7 +331,7 @@ function ReceiptCard({ id, onBack }: { id: number; onBack: () => void }) {
           <button
             onClick={async () => { if (items.length && confirm("Провести прихід? Залишки збільшаться, оновиться собівартість.")) await act({ action: "post" }); }}
             disabled={items.length === 0}
-            className="h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+            className="h-10 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
             Провести прихід
           </button>
         </div>

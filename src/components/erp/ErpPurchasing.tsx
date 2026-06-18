@@ -18,7 +18,7 @@ type PoItem = {
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
 function today() { return new Date().toISOString().slice(0, 10); }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 const STATUS_META: Record<PoStatus, { label: string; cls: string }> = {
   draft:     { label: "Чернетка",  cls: "bg-amber-50 text-amber-800" },
@@ -93,13 +93,13 @@ function PoList({ onOpen }: { onOpen: (id: number) => void }) {
           <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Очікувана поставка</span>
           <input type="date" value={expected} onChange={(e) => setExpected(e.target.value)} className={inp} />
         </label>
-        <button onClick={create} className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Нове замовлення</button>
+        <button onClick={create} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Нове замовлення</button>
       </div>
 
       <div className="flex flex-wrap gap-1 text-[12px]">
         {FILTERS.map((f) => (
           <button key={f || "all"} onClick={() => setFilter(f)}
-            className={`rounded-[3px] px-3 py-1.5 ${filter === f ? "bg-[#17130f] text-white" : "bg-[#f0ece6] text-[#6b6256] hover:bg-[#e7e1d8]"}`}>
+            className={`rounded-[3px] px-3 py-1.5 ${filter === f ? "bg-[#13a89e] text-white" : "bg-[#f0ece6] text-[#6b6256] hover:bg-[#e7e1d8]"}`}>
             {f === "" ? "Усі" : STATUS_META[f].label}
           </button>
         ))}
@@ -215,7 +215,7 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-5 p-5">
-      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">‹ До списку</button>
+      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До списку</button>
 
       {/* header */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
@@ -281,7 +281,7 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
                   <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Закупка / од, ₴</span>
                   <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={pickedCost ? String(Math.round(pickedCost)) : "0"} className={inp + " w-32"} />
                 </label>
-                <button onClick={addLine} disabled={!variantId || !Number(qty)} className="h-9 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати</button>
+                <button onClick={addLine} disabled={!variantId || !Number(qty)} className="h-9 rounded-[3px] bg-[#13a89e] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати</button>
               </div>
               {variants.length === 0 && <p className="text-[11px] text-amber-600">У товару ще немає розмірів — заведіть їх у картці товару, щоб замовляти.</p>}
             </div>
@@ -340,7 +340,7 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
         <div className="flex gap-3">
           {po.status === "draft" && (
             <button onClick={() => act({ action: "send" })} disabled={items.length === 0}
-              className="h-10 rounded-[3px] border border-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+              className="h-10 rounded-[3px] border border-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#13a89e] hover:text-white disabled:opacity-40">
               Відправити постачальнику
             </button>
           )}
@@ -354,7 +354,7 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
                 }
               }}
               disabled={items.length === 0}
-              className="h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+              className="h-10 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
               Отримати (→ прихід)
             </button>
           )}

@@ -109,8 +109,8 @@ function DiffTable({ preview }: { preview: ImportPreview }) {
           <button key={f.v} onClick={() => setFilter(f.v)}
             className={`rounded-[3px] px-3 py-1.5 text-[11px] transition-colors ${
               filter === f.v
-                ? "bg-[#17130f] text-white"
-                : "border border-[#e2ddd5] bg-white text-[#5c5347] hover:border-[#17130f]"
+                ? "bg-[#13a89e] text-white"
+                : "border border-[#e2ddd5] bg-white text-[#5c5347] hover:border-[#13a89e]"
             }`}>
             {f.l} <span className={`${filter === f.v ? "opacity-70" : "text-[#b9ae9b]"}`}>{f.n}</span>
           </button>
@@ -245,7 +245,7 @@ function FileCard({
   const showPreview = item.preview && (item.status === "ready" || item.status === "done" || item.status === "applying");
 
   return (
-    <div className={`rounded-[4px] border bg-white transition-shadow ${expanded ? "border-[#17130f] shadow-sm" : "border-[#e2ddd5]"}`}>
+    <div className={`rounded-[4px] border bg-white transition-shadow ${expanded ? "border-[#13a89e] shadow-sm" : "border-[#e2ddd5]"}`}>
       {/* header row */}
       <div className="flex cursor-pointer items-center gap-3 px-4 py-3 select-none" onClick={onExpand}>
         {/* status dot */}
@@ -328,7 +328,7 @@ function FileCard({
               {item.status === "ready" && (
                 <div className="flex justify-end border-t border-[#e2ddd5] pt-3">
                   <button onClick={onApply} disabled={item.preview.matchedRows === 0}
-                    className="h-9 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+                    className="h-9 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
                     Застосувати ({item.preview.matchedRows.toLocaleString("uk-UA")})
                   </button>
                 </div>
@@ -445,7 +445,7 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <button onClick={onBack}
-            className="mb-1.5 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">
+            className="mb-1.5 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">
             ‹ До товарів
           </button>
           <h1 className="text-[22px] font-light tracking-tight">Завантажити товари</h1>
@@ -461,13 +461,13 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
           )}
           {readyCount > 1 && (
             <button onClick={applyAll} disabled={applyingAll}
-              className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
+              className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
               {applyingAll ? "Застосування…" : `Застосувати всі (${readyCount})`}
             </button>
           )}
           {hasFiles && (
             <button onClick={() => { setFiles([]); setExpandedId(null); }}
-              className="h-9 rounded-[3px] border border-[#e2ddd5] px-3 text-[11px] text-[#5c5347] hover:border-[#17130f]">
+              className="h-9 rounded-[3px] border border-[#e2ddd5] px-3 text-[11px] text-[#5c5347] hover:border-[#13a89e]">
               {allDone ? "Нові файли" : "Очистити"}
             </button>
           )}
@@ -483,7 +483,7 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
           onClick={() => fileRef.current?.click()}
           className={`cursor-pointer rounded-[4px] border-2 border-dashed text-center transition-colors ${
             drag
-              ? "border-[#17130f] bg-[#faf8f5]"
+              ? "border-[#13a89e] bg-[#faf8f5]"
               : hasFiles
                 ? "border-[#e0dacf] px-4 py-3 hover:border-[#b9ae9b]"
                 : "border-[#e0dacf] px-4 py-12 hover:border-[#b9ae9b]"

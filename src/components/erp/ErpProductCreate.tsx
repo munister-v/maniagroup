@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { aiAutofill, aiDescription } from "./aiAssist";
 
-const inp = "h-9 w-full rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 w-full rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 const lbl = "mb-1 block text-[10px] uppercase tracking-wider text-[#9c8f7d]";
 
 type SizeRow = { size: string; qty: string };
@@ -112,7 +112,7 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
 
   return (
     <div className="mx-auto max-w-[1000px] p-6">
-      <button onClick={onCancel} className="mb-3 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">‹ До товарів</button>
+      <button onClick={onCancel} className="mb-3 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До товарів</button>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-[22px] font-light tracking-tight">Новий товар</h1>
         <div className="flex items-center gap-2">
@@ -123,7 +123,7 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
             <span>✨</span>{ai === "fill" ? "Аналіз…" : "Заповнити з назви"}
           </button>
           <button onClick={save} disabled={saving}
-            className="h-9 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+            className="h-9 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
             {saving ? "Збереження…" : "Опублікувати"}
           </button>
         </div>
@@ -141,12 +141,12 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
               <div className="mb-1 flex items-center justify-between">
                 <span className={lbl + " mb-0"}>Опис</span>
                 <button onClick={genDesc} disabled={ai !== "" || !name.trim()} type="button"
-                  className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#8a6d3b] hover:text-[#17130f] disabled:opacity-40">
+                  className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#8a6d3b] hover:text-[#13a89e] disabled:opacity-40">
                   ✨ {ai === "desc" ? "Генерую…" : "Згенерувати"}
                 </button>
               </div>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4}
-                className="w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                className="w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#13a89e] focus:outline-none" />
             </div>
           </div>
 
@@ -168,7 +168,7 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
                   <div key={i} className="group relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={src} alt="" className="h-16 w-16 rounded-[3px] border border-[#e2ddd5] object-cover" />
-                    {i === 0 && <span className="absolute left-0 top-0 rounded-br-[3px] bg-[#17130f] px-1 text-[8px] uppercase tracking-wider text-white">головне</span>}
+                    {i === 0 && <span className="absolute left-0 top-0 rounded-br-[3px] bg-[#13a89e] px-1 text-[8px] uppercase tracking-wider text-white">головне</span>}
                     <button onClick={() => setImages((p) => p.filter((_, j) => j !== i))}
                       className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white opacity-0 group-hover:opacity-100">✕</button>
                   </div>
@@ -196,7 +196,7 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
               ))}
             </div>
             <button onClick={() => setSizes((s) => [...s, { size: "", qty: "" }])}
-              className="mt-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">+ Додати розмір</button>
+              className="mt-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#13a89e]">+ Додати розмір</button>
           </div>
         </div>
 

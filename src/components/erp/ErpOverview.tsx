@@ -69,7 +69,7 @@ export function ErpOverview({ onGoto }: { onGoto?: (s: "products" | "receiving" 
       {/* Purchasing strip */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button onClick={() => onGoto?.("replenishment")}
-          className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4 text-left transition-colors hover:border-[#17130f]">
+          className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4 text-left transition-colors hover:border-[#13a89e]">
           <div>
             <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Поповнення</p>
             <p className="mt-0.5 text-[13px] text-[#17130f]">Що докупити →</p>
@@ -77,7 +77,7 @@ export function ErpOverview({ onGoto }: { onGoto?: (s: "products" | "receiving" 
           <span className="text-[20px]">📈</span>
         </button>
         <button onClick={() => onGoto?.("purchasing")}
-          className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4 text-left transition-colors hover:border-[#17130f]">
+          className="flex items-center justify-between rounded-[4px] border border-[#e2ddd5] bg-white p-4 text-left transition-colors hover:border-[#13a89e]">
           <div>
             <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Відкриті замовлення</p>
             <p className="mt-0.5 text-[18px] font-light tabular-nums text-[#17130f]">{n(d.purchasing.draft + d.purchasing.sent)}</p>

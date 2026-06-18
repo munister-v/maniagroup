@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 type Counts = { count: number; units: number; value: number };
 
@@ -57,11 +57,11 @@ export function ErpChannels() {
         <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e2ddd5] p-0.5">
           {([["instock", "Лише в наявності"], ["all", "Весь каталог"]] as const).map(([v, l]) => (
             <button key={v} onClick={() => setScope(v)}
-              className={`rounded-[2px] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] transition-colors ${scope === v ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>{l}</button>
+              className={`rounded-[2px] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] transition-colors ${scope === v ? "bg-[#13a89e] text-white" : "text-[#9c8f7d] hover:text-[#13a89e]"}`}>{l}</button>
           ))}
         </div>
         <label className="flex items-center gap-2 text-[12px] text-[#17130f]">
-          <input type="checkbox" checked={requireImage} onChange={(e) => setRequireImage(e.target.checked)} className="h-4 w-4 accent-[#17130f]" />
+          <input type="checkbox" checked={requireImage} onChange={(e) => setRequireImage(e.target.checked)} className="h-4 w-4 accent-[#13a89e]" />
           Лише з фото
         </label>
         <label className="flex items-center gap-2 text-[12px] text-[#9c8f7d]">
@@ -97,7 +97,7 @@ export function ErpChannels() {
               </div>
             </div>
             <button onClick={() => download(f.id)} disabled={!counts || counts.count === 0}
-              className="mt-4 h-9 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-30">
+              className="mt-4 h-9 rounded-[3px] bg-[#13a89e] px-4 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-30">
               Завантажити {counts ? `(${counts.count.toLocaleString("uk-UA")})` : ""}
             </button>
           </div>

@@ -54,7 +54,7 @@ const MOVE_LABEL: Record<string, string> = {
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
 function dmy(s: string) { return s ? new Date(s).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "—"; }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 /** Compact numbered pagination: 1 … p-1 p p+1 … N (Intertop footer style). */
 function pageList(page: number, total: number): (number | "…")[] {
@@ -131,25 +131,25 @@ export function ErpWorkspace() {
 
   return (
     <div className="flex h-full">
-      {/* ── Sidebar (WooCommerce/WP-style, Mania neutral) ── */}
-      <aside className="flex w-[220px] shrink-0 flex-col border-r border-black/40 bg-[#1b1611] text-white">
-        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-5">
-          <span className="text-[13px] font-medium tracking-[0.18em]">MANIA</span>
-          <span className="rounded-[3px] bg-white/15 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.15em] text-white/90">ERP</span>
+      {/* ── Sidebar (Intertop-style: light, teal accent) ── */}
+      <aside className="flex w-[220px] shrink-0 flex-col border-r border-[#e2ddd5] bg-white">
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[#eee9e2] px-5">
+          <span className="text-[14px] font-semibold tracking-[0.16em] text-[#17130f]">MANIA</span>
+          <span className="rounded-[3px] bg-[#13a89e] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.15em] text-white">ERP</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3">
           {NAV.map((group, gi) => (
             <div key={gi} className="mb-1.5">
               {group.title && (
-                <p className="px-5 pb-1 pt-3 text-[9px] font-medium uppercase tracking-[0.16em] text-white/35">{group.title}</p>
+                <p className="px-5 pb-1 pt-3 text-[9px] font-medium uppercase tracking-[0.16em] text-[#b9ae9b]">{group.title}</p>
               )}
               {group.items.map((it) => {
                 const active = section === it.id;
                 return (
                   <button key={it.id} onClick={() => go(it.id)}
-                    className={`flex w-full items-center gap-3 border-l-2 px-5 py-2 text-[13px] transition-colors ${
-                      active ? "border-[#c2a878] bg-white/[0.07] text-white" : "border-transparent text-white/60 hover:bg-white/[0.04] hover:text-white"
+                    className={`flex w-full items-center gap-3 border-l-[3px] px-5 py-2 text-[13px] transition-colors ${
+                      active ? "border-[#13a89e] bg-[#13a89e]/[0.08] font-medium text-[#0e7f77]" : "border-transparent text-[#5c5347] hover:bg-[#faf8f5] hover:text-[#13a89e]"
                     }`}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4 shrink-0">
                       <path d={ICONS[it.id]} strokeLinecap="round" strokeLinejoin="round" />
@@ -162,12 +162,12 @@ export function ErpWorkspace() {
           ))}
         </nav>
 
-        <div className="shrink-0 border-t border-white/10 p-3 text-[11px]">
-          <Link href="/admin" className="flex items-center gap-2 rounded-[3px] px-2 py-1.5 text-white/60 transition-colors hover:bg-white/[0.05] hover:text-white">
+        <div className="shrink-0 border-t border-[#eee9e2] p-3 text-[11px]">
+          <Link href="/admin" className="flex items-center gap-2 rounded-[3px] px-2 py-1.5 text-[#7c6f5e] transition-colors hover:bg-[#faf8f5] hover:text-[#13a89e]">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3.5 w-3.5"><path d="M10 19l-7-7 7-7M3 12h18" strokeLinecap="round" strokeLinejoin="round" /></svg>
             Адмінка
           </Link>
-          <Link href="/" className="flex items-center gap-2 rounded-[3px] px-2 py-1.5 text-white/60 transition-colors hover:bg-white/[0.05] hover:text-white">
+          <Link href="/" className="flex items-center gap-2 rounded-[3px] px-2 py-1.5 text-[#7c6f5e] transition-colors hover:bg-[#faf8f5] hover:text-[#13a89e]">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3.5 w-3.5"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h12a1 1 0 001-1V10" strokeLinecap="round" strokeLinejoin="round" /></svg>
             На сайт
           </Link>
@@ -432,7 +432,7 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
         <div className="flex items-center gap-2">
           <span>Показувати на сторінці</span>
           <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
-            className="h-7 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+            className="h-7 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#13a89e] focus:outline-none">
             {[50, 100, 200].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
           <span className="ml-1">
@@ -461,7 +461,7 @@ function ProductList({ onOpen, onAddNew, onUpload }: { onOpen: (id: string) => v
 /* ── product card — tabbed editor (Товар / Торгові пропозиції) ───────────── */
 
 const fieldLbl = "mb-1 block text-[10px] uppercase tracking-wider text-[#9c8f7d]";
-const fieldInp = "h-9 w-full rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const fieldInp = "h-9 w-full rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 const cardCls = "rounded-[4px] border border-[#e2ddd5] bg-white p-4";
 const cardTitleCls = "mb-3 text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]";
 
@@ -623,7 +623,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
 
   return (
     <div className="mx-auto max-w-[1200px] p-5">
-      <button onClick={onBack} className="mb-3 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">‹ До списку</button>
+      <button onClick={onBack} className="mb-3 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До списку</button>
 
       {/* header */}
       <div className="flex flex-wrap items-start gap-4 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
@@ -647,7 +647,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
             <StatusBadge status={status} />
           </div>
           <select value={status} onChange={(e) => setStatus(e.target.value as ErpStatus)}
-            className="h-8 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+            className="h-8 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#13a89e] focus:outline-none">
             {(["publish", "moderation", "draft", "inactive"] as ErpStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </select>
         </div>
@@ -658,7 +658,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
         {([["product", "Товар"], ["offers", `Торгові пропозиції (${variants.length})`]] as const).map(([t, lab]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`-mb-px border-b-2 px-4 py-2.5 text-[13px] transition-colors ${
-              tab === t ? "border-[#17130f] font-medium text-[#17130f]" : "border-transparent text-[#9c8f7d] hover:text-[#17130f]"
+              tab === t ? "border-[#13a89e] font-medium text-[#17130f]" : "border-transparent text-[#9c8f7d] hover:text-[#13a89e]"
             }`}>{lab}</button>
         ))}
       </div>
@@ -676,7 +676,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
                 <label className="mt-3 block">
                   <span className={fieldLbl}>Опис</span>
                   <textarea value={form.description} onChange={(e) => set("description", e.target.value)} rows={4}
-                    className="w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                    className="w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#13a89e] focus:outline-none" />
                 </label>
               </div>
 
@@ -739,7 +739,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
             {saved && <span className="text-[12px] text-green-700">✓ Збережено</span>}
             {dirty && !saved && <span className="text-[11px] text-[#9c8f7d]">Є незбережені зміни</span>}
             <button onClick={saveProduct} disabled={!dirty || saving}
-              className="h-9 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+              className="h-9 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
               {saving ? "Збереження…" : "Зберегти зміни"}
             </button>
           </div>
@@ -782,7 +782,7 @@ function ProductCard({ id, onBack }: { id: string; onBack: () => void }) {
               <input value={newSize} onChange={(e) => setNewSize(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addSize()}
                 placeholder="Новий розмір (напр. L)" className={inp + " w-44"} />
-              <button onClick={addSize} disabled={!newSize.trim()} className="h-9 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати пропозицію</button>
+              <button onClick={addSize} disabled={!newSize.trim()} className="h-9 rounded-[3px] bg-[#13a89e] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати пропозицію</button>
             </div>
           </div>
 
@@ -826,13 +826,13 @@ function VariantRow({ v, onPut, onDelete }: {
     setQty(String(v.stock_qty)); setBarcode(v.barcode); setOffer(v.offer_code);
     setPrice(v.price != null ? String(v.price) : ""); setSale(v.sale_price != null ? String(v.sale_price) : "");
   }, [v]);
-  const cell = "h-8 rounded-[3px] border border-[#e2ddd5] px-2 text-[12px] focus:border-[#17130f] focus:outline-none";
+  const cell = "h-8 rounded-[3px] border border-[#e2ddd5] px-2 text-[12px] focus:border-[#13a89e] focus:outline-none";
 
   return (
     <tr className={`hover:bg-[#fafaf8] ${!v.active ? "opacity-50" : ""}`}>
       <td className="px-3 py-2 text-center">
         <input type="checkbox" checked={v.active} onChange={() => onPut({ variantId: v.id, active: !v.active })}
-          className="h-3.5 w-3.5 accent-[#17130f]" title={v.active ? "Активна" : "Вимкнена"} />
+          className="h-3.5 w-3.5 accent-[#13a89e]" title={v.active ? "Активна" : "Вимкнена"} />
       </td>
       <td className="px-3 py-2 font-medium text-[#17130f]">{v.size}</td>
       <td className="px-3 py-2">

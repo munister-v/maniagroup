@@ -9,7 +9,7 @@ type ReplenishRow = {
 type SupplierOpt = { id: number; name: string };
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 /**
  * Replenishment — variants low/out of stock with 30-day sales velocity and a
@@ -132,7 +132,7 @@ export function ErpReplenishment({ onCreated }: { onCreated?: (poId: number) => 
                     {checked ? (
                       <input type="number" value={sel.get(r.variant_id) ?? r.suggested}
                         onChange={(e) => setQty(r.variant_id, Number(e.target.value))}
-                        className="h-8 w-20 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-right text-[13px] tabular-nums focus:border-[#17130f] focus:outline-none" />
+                        className="h-8 w-20 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-right text-[13px] tabular-nums focus:border-[#13a89e] focus:outline-none" />
                     ) : <span className="text-[#d8d2c8]">—</span>}
                   </td>
                 </tr>
@@ -158,7 +158,7 @@ export function ErpReplenishment({ onCreated }: { onCreated?: (poId: number) => 
               </select>
             </label>
             <button onClick={createPo} disabled={busy}
-              className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
+              className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
               {busy ? "Створюємо…" : "Створити замовлення"}
             </button>
           </div>

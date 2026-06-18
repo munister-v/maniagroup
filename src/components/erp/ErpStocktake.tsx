@@ -7,7 +7,7 @@ type ListRow = Stocktake & { items: number; counted: number; variance: number };
 type Item = { id: number; product_id: number; variant_id: number; name: string; brand: string; size: string; expected: number; counted: number | null };
 type ProdHit = { id: string; name: string; brand: string; sku: string };
 
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 export function ErpStocktake() {
   const [openId, setOpenId] = useState<number | null>(null);
@@ -43,7 +43,7 @@ function StocktakeList({ onOpen }: { onOpen: (id: number) => void }) {
           <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Примітка (необов'язково)</span>
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="напр. Повна інвентаризація склад №1" className={inp + " w-full"} />
         </label>
-        <button onClick={create} className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Нова інвентаризація</button>
+        <button onClick={create} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Нова інвентаризація</button>
       </div>
 
       <div className="overflow-x-auto rounded-[4px] border border-[#e2ddd5] bg-white">
@@ -133,7 +133,7 @@ function StocktakeCard({ id, onBack }: { id: number; onBack: () => void }) {
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-5 p-5">
-      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">‹ До списку</button>
+      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До списку</button>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
         <div>
@@ -175,7 +175,7 @@ function StocktakeCard({ id, onBack }: { id: number; onBack: () => void }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] text-[#9c8f7d]">Масово:</span>
             <button onClick={() => act({ action: "addItems", allInStock: true })} disabled={busy}
-              className="h-8 rounded-[3px] border border-[#e2ddd5] px-3 text-[11px] text-[#17130f] hover:border-[#17130f] disabled:opacity-40">Усі з залишком &gt; 0</button>
+              className="h-8 rounded-[3px] border border-[#e2ddd5] px-3 text-[11px] text-[#17130f] hover:border-[#13a89e] disabled:opacity-40">Усі з залишком &gt; 0</button>
             <input placeholder="бренд…" className={inp + " h-8 w-40"}
               onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.trim(); if (v) { act({ action: "addItems", brand: v }); (e.target as HTMLInputElement).value = ""; } } }} />
             <span className="text-[11px] text-[#b9ae9b]">бренд → Enter</span>
@@ -212,7 +212,7 @@ function StocktakeCard({ id, onBack }: { id: number; onBack: () => void }) {
             className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-red-600">Видалити чернетку</button>
           <button onClick={async () => { if (countedItems.length && confirm("Провести інвентаризацію? Залишки скоригуються за фактом.")) { await act({ action: "post" }); } }}
             disabled={countedItems.length === 0 || busy}
-            className="h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+            className="h-10 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
             Провести інвентаризацію
           </button>
         </div>
@@ -256,7 +256,7 @@ function StocktakeRow({ it, posted, onBack, stId }: { it: Item; posted: boolean;
           <input value={val} onChange={(e) => setVal(e.target.value)} onBlur={() => save(val)}
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
             inputMode="numeric" placeholder="—"
-            className="h-8 w-20 rounded-[3px] border border-[#e2ddd5] px-2 text-center text-[13px] tabular-nums focus:border-[#17130f] focus:outline-none" />
+            className="h-8 w-20 rounded-[3px] border border-[#e2ddd5] px-2 text-center text-[13px] tabular-nums focus:border-[#13a89e] focus:outline-none" />
         )}
       </td>
       <td className={`px-4 py-2 text-right tabular-nums ${variance == null ? "text-[#cbc3b6]" : variance > 0 ? "text-green-700" : variance < 0 ? "text-red-600" : "text-[#9c8f7d]"}`}>

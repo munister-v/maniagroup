@@ -8,7 +8,7 @@ type Supplier = {
 };
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
 
 export function ErpSuppliers() {
   const [rows, setRows] = useState<Supplier[]>([]);
@@ -31,7 +31,7 @@ export function ErpSuppliers() {
           <h1 className="text-[20px] font-light tracking-tight">Постачальники</h1>
           <p className="text-[12px] text-[#9c8f7d]">Довідник постачальників і закупівельна аналітика по кожному.</p>
         </div>
-        <button onClick={() => setCreating(true)} className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">+ Постачальник</button>
+        <button onClick={() => setCreating(true)} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">+ Постачальник</button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -134,14 +134,14 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier: Supplier | nu
           </div>
           <label className="block">
             <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Нотатка</span>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#17130f] focus:outline-none" />
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#13a89e] focus:outline-none" />
           </label>
         </div>
         <div className="mt-5 flex items-center justify-between">
           {supplier ? <button onClick={remove} className="text-[12px] uppercase tracking-wider text-[#9c8f7d] hover:text-red-600">Видалити</button> : <span />}
           <div className="flex gap-2">
-            <button onClick={onClose} className="h-9 rounded-[3px] border border-[#e2ddd5] px-4 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">Скасувати</button>
-            <button onClick={save} disabled={!name.trim() || busy} className="h-9 rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-40">{busy ? "…" : "Зберегти"}</button>
+            <button onClick={onClose} className="h-9 rounded-[3px] border border-[#e2ddd5] px-4 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#13a89e]">Скасувати</button>
+            <button onClick={save} disabled={!name.trim() || busy} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-40">{busy ? "…" : "Зберегти"}</button>
           </div>
         </div>
       </div>
