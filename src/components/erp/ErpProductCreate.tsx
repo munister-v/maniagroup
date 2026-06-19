@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { aiAutofill, aiDescription } from "./aiAssist";
 
-const inp = "h-9 w-full rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
-const lbl = "mb-1 block text-[10px] uppercase tracking-wider text-[#9c8f7d]";
+const inp = "h-9 w-full rounded-[3px] border border-[#E0E0E0] bg-white px-3 text-[13px] focus:border-[#007B6E] focus:outline-none";
+const lbl = "mb-1 block text-[10px] uppercase tracking-wider text-[#9E9E9E]";
 
 type SizeRow = { size: string; qty: string };
 type Facets = { brands: string[]; categories: { name: string }[]; colors: string[]; seasons: string[] };
@@ -107,23 +107,23 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
     setSaving(false);
   }
 
-  const card = "rounded-[4px] border border-[#e2ddd5] bg-white p-4";
-  const cardTitle = "mb-3 text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]";
+  const card = "rounded-[4px] border border-[#E0E0E0] bg-white p-4";
+  const cardTitle = "mb-3 text-[11px] uppercase tracking-[0.12em] text-[#9E9E9E]";
 
   return (
     <div className="mx-auto max-w-[1000px] p-6">
-      <button onClick={onCancel} className="mb-3 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До товарів</button>
+      <button onClick={onCancel} className="mb-3 text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-[#007B6E]">‹ До товарів</button>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h1 className="text-[22px] font-light tracking-tight">Новий товар</h1>
         <div className="flex items-center gap-2">
           {aiErr && <span className="text-[12px] text-red-600">{aiErr}</span>}
           {err && <span className="text-[12px] text-red-600">{err}</span>}
           <button onClick={magicFill} disabled={ai !== "" || !name.trim()} title="Розпізнати поля та опис із назви"
-            className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#c2a878] px-3 text-[11px] uppercase tracking-[0.1em] text-[#8a6d3b] transition-colors hover:bg-[#faf6ee] disabled:opacity-40">
+            className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#007B6E] px-3 text-[11px] uppercase tracking-[0.1em] text-[#616161] transition-colors hover:bg-[#FAFAFA] disabled:opacity-40">
             <span>✨</span>{ai === "fill" ? "Аналіз…" : "Заповнити з назви"}
           </button>
           <button onClick={save} disabled={saving}
-            className="h-9 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+            className="h-9 rounded-[3px] bg-[#007B6E] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
             {saving ? "Збереження…" : "Опублікувати"}
           </button>
         </div>
@@ -141,12 +141,12 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
               <div className="mb-1 flex items-center justify-between">
                 <span className={lbl + " mb-0"}>Опис</span>
                 <button onClick={genDesc} disabled={ai !== "" || !name.trim()} type="button"
-                  className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#8a6d3b] hover:text-[#13a89e] disabled:opacity-40">
+                  className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-[#616161] hover:text-[#007B6E] disabled:opacity-40">
                   ✨ {ai === "desc" ? "Генерую…" : "Згенерувати"}
                 </button>
               </div>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4}
-                className="w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#13a89e] focus:outline-none" />
+                className="w-full resize-none rounded-[3px] border border-[#E0E0E0] bg-white px-3 py-2 text-[13px] focus:border-[#007B6E] focus:outline-none" />
             </div>
           </div>
 
@@ -157,9 +157,9 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); upload(e.dataTransfer.files); }}
               onClick={() => fileRef.current?.click()}
-              className="cursor-pointer rounded-[4px] border-2 border-dashed border-[#e0dacf] px-4 py-6 text-center transition-colors hover:border-[#b9ae9b]">
-              <svg viewBox="0 0 24 24" className="mx-auto h-7 w-7 text-[#c8c0b4]" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <p className="mt-1 text-[12px] text-[#9c8f7d]">{uploading ? "Завантаження…" : "Перетягніть фото або натисніть"}</p>
+              className="cursor-pointer rounded-[4px] border-2 border-dashed border-[#E0E0E0] px-4 py-6 text-center transition-colors hover:border-[#BDBDBD]">
+              <svg viewBox="0 0 24 24" className="mx-auto h-7 w-7 text-[#E0E0E0]" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <p className="mt-1 text-[12px] text-[#9E9E9E]">{uploading ? "Завантаження…" : "Перетягніть фото або натисніть"}</p>
               <input ref={fileRef} type="file" accept="image/*" multiple className="sr-only" onChange={(e) => e.target.files && upload(e.target.files)} />
             </div>
             {images.length > 0 && (
@@ -167,8 +167,8 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
                 {images.map((src, i) => (
                   <div key={i} className="group relative">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt="" className="h-16 w-16 rounded-[3px] border border-[#e2ddd5] object-cover" />
-                    {i === 0 && <span className="absolute left-0 top-0 rounded-br-[3px] bg-[#13a89e] px-1 text-[8px] uppercase tracking-wider text-white">головне</span>}
+                    <img src={src} alt="" className="h-16 w-16 rounded-[3px] border border-[#E0E0E0] object-cover" />
+                    {i === 0 && <span className="absolute left-0 top-0 rounded-br-[3px] bg-[#007B6E] px-1 text-[8px] uppercase tracking-wider text-white">головне</span>}
                     <button onClick={() => setImages((p) => p.filter((_, j) => j !== i))}
                       className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white opacity-0 group-hover:opacity-100">✕</button>
                   </div>
@@ -181,7 +181,7 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
           <div className={card}>
             <div className="mb-3 flex items-center justify-between">
               <p className={cardTitle + " mb-0"}>Розміри та залишки</p>
-              <span className="text-[11px] text-[#9c8f7d]">Усього: <b className="tabular-nums text-[#17130f]">{totalUnits}</b> од</span>
+              <span className="text-[11px] text-[#9E9E9E]">Усього: <b className="tabular-nums text-[#212121]">{totalUnits}</b> од</span>
             </div>
             <div className="space-y-2">
               {sizes.map((row, i) => (
@@ -191,12 +191,12 @@ export function ErpProductCreate({ onDone, onCancel }: { onDone: (id: string | n
                   <input value={row.qty} onChange={(e) => setSizes((s) => s.map((x, j) => j === i ? { ...x, qty: e.target.value } : x))}
                     placeholder="К-сть" inputMode="numeric" className={inp + " w-28"} />
                   <button onClick={() => setSizes((s) => s.length > 1 ? s.filter((_, j) => j !== i) : s)}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] text-[#b9ae9b] hover:bg-[#fdecec] hover:text-red-600">✕</button>
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[3px] text-[#BDBDBD] hover:bg-[#fdecec] hover:text-red-600">✕</button>
                 </div>
               ))}
             </div>
             <button onClick={() => setSizes((s) => [...s, { size: "", qty: "" }])}
-              className="mt-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#13a89e]">+ Додати розмір</button>
+              className="mt-2 text-[11px] uppercase tracking-wider text-[#9E9E9E] hover:text-[#007B6E]">+ Додати розмір</button>
           </div>
         </div>
 

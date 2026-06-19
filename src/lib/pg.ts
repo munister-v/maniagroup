@@ -445,6 +445,72 @@ CREATE TABLE IF NOT EXISTS brand_logos (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ── ERP: SEO fields per-product ──
+ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_title       TEXT NOT NULL DEFAULT '';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_description TEXT NOT NULL DEFAULT '';
+
+-- ── ERP: Returns / RMA ──
+CREATE TABLE IF NOT EXISTS returns (
+  id           BIGSERIAL PRIMARY KEY,
+  order_id     BIGINT REFERENCES orders(id) ON DELETE SET NULL,
+  order_number TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'pending', -- pending|received|refunded|exchanged|rejected
+  reason       TEXT NOT NULL DEFAULT '',
+  note         TEXT NOT NULL DEFAULT '',
+  total        NUMERIC NOT NULL DEFAULT 0,
+  author       TEXT NOT NULL DEFAULT 'admin',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_returns_order  ON returns(order_id);
+CREATE INDEX IF NOT EXISTS idx_returns_status ON returns(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS return_items (
+  id         BIGSERIAL PRIMARY KEY,
+  return_id  BIGINT NOT NULL REFERENCES returns(id) ON DELETE CASCADE,
+  product_id BIGINT NOT NULL,
+  variant_id BIGINT,
+  name       TEXT NOT NULL DEFAULT '',
+  size       TEXT NOT NULL DEFAULT '',
+  qty        INTEGER NOT NULL DEFAULT 1,
+  price      NUMERIC NOT NULL DEFAULT 0,
+  action     TEXT NOT NULL DEFAULT 'refund' -- refund | exchange | store_credit
+);
+CREATE INDEX IF NOT EXISTS idx_return_items ON return_items(return_id);
+
+-- ── ERP: Size charts / розмірні таблиці ──
+CREATE TABLE IF NOT EXISTS size_charts (
+  id         BIGSERIAL PRIMARY KEY,
+  brand      TEXT NOT NULL DEFAULT '',
+  name       TEXT NOT NULL DEFAULT '',
+  gender     TEXT NOT NULL DEFAULT '',
+  chart      JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── ERP: Price rules / правила цін ──
+CREATE TABLE IF NOT EXISTS price_rules (
+  id              BIGSERIAL PRIMARY KEY,
+  name            TEXT NOT NULL DEFAULT '',
+  condition_field TEXT NOT NULL DEFAULT 'all', -- all|brand|category|gender
+  condition_value TEXT NOT NULL DEFAULT '',
+  action          TEXT NOT NULL DEFAULT 'set_markup', -- set_markup|set_discount|set_sale_pct|set_price
+  value           NUMERIC NOT NULL DEFAULT 0,
+  active          BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ── ERP: Email templates ──
+CREATE TABLE IF NOT EXISTS email_templates (
+  id         BIGSERIAL PRIMARY KEY,
+  name       TEXT NOT NULL DEFAULT '',
+  slug       TEXT NOT NULL UNIQUE,
+  subject    TEXT NOT NULL DEFAULT '',
+  body       TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ── ERP Grid: bulk-edit snapshots for rollback ──
 CREATE TABLE IF NOT EXISTS grid_snapshots (
   id         BIGSERIAL PRIMARY KEY,

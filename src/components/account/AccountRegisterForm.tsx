@@ -37,29 +37,29 @@ export function AccountRegisterForm() {
   const lbl = "text-[11px] uppercase tracking-luxe text-muted";
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} className="space-y-4" autoComplete="on">
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className={lbl}>Ім'я</span>
-          <input value={form.first_name} onChange={(e) => set("first_name", e.target.value)} className={inp} placeholder="Олексій" />
+          <input autoComplete="given-name" value={form.first_name} onChange={(e) => set("first_name", e.target.value)} className={inp} placeholder="Олексій" />
         </label>
         <label className="block">
           <span className={lbl}>Прізвище</span>
-          <input value={form.last_name} onChange={(e) => set("last_name", e.target.value)} className={inp} placeholder="Коваль" />
+          <input autoComplete="family-name" value={form.last_name} onChange={(e) => set("last_name", e.target.value)} className={inp} placeholder="Коваль" />
         </label>
       </div>
       <label className="block">
         <span className={lbl}>Email *</span>
-        <input type="email" required value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} placeholder="you@example.com" />
+        <input type="email" name="email" autoComplete="email" required value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} placeholder="you@example.com" />
       </label>
       <label className="block">
         <span className={lbl}>Телефон</span>
-        <input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inp} placeholder="+38 (___) ___-__-__" />
+        <input type="tel" name="phone" autoComplete="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inp} placeholder="+38 (___) ___-__-__" />
       </label>
       <label className="block">
         <span className={lbl}>Пароль *</span>
         <div className="relative mt-1.5">
-          <input type={showPassword ? "text" : "password"} required value={form.password} onChange={(e) => set("password", e.target.value)} className={`${inp} mt-0 pr-11`} placeholder="Мінімум 6 символів" />
+          <input type={showPassword ? "text" : "password"} name="password" autoComplete="new-password" required value={form.password} onChange={(e) => set("password", e.target.value)} className={`${inp} mt-0 pr-11`} placeholder="Мінімум 6 символів" />
           <button type="button" onClick={() => setShowPassword((v) => !v)}
             aria-label={showPassword ? "Сховати пароль" : "Показати пароль"}
             className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted hover:text-ink">
@@ -69,7 +69,7 @@ export function AccountRegisterForm() {
       </label>
       <label className="block">
         <span className={lbl}>Повторіть пароль *</span>
-        <input type={showPassword ? "text" : "password"} required value={form.password2} onChange={(e) => set("password2", e.target.value)} className={inp} placeholder="••••••" />
+        <input type={showPassword ? "text" : "password"} name="password2" autoComplete="new-password" required value={form.password2} onChange={(e) => set("password2", e.target.value)} className={inp} placeholder="••••••" />
       </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button type="submit" disabled={loading}

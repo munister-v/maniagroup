@@ -61,9 +61,9 @@ function sortedByPriority(items: FileItem[]): FileItem[] {
 /* ── StatChip ─────────────────────────────────────────────────────────────── */
 function StatChip({ label, value, accent }: { label: string; value: number | string; accent?: string }) {
   return (
-    <div className="rounded-[4px] border border-[#e2ddd5] bg-white px-3 py-2">
-      <p className="text-[9px] uppercase tracking-wider text-[#9c8f7d]">{label}</p>
-      <p className={`mt-0.5 text-[16px] tabular-nums font-medium ${accent ?? "text-[#17130f]"}`}>
+    <div className="rounded-[4px] border border-[#E0E0E0] bg-white px-3 py-2">
+      <p className="text-[9px] uppercase tracking-wider text-[#9E9E9E]">{label}</p>
+      <p className={`mt-0.5 text-[16px] tabular-nums font-medium ${accent ?? "text-[#212121]"}`}>
         {typeof value === "number" ? value.toLocaleString("uk-UA") : value}
       </p>
     </div>
@@ -109,22 +109,22 @@ function DiffTable({ preview }: { preview: ImportPreview }) {
           <button key={f.v} onClick={() => setFilter(f.v)}
             className={`rounded-[3px] px-3 py-1.5 text-[11px] transition-colors ${
               filter === f.v
-                ? "bg-[#13a89e] text-white"
-                : "border border-[#e2ddd5] bg-white text-[#5c5347] hover:border-[#13a89e]"
+                ? "bg-[#007B6E] text-white"
+                : "border border-[#E0E0E0] bg-white text-[#424242] hover:border-[#007B6E]"
             }`}>
-            {f.l} <span className={`${filter === f.v ? "opacity-70" : "text-[#b9ae9b]"}`}>{f.n}</span>
+            {f.l} <span className={`${filter === f.v ? "opacity-70" : "text-[#BDBDBD]"}`}>{f.n}</span>
           </button>
         ))}
         {preview.items.length >= 120 && (
-          <span className="ml-auto text-[11px] text-[#9c8f7d]">Показано перші 120 з {preview.matchedRows}</span>
+          <span className="ml-auto text-[11px] text-[#9E9E9E]">Показано перші 120 з {preview.matchedRows}</span>
         )}
       </div>
 
       {/* table */}
-      <div className="overflow-x-auto rounded-[4px] border border-[#e2ddd5]">
+      <div className="overflow-x-auto rounded-[4px] border border-[#E0E0E0]">
         <table className="w-full min-w-[600px] text-[12px]">
           <thead>
-            <tr className="border-b border-[#f0ece6] bg-[#faf8f5] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <tr className="border-b border-[#F5F5F5] bg-[#FAFAFA] text-[10px] uppercase tracking-wider text-[#9E9E9E]">
               <th className="px-3 py-2 text-left">Товар</th>
               {isOffers && <th className="w-16 px-3 py-2 text-center">Розмір</th>}
               <th className="w-28 px-3 py-2 text-center">Залишок</th>
@@ -133,52 +133,52 @@ function DiffTable({ preview }: { preview: ImportPreview }) {
               <th className="w-24 px-3 py-2 text-center">Стан</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f7f4f0]">
+          <tbody className="divide-y divide-[#F5F5F5]">
             {items.slice(0, 150).map((it, i) => {
               const qtyChanged   = it.newQty   != null && it.newQty   !== it.oldQty;
               const priceChanged = it.newPrice != null && Math.abs((it.newPrice || 0) - (it.oldPrice || 0)) > 1;
               return (
-                <tr key={i} className={`${it.isNew ? "bg-green-50/50" : (qtyChanged || priceChanged) ? "bg-amber-50/30" : ""} hover:bg-[#fafaf8]`}>
+                <tr key={i} className={`${it.isNew ? "bg-green-50/50" : (qtyChanged || priceChanged) ? "bg-amber-50/30" : ""} hover:bg-[#FAFAFA]`}>
                   <td className="px-3 py-2">
-                    <span className="font-medium text-[#17130f]">{it.name}</span>
-                    {it.sku && <span className="ml-2 text-[10px] text-[#c8c0b4]">#{it.sku}</span>}
+                    <span className="font-medium text-[#212121]">{it.name}</span>
+                    {it.sku && <span className="ml-2 text-[10px] text-[#BDBDBD]">#{it.sku}</span>}
                   </td>
-                  {isOffers && <td className="px-3 py-2 text-center font-medium text-[#5c5347]">{it.size || "—"}</td>}
+                  {isOffers && <td className="px-3 py-2 text-center font-medium text-[#424242]">{it.size || "—"}</td>}
 
                   {/* qty */}
                   <td className="px-3 py-2 text-center tabular-nums">
                     {it.newQty == null ? (
-                      <span className="text-[#b9ae9b]">—</span>
+                      <span className="text-[#BDBDBD]">—</span>
                     ) : it.isNew ? (
                       <span className="font-medium text-green-700">→ {it.newQty}</span>
                     ) : qtyChanged ? (
                       <span className="inline-flex items-center gap-1">
-                        <span className="text-[#b9ae9b] line-through">{it.oldQty ?? 0}</span>
-                        <span className="text-[#c2a878]">→</span>
+                        <span className="text-[#BDBDBD] line-through">{it.oldQty ?? 0}</span>
+                        <span className="text-[#007B6E]">→</span>
                         <span className={`font-medium ${(it.newQty ?? 0) > (it.oldQty ?? 0) ? "text-green-700" : "text-red-600"}`}>{it.newQty}</span>
                       </span>
                     ) : (
-                      <span className="text-[#5c5347]">{it.newQty}</span>
+                      <span className="text-[#424242]">{it.newQty}</span>
                     )}
                   </td>
 
                   {/* price */}
                   <td className="px-3 py-2 text-center tabular-nums">
                     {it.newPrice == null ? (
-                      <span className="text-[#b9ae9b]">{it.oldPrice ? uah(it.oldPrice) : "—"}</span>
+                      <span className="text-[#BDBDBD]">{it.oldPrice ? uah(it.oldPrice) : "—"}</span>
                     ) : priceChanged ? (
                       <span className="inline-flex items-center gap-1">
-                        <span className="text-[10px] text-[#b9ae9b] line-through">{it.oldPrice ? uah(it.oldPrice) : "—"}</span>
-                        <span className="text-[#c2a878]">→</span>
-                        <span className="font-medium text-[#17130f]">{uah(it.newPrice)}</span>
+                        <span className="text-[10px] text-[#BDBDBD] line-through">{it.oldPrice ? uah(it.oldPrice) : "—"}</span>
+                        <span className="text-[#007B6E]">→</span>
+                        <span className="font-medium text-[#212121]">{uah(it.newPrice)}</span>
                       </span>
                     ) : (
-                      <span className="text-[#5c5347]">{uah(it.newPrice)}</span>
+                      <span className="text-[#424242]">{uah(it.newPrice)}</span>
                     )}
                   </td>
 
                   {isOffers && (
-                    <td className="px-3 py-2 text-center tabular-nums text-[#9c8f7d]">
+                    <td className="px-3 py-2 text-center tabular-nums text-[#9E9E9E]">
                       {it.discountPrice ? uah(it.discountPrice) : "—"}
                     </td>
                   )}
@@ -194,14 +194,14 @@ function DiffTable({ preview }: { preview: ImportPreview }) {
                     ) : priceChanged ? (
                       <span className="rounded-[3px] bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-700">ціна</span>
                     ) : (
-                      <span className="text-[10px] text-[#c8c0b4]">без змін</span>
+                      <span className="text-[10px] text-[#BDBDBD]">без змін</span>
                     )}
                   </td>
                 </tr>
               );
             })}
             {items.length === 0 && (
-              <tr><td colSpan={6} className="py-8 text-center text-[12px] text-[#9c8f7d]">Немає рядків для цього фільтра</td></tr>
+              <tr><td colSpan={6} className="py-8 text-center text-[12px] text-[#9E9E9E]">Немає рядків для цього фільтра</td></tr>
             )}
           </tbody>
         </table>
@@ -245,7 +245,7 @@ function FileCard({
   const showPreview = item.preview && (item.status === "ready" || item.status === "done" || item.status === "applying");
 
   return (
-    <div className={`rounded-[4px] border bg-white transition-shadow ${expanded ? "border-[#13a89e] shadow-sm" : "border-[#e2ddd5]"}`}>
+    <div className={`rounded-[4px] border bg-white transition-shadow ${expanded ? "border-[#007B6E] shadow-sm" : "border-[#E0E0E0]"}`}>
       {/* header row */}
       <div className="flex cursor-pointer items-center gap-3 px-4 py-3 select-none" onClick={onExpand}>
         {/* status dot */}
@@ -257,7 +257,7 @@ function FileCard({
           "bg-[#ddd]"
         }`} />
 
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#17130f]">{item.file.name}</span>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#212121]">{item.file.name}</span>
 
         {item.preview && (
           <span className={`shrink-0 rounded-[3px] border px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] ${KIND_COLOR[kind]}`}>
@@ -268,7 +268,7 @@ function FileCard({
           <span className="shrink-0 rounded-[3px] border border-violet-300 bg-violet-50 px-2 py-0.5 text-[10px] text-violet-700">🤖 ШІ</span>
         )}
         {item.status === "ready" && item.preview && (
-          <span className="shrink-0 text-[11px] text-[#9c8f7d]">
+          <span className="shrink-0 text-[11px] text-[#9E9E9E]">
             {item.preview.matchedRows.toLocaleString("uk-UA")} зн. · {item.preview.stockChanges} зм.
           </span>
         )}
@@ -279,19 +279,19 @@ function FileCard({
           <span className="shrink-0 text-[11px] text-red-600">помилка</span>
         )}
         {item.status === "previewing" && (
-          <span className="shrink-0 text-[11px] text-[#9c8f7d] animate-pulse">аналіз…</span>
+          <span className="shrink-0 text-[11px] text-[#9E9E9E] animate-pulse">аналіз…</span>
         )}
         {item.status === "applying" && (
           <span className="shrink-0 text-[11px] text-blue-600 animate-pulse">застосування…</span>
         )}
 
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
-          className={`h-4 w-4 shrink-0 text-[#9c8f7d] transition-transform ${expanded ? "rotate-180" : ""}`}>
+          className={`h-4 w-4 shrink-0 text-[#9E9E9E] transition-transform ${expanded ? "rotate-180" : ""}`}>
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
 
         <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="shrink-0 text-[#c8c0b4] hover:text-red-500" title="Видалити файл">
+          className="shrink-0 text-[#BDBDBD] hover:text-red-500" title="Видалити файл">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-3.5 w-3.5">
             <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
           </svg>
@@ -300,7 +300,7 @@ function FileCard({
 
       {/* expanded body */}
       {expanded && (
-        <div className="border-t border-[#f0ece6] px-4 py-4 space-y-4">
+        <div className="border-t border-[#F5F5F5] px-4 py-4 space-y-4">
           {item.status === "error" && (
             <p className="rounded-[4px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{item.error}</p>
           )}
@@ -326,9 +326,9 @@ function FileCard({
               {item.status !== "done" && <DiffTable preview={item.preview} />}
 
               {item.status === "ready" && (
-                <div className="flex justify-end border-t border-[#e2ddd5] pt-3">
+                <div className="flex justify-end border-t border-[#E0E0E0] pt-3">
                   <button onClick={onApply} disabled={item.preview.matchedRows === 0}
-                    className="h-9 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+                    className="h-9 rounded-[3px] bg-[#007B6E] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
                     Застосувати ({item.preview.matchedRows.toLocaleString("uk-UA")})
                   </button>
                 </div>
@@ -445,11 +445,11 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <button onClick={onBack}
-            className="mb-1.5 text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">
+            className="mb-1.5 text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-[#007B6E]">
             ‹ До товарів
           </button>
           <h1 className="text-[22px] font-light tracking-tight">Завантажити товари</h1>
-          <p className="mt-0.5 text-[12px] text-[#9c8f7d]">
+          <p className="mt-0.5 text-[12px] text-[#9E9E9E]">
             База MG (.xls) та/або прайс Intertop (.csv) — перетягніть один або кілька файлів одразу.
           </p>
         </div>
@@ -461,13 +461,13 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
           )}
           {readyCount > 1 && (
             <button onClick={applyAll} disabled={applyingAll}
-              className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
+              className="h-9 rounded-[3px] bg-[#007B6E] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
               {applyingAll ? "Застосування…" : `Застосувати всі (${readyCount})`}
             </button>
           )}
           {hasFiles && (
             <button onClick={() => { setFiles([]); setExpandedId(null); }}
-              className="h-9 rounded-[3px] border border-[#e2ddd5] px-3 text-[11px] text-[#5c5347] hover:border-[#13a89e]">
+              className="h-9 rounded-[3px] border border-[#E0E0E0] px-3 text-[11px] text-[#424242] hover:border-[#007B6E]">
               {allDone ? "Нові файли" : "Очистити"}
             </button>
           )}
@@ -483,26 +483,26 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
           onClick={() => fileRef.current?.click()}
           className={`cursor-pointer rounded-[4px] border-2 border-dashed text-center transition-colors ${
             drag
-              ? "border-[#13a89e] bg-[#faf8f5]"
+              ? "border-[#007B6E] bg-[#FAFAFA]"
               : hasFiles
-                ? "border-[#e0dacf] px-4 py-3 hover:border-[#b9ae9b]"
-                : "border-[#e0dacf] px-4 py-12 hover:border-[#b9ae9b]"
+                ? "border-[#E0E0E0] px-4 py-3 hover:border-[#BDBDBD]"
+                : "border-[#E0E0E0] px-4 py-12 hover:border-[#BDBDBD]"
           }`}>
           {!hasFiles ? (
             <>
-              <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-[#c8c0b4]" fill="none" stroke="currentColor" strokeWidth="1.3">
+              <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-[#BDBDBD]" fill="none" stroke="currentColor" strokeWidth="1.3">
                 <path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="mt-3 text-[14px] text-[#5c5347]">Перетягніть файли або натисніть для вибору</p>
-              <p className="mt-1 text-[12px] text-[#9c8f7d]">.csv · .xls · .xlsx — можна кинути кілька файлів одразу</p>
+              <p className="mt-3 text-[14px] text-[#424242]">Перетягніть файли або натисніть для вибору</p>
+              <p className="mt-1 text-[12px] text-[#9E9E9E]">.csv · .xls · .xlsx — можна кинути кілька файлів одразу</p>
               <div className="mt-3 flex items-center justify-center gap-3 text-[11px]">
                 <span className="rounded-[3px] border border-amber-200 bg-amber-50 px-2 py-1 text-amber-600">База MG (.xls)</span>
-                <span className="text-[#c8c0b4]">+</span>
+                <span className="text-[#BDBDBD]">+</span>
                 <span className="rounded-[3px] border border-blue-200 bg-blue-50 px-2 py-1 text-blue-600">Прайс Intertop (.csv)</span>
               </div>
             </>
           ) : (
-            <p className="text-[12px] text-[#9c8f7d]">+ Додати ще файли</p>
+            <p className="text-[12px] text-[#9E9E9E]">+ Додати ще файли</p>
           )}
           <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx" multiple className="sr-only"
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }} />
@@ -530,17 +530,17 @@ export function ErpImport({ onBack }: { onBack: () => void }) {
 
       {/* history */}
       <div className="mt-8">
-        <h2 className="mb-2 text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Останні завантаження</h2>
+        <h2 className="mb-2 text-[11px] uppercase tracking-[0.12em] text-[#9E9E9E]">Останні завантаження</h2>
         {history.length === 0 ? (
-          <p className="text-[12px] text-[#b9ae9b]">Ще не було жодного імпорту</p>
+          <p className="text-[12px] text-[#BDBDBD]">Ще не було жодного імпорту</p>
         ) : (
-          <div className="divide-y divide-[#f7f4f0] rounded-[4px] border border-[#e2ddd5] bg-white">
+          <div className="divide-y divide-[#F5F5F5] rounded-[4px] border border-[#E0E0E0] bg-white">
             {history.map((h, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-[12px]">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
-                <span className="min-w-0 flex-1 truncate font-medium text-[#17130f]">{h.filename}</span>
-                <span className="shrink-0 tabular-nums text-[#9c8f7d]">{Number(h.movements).toLocaleString("uk-UA")} рухів</span>
-                <span className="shrink-0 text-[11px] text-[#b9ae9b]">{dmy(h.started_at)}</span>
+                <span className="min-w-0 flex-1 truncate font-medium text-[#212121]">{h.filename}</span>
+                <span className="shrink-0 tabular-nums text-[#9E9E9E]">{Number(h.movements).toLocaleString("uk-UA")} рухів</span>
+                <span className="shrink-0 text-[11px] text-[#BDBDBD]">{dmy(h.started_at)}</span>
               </div>
             ))}
           </div>

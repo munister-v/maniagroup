@@ -18,13 +18,13 @@ type PoItem = {
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
 function today() { return new Date().toISOString().slice(0, 10); }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#E0E0E0] bg-white px-3 text-[13px] focus:border-[#007B6E] focus:outline-none";
 
 const STATUS_META: Record<PoStatus, { label: string; cls: string }> = {
   draft:     { label: "Чернетка",  cls: "bg-amber-50 text-amber-800" },
   sent:      { label: "Відправлено", cls: "bg-blue-50 text-blue-800" },
   received:  { label: "Отримано",  cls: "bg-green-50 text-green-800" },
-  cancelled: { label: "Скасовано", cls: "bg-[#f0ece6] text-[#9c8f7d]" },
+  cancelled: { label: "Скасовано", cls: "bg-[#EEEEEE] text-[#9E9E9E]" },
 };
 
 /* ── root ───────────────────────────────────────────────────────────────── */
@@ -74,12 +74,12 @@ function PoList({ onOpen }: { onOpen: (id: number) => void }) {
     <div className="mx-auto max-w-[1100px] space-y-5 p-5">
       <div>
         <h1 className="text-[20px] font-light tracking-tight">Замовлення постачальнику</h1>
-        <p className="text-[12px] text-[#9c8f7d]">План закупівлі → відправка → отримання автоматично створює прихід (залишок + собівартість).</p>
+        <p className="text-[12px] text-[#9E9E9E]">План закупівлі → відправка → отримання автоматично створює прихід (залишок + собівартість).</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-[4px] border border-[#E0E0E0] bg-white p-4">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Постачальник</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Постачальник</span>
           {suppliers.length > 0 ? (
             <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={inp + " w-60 pr-7"}>
               <option value="">— без постачальника —</option>
@@ -90,25 +90,25 @@ function PoList({ onOpen }: { onOpen: (id: number) => void }) {
           )}
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Очікувана поставка</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Очікувана поставка</span>
           <input type="date" value={expected} onChange={(e) => setExpected(e.target.value)} className={inp} />
         </label>
-        <button onClick={create} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Нове замовлення</button>
+        <button onClick={create} className="h-9 rounded-[3px] bg-[#007B6E] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">Нове замовлення</button>
       </div>
 
       <div className="flex flex-wrap gap-1 text-[12px]">
         {FILTERS.map((f) => (
           <button key={f || "all"} onClick={() => setFilter(f)}
-            className={`rounded-[3px] px-3 py-1.5 ${filter === f ? "bg-[#13a89e] text-white" : "bg-[#f0ece6] text-[#6b6256] hover:bg-[#e7e1d8]"}`}>
+            className={`rounded-[3px] px-3 py-1.5 ${filter === f ? "bg-[#007B6E] text-white" : "bg-[#EEEEEE] text-[#616161] hover:bg-[#EEEEEE]"}`}>
             {f === "" ? "Усі" : STATUS_META[f].label}
           </button>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-[4px] border border-[#e2ddd5] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#E0E0E0] bg-white">
         <table className="w-full min-w-[760px] text-[13px]">
           <thead>
-            <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <tr className="border-b border-[#EEEEEE] text-[10px] uppercase tracking-wider text-[#9E9E9E]">
               <th className="px-4 py-3 text-left">№</th>
               <th className="px-4 py-3 text-left">Створено</th>
               <th className="px-4 py-3 text-left">Постачальник</th>
@@ -119,15 +119,15 @@ function PoList({ onOpen }: { onOpen: (id: number) => void }) {
               <th className="px-4 py-3 text-center">Статус</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f7f4f0]">
-            {loading && !rows.length && <tr><td colSpan={8} className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</td></tr>}
-            {!loading && rows.length === 0 && <tr><td colSpan={8} className="py-12 text-center text-[12px] text-[#9c8f7d]">Замовлень ще немає</td></tr>}
+          <tbody className="divide-y divide-[#FAFAFA]">
+            {loading && !rows.length && <tr><td colSpan={8} className="py-12 text-center text-[12px] text-[#9E9E9E]">Завантаження…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={8} className="py-12 text-center text-[12px] text-[#9E9E9E]">Замовлень ще немає</td></tr>}
             {rows.map((r) => (
-              <tr key={r.id} onClick={() => onOpen(r.id)} className="cursor-pointer hover:bg-[#fafaf8]">
-                <td className="px-4 py-2.5 font-mono text-[12px] text-[#9c8f7d]">#{r.id}</td>
+              <tr key={r.id} onClick={() => onOpen(r.id)} className="cursor-pointer hover:bg-[#FAFAFA]">
+                <td className="px-4 py-2.5 font-mono text-[12px] text-[#9E9E9E]">#{r.id}</td>
                 <td className="px-4 py-2.5">{new Date(r.created_at).toLocaleDateString("uk-UA")}</td>
                 <td className="px-4 py-2.5">{r.supplier || "—"}</td>
-                <td className="px-4 py-2.5 text-[#9c8f7d]">{r.expected_at ? new Date(r.expected_at).toLocaleDateString("uk-UA") : "—"}</td>
+                <td className="px-4 py-2.5 text-[#9E9E9E]">{r.expected_at ? new Date(r.expected_at).toLocaleDateString("uk-UA") : "—"}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{r.items}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{r.units}</td>
                 <td className="px-4 py-2.5 text-right font-medium tabular-nums">{uah(r.total)}</td>
@@ -205,8 +205,8 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
     if (d) { setPicked(null); setPickedCost(0); setVariants([]); setVariantId(null); setQty("1"); setCost(""); }
   }
 
-  if (loading && !po) return <div className="p-8 text-center text-[12px] text-[#9c8f7d]">Завантаження…</div>;
-  if (!po) return <div className="p-8 text-center text-[12px] text-[#9c8f7d]">Не знайдено</div>;
+  if (loading && !po) return <div className="p-8 text-center text-[12px] text-[#9E9E9E]">Завантаження…</div>;
+  if (!po) return <div className="p-8 text-center text-[12px] text-[#9E9E9E]">Не знайдено</div>;
 
   const editable = po.status === "draft";
   const total = items.reduce((s, i) => s + i.qty * i.unit_cost, 0);
@@ -215,15 +215,15 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
 
   return (
     <div className="mx-auto max-w-[1000px] space-y-5 p-5">
-      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#13a89e]">‹ До списку</button>
+      <button onClick={onBack} className="text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-[#007B6E]">‹ До списку</button>
 
       {/* header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#E0E0E0] bg-white p-4">
         <div>
           <h1 className="text-[17px]">Замовлення #{po.id}
             <span className={`ml-3 rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-wider ${meta.cls}`}>{meta.label}</span>
           </h1>
-          <p className="mt-1 text-[12px] text-[#9c8f7d]">
+          <p className="mt-1 text-[12px] text-[#9E9E9E]">
             {po.supplier || "Без постачальника"}
             {po.expected_at && <> · очікується {new Date(po.expected_at).toLocaleDateString("uk-UA")}</>}
             {po.receipt_id && <> · прихід #{po.receipt_id}</>}
@@ -231,7 +231,7 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
         </div>
         <div className="text-right">
           <p className="text-[20px] font-light tabular-nums">{uah(total)}</p>
-          <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">{units} од · {items.length} поз</p>
+          <p className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">{units} од · {items.length} поз</p>
         </div>
       </div>
 
@@ -240,18 +240,18 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
 
       {/* line add (draft only) */}
       {editable && (
-        <div className="rounded-[4px] border border-[#e2ddd5] bg-white p-4">
-          <h3 className="mb-3 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Додати позицію</h3>
+        <div className="rounded-[4px] border border-[#E0E0E0] bg-white p-4">
+          <h3 className="mb-3 text-[10px] uppercase tracking-wider text-[#9E9E9E]">Додати позицію</h3>
           {!picked ? (
             <div className="relative">
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Пошук товару: назва, бренд, артикул…" className={inp + " w-full max-w-md"} />
               {hits.length > 0 && (
-                <ul className="absolute z-10 mt-1 max-h-64 w-full max-w-md overflow-y-auto rounded-[3px] border border-[#e2ddd5] bg-white shadow-lg">
+                <ul className="absolute z-10 mt-1 max-h-64 w-full max-w-md overflow-y-auto rounded-[3px] border border-[#E0E0E0] bg-white shadow-lg">
                   {hits.map((h) => (
                     <li key={h.id}>
-                      <button onClick={() => pickProduct(h)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#f5f1ea]">
+                      <button onClick={() => pickProduct(h)} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[12px] hover:bg-[#F5F5F5]">
                         <span className="min-w-0 truncate">{h.name}</span>
-                        <span className="shrink-0 text-[#9c8f7d]">{h.brand} · {h.sku}</span>
+                        <span className="shrink-0 text-[#9E9E9E]">{h.brand} · {h.sku}</span>
                       </button>
                     </li>
                   ))}
@@ -261,27 +261,27 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
           ) : (
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-[13px]">
-                <span className="font-medium text-[#17130f]">{picked.name}</span>
-                <span className="text-[#9c8f7d]">{picked.brand} · {picked.sku}</span>
-                <button onClick={() => { setPicked(null); setVariants([]); }} className="text-[#b9ae9b] hover:text-red-600">✕</button>
+                <span className="font-medium text-[#212121]">{picked.name}</span>
+                <span className="text-[#9E9E9E]">{picked.brand} · {picked.sku}</span>
+                <button onClick={() => { setPicked(null); setVariants([]); }} className="text-[#BDBDBD] hover:text-red-600">✕</button>
               </div>
               <div className="flex flex-wrap items-end gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Розмір</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Розмір</span>
                   <select value={variantId ?? ""} onChange={(e) => setVariantId(Number(e.target.value))} className={inp + " pr-7"}>
                     {variants.length === 0 && <option value="">нема розмірів</option>}
                     {variants.map((v) => <option key={v.id} value={v.id}>{v.size} (зараз {v.stock_qty})</option>)}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">К-сть</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">К-сть</span>
                   <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} className={inp + " w-24"} />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Закупка / од, ₴</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Закупка / од, ₴</span>
                   <input type="number" value={cost} onChange={(e) => setCost(e.target.value)} placeholder={pickedCost ? String(Math.round(pickedCost)) : "0"} className={inp + " w-32"} />
                 </label>
-                <button onClick={addLine} disabled={!variantId || !Number(qty)} className="h-9 rounded-[3px] bg-[#13a89e] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати</button>
+                <button onClick={addLine} disabled={!variantId || !Number(qty)} className="h-9 rounded-[3px] bg-[#007B6E] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">Додати</button>
               </div>
               {variants.length === 0 && <p className="text-[11px] text-amber-600">У товару ще немає розмірів — заведіть їх у картці товару, щоб замовляти.</p>}
             </div>
@@ -290,10 +290,10 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
       )}
 
       {/* lines */}
-      <div className="overflow-x-auto rounded-[4px] border border-[#e2ddd5] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#E0E0E0] bg-white">
         <table className="w-full min-w-[600px] text-[13px]">
           <thead>
-            <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <tr className="border-b border-[#EEEEEE] text-[10px] uppercase tracking-wider text-[#9E9E9E]">
               <th className="px-4 py-3 text-left">Товар</th>
               <th className="px-4 py-3 text-left">Бренд</th>
               <th className="px-4 py-3 text-center">Розмір</th>
@@ -303,19 +303,19 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
               {editable && <th className="px-4 py-3 w-8" />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f7f4f0]">
-            {items.length === 0 && <tr><td colSpan={editable ? 7 : 6} className="py-8 text-center text-[12px] text-[#9c8f7d]">Позицій немає</td></tr>}
+          <tbody className="divide-y divide-[#FAFAFA]">
+            {items.length === 0 && <tr><td colSpan={editable ? 7 : 6} className="py-8 text-center text-[12px] text-[#9E9E9E]">Позицій немає</td></tr>}
             {items.map((it) => (
-              <tr key={it.id} className="hover:bg-[#fafaf8]">
+              <tr key={it.id} className="hover:bg-[#FAFAFA]">
                 <td className="px-4 py-2.5">{it.name}</td>
-                <td className="px-4 py-2.5 text-[#9c8f7d]">{it.brand}</td>
+                <td className="px-4 py-2.5 text-[#9E9E9E]">{it.brand}</td>
                 <td className="px-4 py-2.5 text-center">{it.size}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{it.qty}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{uah(it.unit_cost)}</td>
                 <td className="px-4 py-2.5 text-right font-medium tabular-nums">{uah(it.qty * it.unit_cost)}</td>
                 {editable && (
                   <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => act({ action: "deleteItem", itemId: it.id })} className="text-[#b9ae9b] hover:text-red-600">✕</button>
+                    <button onClick={() => act({ action: "deleteItem", itemId: it.id })} className="text-[#BDBDBD] hover:text-red-600">✕</button>
                   </td>
                 )}
               </tr>
@@ -330,17 +330,17 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
           {(po.status === "draft" || po.status === "cancelled") && (
             <button
               onClick={async () => { if (confirm("Видалити замовлення?")) { await fetch(`/api/erp/purchase-orders/${id}`, { method: "DELETE" }); onBack(); } }}
-              className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-red-600">Видалити</button>
+              className="text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-red-600">Видалити</button>
           )}
           {(po.status === "draft" || po.status === "sent") && (
             <button onClick={() => { if (confirm("Скасувати замовлення?")) act({ action: "cancel" }); }}
-              className="text-[12px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-red-600">Скасувати</button>
+              className="text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-red-600">Скасувати</button>
           )}
         </div>
         <div className="flex gap-3">
           {po.status === "draft" && (
             <button onClick={() => act({ action: "send" })} disabled={items.length === 0}
-              className="h-10 rounded-[3px] border border-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#13a89e] hover:text-white disabled:opacity-40">
+              className="h-10 rounded-[3px] border border-[#007B6E] px-6 text-[11px] uppercase tracking-[0.12em] text-[#212121] hover:bg-[#007B6E] hover:text-white disabled:opacity-40">
               Відправити постачальнику
             </button>
           )}
@@ -354,7 +354,7 @@ function PoCard({ id, onBack }: { id: number; onBack: () => void }) {
                 }
               }}
               disabled={items.length === 0}
-              className="h-10 rounded-[3px] bg-[#13a89e] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
+              className="h-10 rounded-[3px] bg-[#007B6E] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-40">
               Отримати (→ прихід)
             </button>
           )}

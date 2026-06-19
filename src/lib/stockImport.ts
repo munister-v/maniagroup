@@ -109,6 +109,14 @@ export function parseImport(buf: Buffer, filename: string): Parsed {
       return { kind: "master", filename, rows: parseMaster(grid, i) };
     }
   }
+  // WP (WooCommerce export): has Type column with variable/variation values.
+  for (let i = 0; i < head.length; i++) {
+    const cells = (grid[i] ?? []).map(norm);
+    if (cells.includes("type") && cells.some((c) => c === "sku" || c === "id") && cells.some((c) => c.includes("attribute"))) {
+      const rows = parseWp(grid, i);
+      if (rows.length > 0) return { kind: "offers", filename, rows };
+    }
+  }
   // OFFERS: a header row with size + price/quantity columns.
   for (let i = 0; i < head.length; i++) {
     const cells = (grid[i] ?? []).map(norm);
@@ -116,6 +124,95 @@ export function parseImport(buf: Buffer, filename: string): Parsed {
     if (idx) return { kind: "offers", filename, rows: parseOffers(grid, i + 1, idx) };
   }
   return { kind: "unknown", filename, rows: [] };
+}
+
+/** Parse WooCommerce product export (variable/variation rows) into OfferRow[]. */
+function parseWp(grid: unknown[][], headerRow: number): OfferRow[] {
+  const cells = (grid[headerRow] ?? []).map(norm);
+  const ci = (names: string[]) => cells.findIndex((c) => names.some((n) => c === n || c.replace(/\s/g, "_") === n));
+  const typeCol = ci(["type"]);
+  const idCol = ci(["id"]);
+  const skuCol = ci(["sku"]);
+  const nameCol = ci(["name"]);
+  const priceCol = ci(["regular price", "regular_price"]);
+  const salePriceCol = ci(["sale price", "sale_price"]);
+  const stockCol = ci(["stock", "in stock?", "in_stock", "stock_qty", "quantity"]);
+  const parentSkuCol = ci(["parent", "parent sku", "parent_sku"]);
+
+  // Find size attribute column: "Attribute 1 value(s)" where name col says "Розмір"
+  let sizeAttrVal = -1;
+  for (let ci2 = 0; ci2 < cells.length; ci2++) {
+    const c = cells[ci2];
+    if (/attribute.*value/i.test(c) || /значення/i.test(c)) {
+      // Find corresponding name column — usually one before
+      const nameIdx = cells.findIndex((x, idx) =>
+        idx < ci2 && (/attribute.*name/i.test(x) || /назва.*атрибут/i.test(x))
+      );
+      if (nameIdx >= 0) {
+        // Check any data row to see if this attribute is size
+        for (let ri = headerRow + 1; ri < Math.min(headerRow + 20, grid.length); ri++) {
+          const attrName = norm(grid[ri]?.[nameIdx]);
+          if (attrName.includes("розмір") || attrName.includes("размер") || attrName.toLowerCase() === "size") {
+            sizeAttrVal = ci2; break;
+          }
+        }
+        if (sizeAttrVal >= 0) break;
+      }
+      // Fallback: if no name column found, check if values look like sizes
+      if (sizeAttrVal < 0) {
+        const sample = grid.slice(headerRow + 1, headerRow + 10)
+          .map((r) => norm((r as unknown[])[ci2]))
+          .filter(Boolean);
+        if (sample.some((v) => /^(xs|s|m|l|xl|xxl|xxxl|\d{2,3})$/i.test(v))) {
+          sizeAttrVal = ci2; break;
+        }
+      }
+    }
+  }
+  if (sizeAttrVal < 0) return []; // can't map without size
+
+  const at = (r: unknown[], i: number) => (i >= 0 ? String(r[i] ?? "").trim() : "");
+  const rows: OfferRow[] = [];
+  let lastParentSku = "";
+  let lastParentId = "";
+  let lastParentPrice = 0;
+
+  for (let i = headerRow + 1; i < grid.length; i++) {
+    const r = grid[i] ?? [];
+    const type = norm(at(r, typeCol));
+    if (!type) continue;
+
+    if (type === "variable" || type === "змінний") {
+      lastParentSku = at(r, skuCol);
+      lastParentId = at(r, idCol);
+      lastParentPrice = priceCol >= 0 ? num(r[priceCol]) : 0;
+      continue;
+    }
+
+    if (type !== "variation" && type !== "вариація" && type !== "варіація") continue;
+
+    const size = at(r, sizeAttrVal);
+    if (!size) continue;
+
+    const sku = at(r, skuCol);
+    const extId = at(r, idCol) || lastParentId;
+    const fa = parentSkuCol >= 0 ? at(r, parentSkuCol) : lastParentSku;
+    const price = priceCol >= 0 && at(r, priceCol) ? num(r[priceCol]) : lastParentPrice;
+    const saleP = salePriceCol >= 0 ? num(r[salePriceCol]) : 0;
+    const qty = stockCol >= 0 && at(r, stockCol) !== "" ? Math.max(0, Math.round(num(r[stockCol]))) : null;
+
+    rows.push({
+      external_id: extId,
+      factory_article: fa || lastParentSku,
+      barcode: "",
+      size,
+      offer_code: sku,
+      quantity: qty,
+      base_price: price,
+      discount_price: saleP,
+    });
+  }
+  return rows;
 }
 
 /**
@@ -261,7 +358,7 @@ async function loadProducts(ids: number[]) {
 }
 
 /** Resolve every offer row → product id, using the matching chain. */
-async function resolveOfferTargets(rows: OfferRow[]) {
+export async function resolveOfferTargets(rows: OfferRow[]) {
   const factoryArticles = [...new Set(rows.map((r) => r.factory_article).filter(Boolean))];
   const externalIds = [...new Set(rows.map((r) => r.external_id).filter(Boolean))];
   const offerCodes = [...new Set(rows.map((r) => r.offer_code).filter(Boolean))];

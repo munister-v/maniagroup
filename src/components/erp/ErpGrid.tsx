@@ -172,7 +172,12 @@ export function ErpGrid() {
     try {
       const sizeQty: Record<string, number> = {};
       for (const v of product.variants) sizeQty[v.size] = v.qty;
-      // Overlay any local edits from other cells in this row
+      // Overlay local edits from same row
+      for (const sz of sizes) {
+        const v = product.variants.find((x) => x.size === sz);
+        const k = cellKey(product.id, sz, v?.id ?? null);
+        if (localQty.has(k)) sizeQty[sz] = localQty.get(k)!;
+      }
       return evalFormula(formula, {
         sizeQty, price: product.price, cost: product.cost_price,
         sku: product.sku, brand: product.brand, allSizes: sizes,
@@ -180,7 +185,7 @@ export function ErpGrid() {
     } catch {
       return 0;
     }
-  }, [namedTables]);
+  }, [namedTables, localQty]);
 
   const onCellFocus = useCallback((key: string, displayQty: number, label: string) => {
     preFocusVal.current.set(key, displayQty);
@@ -277,6 +282,22 @@ export function ErpGrid() {
     }
   }
 
+  /* ── export to XLSX ── */
+  async function exportXlsx() {
+    const sp = new URLSearchParams({ perPage: "9999" });
+    if (search) sp.set("q", search);
+    if (brand) sp.set("brand", brand);
+    if (status) sp.set("status", status);
+    const r = await fetch(`/api/erp/grid/export?${sp}`);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mania_grid_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   /* ── discard local changes ── */
   function discard() {
     setLocalQty(new Map());
@@ -320,36 +341,36 @@ export function ErpGrid() {
   return (
     <div className="flex h-full flex-col">
       {/* ── Toolbar ── */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-[#e2ddd5] bg-white px-4 py-2.5">
-        <h1 className="text-[15px] font-light tracking-tight text-[#17130f]">Таблиця залишків</h1>
-        <div className="mx-2 h-4 w-px bg-[#e2ddd5]" />
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E0E0E0] bg-white px-4 py-2.5">
+        <h1 className="text-[15px] font-light tracking-tight text-[#212121]">Таблиця залишків</h1>
+        <div className="mx-2 h-4 w-px bg-[#E0E0E0]" />
 
         {/* Search */}
         <form onSubmit={(e) => { e.preventDefault(); setPage(1); setSearch(searchInput); }}
           className="flex items-center gap-1">
           <input value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Пошук…"
-            className="h-8 rounded-[3px] border border-[#e2ddd5] px-2.5 text-[12px] focus:border-[#17130f] focus:outline-none w-36" />
+            className="h-8 rounded-[3px] border border-[#E0E0E0] px-2.5 text-[12px] focus:border-[#007B6E] focus:outline-none w-36" />
           <button type="submit"
-            className="h-8 rounded-[3px] border border-[#e2ddd5] bg-[#f7f4f0] px-2.5 text-[11px] hover:border-[#17130f]">
+            className="h-8 rounded-[3px] border border-[#E0E0E0] bg-[#F5F5F5] px-2.5 text-[11px] hover:border-[#007B6E]">
             →
           </button>
           {search && (
             <button type="button" onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }}
-              className="text-[11px] text-[#9c8f7d] hover:text-[#17130f]">✕</button>
+              className="text-[11px] text-[#9E9E9E] hover:text-[#007B6E]">✕</button>
           )}
         </form>
 
         {/* Brand filter */}
         <select value={brand} onChange={(e) => { setBrand(e.target.value); setPage(1); }}
-          className="h-8 rounded-[3px] border border-[#e2ddd5] px-2 text-[12px] focus:border-[#17130f] focus:outline-none bg-white">
+          className="h-8 rounded-[3px] border border-[#E0E0E0] px-2 text-[12px] focus:border-[#007B6E] focus:outline-none bg-white">
           <option value="">Всі бренди</option>
           {data?.brands.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
 
         {/* Status filter */}
         <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}
-          className="h-8 rounded-[3px] border border-[#e2ddd5] px-2 text-[12px] focus:border-[#17130f] focus:outline-none bg-white">
+          className="h-8 rounded-[3px] border border-[#E0E0E0] px-2 text-[12px] focus:border-[#007B6E] focus:outline-none bg-white">
           <option value="">Всі статуси</option>
           <option value="publish">Активні</option>
           <option value="draft">Чернетки</option>
@@ -359,18 +380,24 @@ export function ErpGrid() {
         <div className="flex-1" />
 
         {/* Hint */}
-        <span className="text-[11px] text-[#9c8f7d]">Tab/Enter — навігація · Ctrl+Z — відмінити</span>
+        <span className="text-[11px] text-[#9E9E9E]">Tab/Enter — навігація · Ctrl+Z — відмінити</span>
+
+        {/* Export */}
+        <button onClick={exportXlsx}
+          className="h-8 rounded-[3px] border border-[#E0E0E0] px-3 text-[12px] text-[#9E9E9E] hover:border-[#007B6E] hover:text-[#007B6E]">
+          ↓ XLSX
+        </button>
 
         {/* Snapshots */}
         <button onClick={async () => { await loadSnapshots(); setShowSnapshots(true); }}
-          className="h-8 rounded-[3px] border border-[#e2ddd5] px-3 text-[12px] text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+          className="h-8 rounded-[3px] border border-[#E0E0E0] px-3 text-[12px] text-[#9E9E9E] hover:border-[#007B6E] hover:text-[#007B6E]">
           Знімки
         </button>
 
         {/* Discard */}
         {changeCount > 0 && (
           <button onClick={discard}
-            className="h-8 rounded-[3px] border border-[#e2ddd5] px-3 text-[12px] text-[#9c8f7d] hover:border-[#17130f]">
+            className="h-8 rounded-[3px] border border-[#E0E0E0] px-3 text-[12px] text-[#9E9E9E] hover:border-[#007B6E]">
             Скасувати ({changeCount})
           </button>
         )}
@@ -379,15 +406,15 @@ export function ErpGrid() {
         <button onClick={save} disabled={changeCount === 0 || saving}
           className={`h-8 rounded-[3px] px-4 text-[12px] font-medium transition-colors
             ${changeCount > 0
-              ? "bg-[#17130f] text-white hover:bg-[#2d2820]"
-              : "bg-[#f0ece6] text-[#9c8f7d] cursor-default"}`}>
+              ? "bg-[#007B6E] text-white hover:bg-[#006B5E]"
+              : "bg-[#F5F5F5] text-[#9E9E9E] cursor-default"}`}>
           {saving ? "Збереження…" : changeCount > 0 ? `Зберегти (${changeCount})` : "Зберегти"}
         </button>
       </div>
 
       {/* Save message */}
       {saveMsg && (
-        <div className={`px-4 py-2 text-[12px] border-b border-[#e2ddd5] ${saveMsg.startsWith("✓")
+        <div className={`px-4 py-2 text-[12px] border-b border-[#E0E0E0] ${saveMsg.startsWith("✓")
           ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
           {saveMsg}
           <button onClick={() => setSaveMsg("")} className="ml-3 opacity-60 hover:opacity-100">✕</button>
@@ -395,9 +422,9 @@ export function ErpGrid() {
       )}
 
       {/* ── Formula bar ── */}
-      <div className="flex items-center gap-2 border-b border-[#e2ddd5] bg-[#fafaf8] px-3 py-1.5 text-[12px]">
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-[#9c8f7d] w-6">fx</span>
-        <span className="text-[#9c8f7d] text-[11px] min-w-[120px] shrink-0">
+      <div className="flex items-center gap-2 border-b border-[#E0E0E0] bg-[#FAFAFA] px-3 py-1.5 text-[12px]">
+        <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.08em] text-[#9E9E9E] w-6">fx</span>
+        <span className="text-[#9E9E9E] text-[11px] min-w-[120px] shrink-0">
           {activeCell?.label ?? "—"}
         </span>
         <input
@@ -412,30 +439,35 @@ export function ErpGrid() {
           onChange={(e) => {
             if (!activeCell) return;
             onCellChange(activeCell.key, e.target.value);
-            const inp = cellRefs.current.get(
-              [...cellRefs.current.entries()].find(([, el]) => {
-                const k = el.dataset.cellkey;
-                return k === activeCell.key;
-              })?.[0] ?? ""
+            const refEntry = [...cellRefs.current.entries()].find(
+              ([, el]) => el.dataset.cellkey === activeCell.key
             );
-            if (inp) inp.value = e.target.value;
+            if (refEntry) refEntry[1].value = e.target.value;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && activeCell) {
+              const refEntry = [...cellRefs.current.entries()].find(
+                ([, el]) => el.dataset.cellkey === activeCell.key
+              );
+              refEntry?.[1].blur();
+            }
           }}
           placeholder="Введіть значення або =ФОРМУЛА(…)"
-          className="flex-1 bg-transparent text-[12px] text-[#17130f] focus:outline-none placeholder:text-[#ccc]"
+          className="flex-1 bg-transparent text-[12px] text-[#212121] focus:outline-none placeholder:text-[#ccc]"
         />
         {activeCell && formulaMap.has(activeCell.key) && (
           <span className="shrink-0 rounded-[3px] bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
             fx · {localQty.has(activeCell.key) ? `= ${localQty.get(activeCell.key)}` : "…"}
           </span>
         )}
-        <div className="ml-2 shrink-0 text-[10px] text-[#b9ae9b]">
-          SUM · MIN · MAX · AVG · IF · VLOOKUP/ВПР · таблиці: RECEIPTS ORDERS SUPPLIERS PRODUCTS
+        <div className="ml-2 shrink-0 text-[10px] text-[#BDBDBD]">
+          SUM · IF · VLOOKUP/ВПР · MARGIN · MARKUP · PERCENT · таблиці: RECEIPTS ORDERS SUPPLIERS PRODUCTS
         </div>
       </div>
 
       {/* ── Table ── */}
       {loading && !data && (
-        <div className="flex-1 flex items-center justify-center text-[12px] text-[#9c8f7d]">
+        <div className="flex-1 flex items-center justify-center text-[12px] text-[#9E9E9E]">
           Завантаження…
         </div>
       )}
@@ -450,7 +482,7 @@ export function ErpGrid() {
                 {(["Бренд", "Назва", "Ціна", "Собів."] as const).map((h, ci) => (
                   <th key={h}
                     style={{ position: "sticky", top: 0, left: STICKY_LEFT[ci], zIndex: 30, width: STICKY_COL_W[ci], minWidth: STICKY_COL_W[ci] }}
-                    className="border-b border-r border-[#e2ddd5] bg-[#f7f4f0] px-2 py-2 text-left text-[10px] uppercase tracking-[0.08em] text-[#9c8f7d] whitespace-nowrap">
+                    className="border-b border-r border-[#E0E0E0] bg-[#F5F5F5] px-2 py-2 text-left text-[10px] uppercase tracking-[0.08em] text-[#9E9E9E] whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -458,7 +490,7 @@ export function ErpGrid() {
                 {sizes.map((sz) => (
                   <th key={sz}
                     style={{ position: "sticky", top: 0, zIndex: 20, minWidth: 52, width: 52 }}
-                    className="border-b border-r border-[#e2ddd5] bg-[#f7f4f0] px-1 py-2 text-center text-[10px] uppercase tracking-[0.06em] text-[#9c8f7d] whitespace-nowrap">
+                    className="border-b border-r border-[#E0E0E0] bg-[#F5F5F5] px-1 py-2 text-center text-[10px] uppercase tracking-[0.06em] text-[#9E9E9E] whitespace-nowrap">
                     {sz}
                   </th>
                 ))}
@@ -473,29 +505,29 @@ export function ErpGrid() {
                   <tr key={p.id} className="group">
                     {/* Brand */}
                     <td style={{ position: "sticky", left: STICKY_LEFT[0], zIndex: 10, width: STICKY_COL_W[0] }}
-                      className="border-b border-r border-[#f0ece6] bg-white group-hover:bg-[#fafaf8] px-2 py-1.5 whitespace-nowrap">
+                      className="border-b border-r border-[#F5F5F5] bg-white group-hover:bg-[#FAFAFA] px-2 py-1.5 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
                         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[p.status] ?? "bg-[#ccc]"}`} />
-                        <span className="truncate text-[11px] text-[#7c6f5e] max-w-[60px]" title={p.brand}>{p.brand}</span>
+                        <span className="truncate text-[11px] text-[#616161] max-w-[60px]" title={p.brand}>{p.brand}</span>
                       </div>
                     </td>
 
                     {/* Name */}
                     <td style={{ position: "sticky", left: STICKY_LEFT[1], zIndex: 10, width: STICKY_COL_W[1] }}
-                      className="border-b border-r border-[#f0ece6] bg-white group-hover:bg-[#fafaf8] px-2 py-1.5">
-                      <span className="block truncate text-[#17130f]" title={p.name}>{p.name}</span>
-                      {p.sku && <span className="text-[10px] text-[#b9ae9b]">{p.sku}</span>}
+                      className="border-b border-r border-[#F5F5F5] bg-white group-hover:bg-[#FAFAFA] px-2 py-1.5">
+                      <span className="block truncate text-[#212121]" title={p.name}>{p.name}</span>
+                      {p.sku && <span className="text-[10px] text-[#BDBDBD]">{p.sku}</span>}
                     </td>
 
                     {/* Price */}
                     <td style={{ position: "sticky", left: STICKY_LEFT[2], zIndex: 10, width: STICKY_COL_W[2] }}
-                      className="border-b border-r border-[#f0ece6] bg-white group-hover:bg-[#fafaf8] px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[#17130f]">
+                      className="border-b border-r border-[#F5F5F5] bg-white group-hover:bg-[#FAFAFA] px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[#212121]">
                       {uah(p.price)}
                     </td>
 
                     {/* Cost */}
                     <td style={{ position: "sticky", left: STICKY_LEFT[3], zIndex: 10, width: STICKY_COL_W[3] }}
-                      className="border-b border-r border-[#f0ece6] bg-white group-hover:bg-[#fafaf8] px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[#9c8f7d]">
+                      className="border-b border-r border-[#F5F5F5] bg-white group-hover:bg-[#FAFAFA] px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[#9E9E9E]">
                       {p.cost_price ? uah(p.cost_price) : "—"}
                     </td>
 
@@ -505,7 +537,11 @@ export function ErpGrid() {
                       const key = cellKey(p.id, sz, variant?.id ?? null);
                       const hasFormula = formulaMap.has(key);
                       const isEditing = formulaEditKey === key;
-                      const currentQty = localQty.has(key) ? localQty.get(key)! : (variant?.qty ?? 0);
+                      const currentQty = localQty.has(key)
+                        ? localQty.get(key)!
+                        : hasFormula
+                          ? Math.max(0, Math.round(runFormula(formulaMap.get(key)!, p, sizes)))
+                          : (variant?.qty ?? 0);
                       const isChanged = localQty.has(key) || hasFormula;
                       const isEmpty = !variant && !hasFormula;
                       const cellLabel = `${p.brand} · ${p.name} · ${sz}`;
@@ -513,8 +549,8 @@ export function ErpGrid() {
                       return (
                         <td key={sz}
                           style={{ minWidth: 52, width: 52 }}
-                          className={`border-b border-r border-[#f0ece6] p-0
-                            ${hasFormula ? "bg-blue-50" : isChanged ? "bg-amber-50" : isEmpty ? "bg-[#fafaf8]" : "bg-white"}`}>
+                          className={`border-b border-r border-[#F5F5F5] p-0
+                            ${hasFormula ? "bg-blue-50" : isChanged ? "bg-amber-50" : isEmpty ? "bg-[#FAFAFA]" : "bg-white"}`}>
                           <input
                             ref={(el) => {
                               const refKey = `${rowIdx}:${colIdx}`;
@@ -547,10 +583,10 @@ export function ErpGrid() {
                               ${hasFormula
                                 ? "text-blue-700 font-medium focus:ring-blue-400/40"
                                 : isChanged
-                                  ? "text-amber-800 font-medium focus:ring-[#17130f]/30"
+                                  ? "text-amber-800 font-medium focus:ring-[#212121]/30"
                                   : isEmpty
-                                    ? "text-[#ccc] focus:ring-[#17130f]/30"
-                                    : "text-[#17130f] focus:ring-[#17130f]/30"}`}
+                                    ? "text-[#ccc] focus:ring-[#212121]/30"
+                                    : "text-[#212121] focus:ring-[#212121]/30"}`}
                           />
                         </td>
                       );
@@ -562,27 +598,27 @@ export function ErpGrid() {
           </table>
 
           {products.length === 0 && !loading && (
-            <div className="py-16 text-center text-[12px] text-[#9c8f7d]">Товарів не знайдено</div>
+            <div className="py-16 text-center text-[12px] text-[#9E9E9E]">Товарів не знайдено</div>
           )}
         </div>
       )}
 
       {/* ── Footer: pagination + stats ── */}
       {data && (
-        <div className="flex items-center justify-between border-t border-[#e2ddd5] bg-white px-4 py-2">
-          <span className="text-[11px] text-[#9c8f7d]">
+        <div className="flex items-center justify-between border-t border-[#E0E0E0] bg-white px-4 py-2">
+          <span className="text-[11px] text-[#9E9E9E]">
             {data.total.toLocaleString("uk-UA")} товарів · {sizes.length} розмірів
             {changeCount > 0 && <span className="ml-2 text-amber-700 font-medium">{changeCount} змін (не збережено)</span>}
           </span>
           {totalPages > 1 && (
             <div className="flex items-center gap-1">
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                className="h-7 w-7 rounded-[3px] border border-[#e2ddd5] text-[12px] disabled:opacity-40 hover:border-[#17130f]">
+                className="h-7 w-7 rounded-[3px] border border-[#E0E0E0] text-[12px] disabled:opacity-40 hover:border-[#007B6E]">
                 ‹
               </button>
-              <span className="px-3 text-[12px] text-[#17130f]">{page} / {totalPages}</span>
+              <span className="px-3 text-[12px] text-[#212121]">{page} / {totalPages}</span>
               <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="h-7 w-7 rounded-[3px] border border-[#e2ddd5] text-[12px] disabled:opacity-40 hover:border-[#17130f]">
+                className="h-7 w-7 rounded-[3px] border border-[#E0E0E0] text-[12px] disabled:opacity-40 hover:border-[#007B6E]">
                 ›
               </button>
             </div>
@@ -594,30 +630,30 @@ export function ErpGrid() {
       {showSnapshots && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 sm:items-center">
           <div className="w-full max-w-lg rounded-[6px] bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#e2ddd5] px-5 py-3.5">
-              <h2 className="text-[14px] font-medium text-[#17130f]">Знімки для відкату</h2>
-              <button onClick={() => setShowSnapshots(false)} className="text-[#9c8f7d] hover:text-[#17130f]">✕</button>
+            <div className="flex items-center justify-between border-b border-[#E0E0E0] px-5 py-3.5">
+              <h2 className="text-[14px] font-medium text-[#212121]">Знімки для відкату</h2>
+              <button onClick={() => setShowSnapshots(false)} className="text-[#9E9E9E] hover:text-[#007B6E]">✕</button>
             </div>
             <div className="max-h-[60vh] overflow-y-auto">
               {snapshots.length === 0 && (
-                <p className="px-5 py-8 text-center text-[12px] text-[#9c8f7d]">Знімків ще немає</p>
+                <p className="px-5 py-8 text-center text-[12px] text-[#9E9E9E]">Знімків ще немає</p>
               )}
               {snapshots.map((s) => (
-                <div key={s.id} className="flex items-center gap-3 border-b border-[#f0ece6] px-5 py-3">
+                <div key={s.id} className="flex items-center gap-3 border-b border-[#F5F5F5] px-5 py-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] text-[#17130f] truncate">{s.label}</p>
-                    <p className="text-[11px] text-[#9c8f7d]">
+                    <p className="text-[12px] text-[#212121] truncate">{s.label}</p>
+                    <p className="text-[11px] text-[#9E9E9E]">
                       {new Date(s.created_at).toLocaleString("uk-UA")} · {s.item_count} варіантів
                     </p>
                   </div>
                   <button onClick={() => rollback(s.id)} disabled={rollingBack !== null}
-                    className="shrink-0 rounded-[3px] border border-[#e2ddd5] px-3 py-1.5 text-[11px] text-[#17130f] hover:border-[#17130f] disabled:opacity-50">
+                    className="shrink-0 rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] text-[#212121] hover:border-[#007B6E] disabled:opacity-50">
                     {rollingBack === s.id ? "Відкат…" : "Відкотити"}
                   </button>
                 </div>
               ))}
             </div>
-            <div className="px-5 py-3 text-[11px] text-[#9c8f7d] border-t border-[#e2ddd5]">
+            <div className="px-5 py-3 text-[11px] text-[#9E9E9E] border-t border-[#E0E0E0]">
               Відкат відновлює залишки до стану <b>перед</b> збереженням знімку.
             </div>
           </div>

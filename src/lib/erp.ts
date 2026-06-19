@@ -244,6 +244,7 @@ async function recomputeProductStock(client: PoolClient, productId: number): Pro
 /** Product list for the ERP grid, with stock summary. */
 export async function listErpProducts(opts: {
   q?: string; page?: number; perPage?: number; stock?: "in" | "out" | ""; status?: string;
+  categories?: string[]; brands?: string[]; gender?: string; season?: string;
 }): Promise<{ products: ErpProductRow[]; total: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const perPage = Math.min(100, opts.perPage ?? 50);
@@ -261,6 +262,13 @@ export async function listErpProducts(opts: {
   }
   if (opts.stock === "in") conds.push("p.is_in_stock");
   if (opts.stock === "out") conds.push("NOT p.is_in_stock");
+  // Multi-select chip filters (Intertop-style).
+  const cats = (opts.categories ?? []).filter(Boolean);
+  if (cats.length) { bind.push(cats); conds.push(`p.category = ANY($${bind.length})`); }
+  const brands = (opts.brands ?? []).filter(Boolean);
+  if (brands.length) { bind.push(brands); conds.push(`p.brand = ANY($${bind.length})`); }
+  if (opts.gender?.trim()) { bind.push(opts.gender.trim()); conds.push(`p.gender = $${bind.length}`); }
+  if (opts.season?.trim()) { bind.push(opts.season.trim()); conds.push(`p.season = $${bind.length}`); }
   const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
 
   const countRow = await q1<{ n: string }>(`SELECT COUNT(*)::text AS n FROM products p ${where}`, bind);
@@ -352,6 +360,7 @@ export type ErpProductPatch = Partial<{
   name: string; brand: string; category: string; gender: string;
   color: string; composition: string; season: string; country: string;
   collection: string; sku: string; factory_article: string; description: string;
+  meta_title: string; meta_description: string;
   regular_price: number; sale_price: number | null; cost_price: number | null;
   status: ErpStatus;
 }>;
@@ -364,6 +373,7 @@ export async function updateErpProduct(productId: number, patch: ErpProductPatch
   const textCols: (keyof ErpProductPatch)[] = [
     "name", "brand", "category", "gender", "color", "composition",
     "season", "country", "collection", "sku", "factory_article", "description",
+    "meta_title", "meta_description",
   ];
   for (const c of textCols) if (patch[c] !== undefined) add(c, String(patch[c] ?? "").trim());
 

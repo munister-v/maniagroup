@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { Reveal } from "@/components/Reveal";
 import { formatPrice } from "@/lib/catalog";
 import { AddToCartButton } from "@/components/AddToCartButton";
+import { SizeChartButton } from "@/components/SizeChartModal";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductMedia } from "@/components/ProductMedia";
 import { ProductGallery } from "@/components/ProductGallery";
@@ -18,8 +19,10 @@ export async function generateMetadata({
   const { slug } = await params;
   const detail = await dbProductById(slug);
   if (!detail) return {};
-  const t = `${detail.product.name} — ${detail.product.brand} | Mania Group`;
-  const description = `${detail.product.name} від ${detail.product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`;
+  // Prefer ERP-managed SEO fields, fallback to auto-generated
+  const t = detail.metaTitle || `${detail.product.name} — ${detail.product.brand} | Mania Group`;
+  const description = detail.metaDescription ||
+    `${detail.product.name} від ${detail.product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`;
   return {
     title: t,
     description,
@@ -57,7 +60,7 @@ function ProductView({
   detail: DbProductDetail;
   related: DbProductDetail["product"][];
 }) {
-  const { product, images, sizes, composition, color, season, country, inStock } = detail;
+  const { product, images, sizes, sizeVariants, composition, color, season, country, inStock } = detail;
   const gallery = images.map((img, i) => ({
     id: i,
     src: img.src,
@@ -146,8 +149,14 @@ function ProductView({
               )}
             </div>
 
+            {sizes.length > 0 && (
+              <div className="mt-6">
+                <SizeChartButton brand={product.brand} gender={product.gender} />
+              </div>
+            )}
+
             {inStock ? (
-              <AddToCartButton inStock={inStock} productId={product.id} sizes={sizes} />
+              <AddToCartButton inStock={inStock} productId={product.id} sizes={sizes} sizeVariants={sizeVariants} />
             ) : (
               <div className="mt-6 border border-line bg-cloud/50 px-4 py-3 text-sm text-muted">
                 Цей товар наразі <span className="text-ink">немає в наявності</span>. Зателефонуйте

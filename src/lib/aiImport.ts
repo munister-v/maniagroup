@@ -16,21 +16,40 @@ export type AiMapping = {
 };
 
 const SCHEMA_HINT = `Two target schemas:
-- "offers": price/stock list, ONE ROW PER SIZE. Fields:
-  external_id (product code), factory_article (заводський/factory article),
-  barcode (штрихкод/EAN), size (розмір), offer_code (mp-code/offer id),
-  quantity (кількість/наявність), base_price (базова ціна), discount_price (акційна ціна).
-- "master": product master list, ONE ROW PER PRODUCT. Fields:
-  kod (internal numeric code), factory_article, brand (бренд), name (назва/наименование),
-  sizes (a cell listing all sizes, possibly repeated), base_price, sale_price,
-  composition (склад/состав), collection (колекція), color (колір/цвет).`;
 
-function renderRows(grid: unknown[][], maxRows = 8, maxCols = 22): string {
-  return grid.slice(0, maxRows).map((row, ri) => {
+"offers" — price/stock list, ONE ROW PER SIZE VARIANT. Fields (use the most likely column):
+  external_id   → product id / код товару / external_code / ID
+  factory_article → заводський артикул / factory article / артикул виробника
+  barcode       → штрихкод / EAN / barcode
+  size          → розмір / размер / size / clother_size — REQUIRED
+  offer_code    → код оферу / mp-code / offer_id / SKU
+  quantity      → кількість / наявність / qty / stock / залишок (integer stock count)
+  base_price    → базова ціна / ціна / regular price (numeric)
+  discount_price → акційна ціна / sale price / знижка (numeric, optional)
+
+"master" — product master list, ONE ROW PER PRODUCT. Fields:
+  kod           → КОД / ID (internal numeric code) — REQUIRED
+  factory_article → АРТИКУЛ / артикул / art
+  brand         → БРЕНД / brand
+  name          → НАИМЕНОВАНИЕ / НАЙМЕНУВАННЯ / назва
+  sizes         → a cell containing multiple sizes (e.g. "XS M L XL" or "L| M| S")
+  base_price    → базова ціна / ціна (numeric)
+  sale_price    → ціна продажу / sale price (numeric)
+  composition   → склад / состав / composition
+  collection    → колекція / коллекция
+  color         → колір / цвет / color
+
+Key rule: if rows contain one size per row with product key → "offers"; if one row per product with sizes in one cell → "master".`;
+
+function renderRows(grid: unknown[][], maxRows = 12, maxCols = 28): string {
+  // Find first non-empty row to use as anchor
+  const firstData = grid.findIndex((r) => (r as unknown[]).some((c) => String(c ?? "").trim()));
+  const start = Math.max(0, firstData);
+  return grid.slice(start, start + maxRows).map((row, ri) => {
     const cells = (row ?? []).slice(0, maxCols)
-      .map((c, ci) => `[${ci}]=${String(c ?? "").slice(0, 28)}`)
+      .map((c, ci) => `[${ci}]=${String(c ?? "").slice(0, 30)}`)
       .join("  ");
-    return `row ${ri}: ${cells}`;
+    return `row ${start + ri}: ${cells}`;
   }).join("\n");
 }
 
@@ -57,18 +76,22 @@ export async function aiDetectImport(grid: unknown[][]): Promise<AiMapping | nul
     {
       role: "user" as const,
       content:
-        `${SCHEMA_HINT}\n\nColumns are 0-based. Sample rows:\n${renderRows(grid)}\n\n` +
-        `Decide the file type and map our fields to column indices. ` +
-        `Return JSON exactly like: ` +
-        `{"kind":"offers"|"master","headerRow":<int index of the header row>,` +
-        `"columns":{"<field>":<columnIndex>}}. ` +
-        `Only include fields that are clearly present. If it is neither type, return {"kind":"unknown"}.`,
+        `${SCHEMA_HINT}\n\nSpreadsheet sample (columns are 0-based indices):\n${renderRows(grid)}\n\n` +
+        `Task: identify which schema ("offers" or "master") matches this file, ` +
+        `find the header row (first row with column labels), and map field names to column indices.\n` +
+        `Return JSON exactly:\n` +
+        `{"kind":"offers"|"master","headerRow":<0-based row index>,"columns":{"<field>":<colIndex>,...}}\n` +
+        `Rules:\n` +
+        `- "size" column MUST be mapped for "offers"; "kod" MUST be mapped for "master".\n` +
+        `- Only include fields you are confident about (skip unsure ones).\n` +
+        `- If the file matches neither schema, return {"kind":"unknown"}.\n` +
+        `- No prose, no markdown — pure JSON only.`,
     },
   ];
 
   let raw: string;
   try {
-    raw = await orChat(messages, { maxTokens: 400, temperature: 0 });
+    raw = await orChat(messages, { maxTokens: 600, temperature: 0 });
   } catch {
     return null;
   }

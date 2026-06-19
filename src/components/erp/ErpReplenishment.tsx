@@ -9,7 +9,7 @@ type ReplenishRow = {
 type SupplierOpt = { id: number; name: string };
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#E0E0E0] bg-white px-3 text-[13px] focus:border-[#007B6E] focus:outline-none";
 
 /**
  * Replenishment — variants low/out of stock with 30-day sales velocity and a
@@ -79,25 +79,25 @@ export function ErpReplenishment({ onCreated }: { onCreated?: (poId: number) => 
     <div className="mx-auto max-w-[1100px] space-y-5 p-5">
       <div>
         <h1 className="text-[20px] font-light tracking-tight">Поповнення складу</h1>
-        <p className="text-[12px] text-[#9c8f7d]">Розміри на межі або без залишку + швидкість продажів за 30 днів → рекомендована кількість до закупівлі.</p>
+        <p className="text-[12px] text-[#9E9E9E]">Розміри на межі або без залишку + швидкість продажів за 30 днів → рекомендована кількість до закупівлі.</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-[4px] border border-[#e2ddd5] bg-white p-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-[4px] border border-[#E0E0E0] bg-white p-4">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Поріг залишку, ≤</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Поріг залишку, ≤</span>
           <input type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} placeholder="з налаштувань" className={inp + " w-36"} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Бренд</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Бренд</span>
           <input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="усі бренди" className={inp + " w-48"} />
         </label>
-        <span className="self-center text-[12px] text-[#9c8f7d]">Знайдено позицій: <b className="text-[#17130f] tabular-nums">{rows.length}</b></span>
+        <span className="self-center text-[12px] text-[#9E9E9E]">Знайдено позицій: <b className="text-[#212121] tabular-nums">{rows.length}</b></span>
       </div>
 
-      <div className="overflow-x-auto rounded-[4px] border border-[#e2ddd5] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#E0E0E0] bg-white">
         <table className="w-full min-w-[820px] text-[13px]">
           <thead>
-            <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <tr className="border-b border-[#EEEEEE] text-[10px] uppercase tracking-wider text-[#9E9E9E]">
               <th className="px-3 py-3 text-center w-8">
                 <input type="checkbox" checked={rows.length > 0 && sel.size === rows.length} onChange={selectAll} />
               </th>
@@ -111,29 +111,29 @@ export function ErpReplenishment({ onCreated }: { onCreated?: (poId: number) => 
               <th className="px-4 py-3 text-right">До замовлення</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f7f4f0]">
-            {loading && !rows.length && <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</td></tr>}
-            {!loading && rows.length === 0 && <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#9c8f7d]">Немає позицій нижче порогу — склад у нормі 👍</td></tr>}
+          <tbody className="divide-y divide-[#FAFAFA]">
+            {loading && !rows.length && <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#9E9E9E]">Завантаження…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#9E9E9E]">Немає позицій нижче порогу — склад у нормі 👍</td></tr>}
             {rows.map((r) => {
               const checked = sel.has(r.variant_id);
               return (
-                <tr key={r.variant_id} className={`hover:bg-[#fafaf8] ${checked ? "bg-[#fbfaf6]" : ""}`}>
+                <tr key={r.variant_id} className={`hover:bg-[#FAFAFA] ${checked ? "bg-[#FAFAFA]" : ""}`}>
                   <td className="px-3 py-2.5 text-center">
                     <input type="checkbox" checked={checked} onChange={() => toggle(r)} />
                   </td>
                   <td className="px-4 py-2.5">{r.name}</td>
-                  <td className="px-4 py-2.5 text-[#9c8f7d]">{r.brand}</td>
+                  <td className="px-4 py-2.5 text-[#9E9E9E]">{r.brand}</td>
                   <td className="px-4 py-2.5 text-center">{r.size}</td>
                   <td className={`px-4 py-2.5 text-right tabular-nums ${r.stock_qty === 0 ? "font-medium text-red-600" : "text-amber-600"}`}>{r.stock_qty}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-[#9c8f7d]">{r.sold_30d || "—"}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[#9E9E9E]">{r.sold_30d || "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.suggested}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-[#9c8f7d]">{r.cost ? uah(r.cost) : "—"}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[#9E9E9E]">{r.cost ? uah(r.cost) : "—"}</td>
                   <td className="px-4 py-2.5 text-right">
                     {checked ? (
                       <input type="number" value={sel.get(r.variant_id) ?? r.suggested}
                         onChange={(e) => setQty(r.variant_id, Number(e.target.value))}
-                        className="h-8 w-20 rounded-[3px] border border-[#e2ddd5] bg-white px-2 text-right text-[13px] tabular-nums focus:border-[#13a89e] focus:outline-none" />
-                    ) : <span className="text-[#d8d2c8]">—</span>}
+                        className="h-8 w-20 rounded-[3px] border border-[#E0E0E0] bg-white px-2 text-right text-[13px] tabular-nums focus:border-[#007B6E] focus:outline-none" />
+                    ) : <span className="text-[#E0E0E0]">—</span>}
                   </td>
                 </tr>
               );
@@ -144,21 +144,21 @@ export function ErpReplenishment({ onCreated }: { onCreated?: (poId: number) => 
 
       {/* action bar */}
       {sel.size > 0 && (
-        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#17130f]/15 bg-white p-4 shadow-[0_-2px_12px_rgba(5,5,23,0.06)]">
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-[4px] border border-[#212121]/15 bg-white p-4 shadow-[0_-2px_12px_rgba(5,5,23,0.06)]">
           <div className="text-[13px]">
             <b className="tabular-nums">{sel.size}</b> поз · <b className="tabular-nums">{planUnits}</b> од
-            <span className="ml-2 text-[#9c8f7d]">≈ {uah(planValue)} закупки</span>
+            <span className="ml-2 text-[#9E9E9E]">≈ {uah(planValue)} закупки</span>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">
-              <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Постачальник</span>
+              <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Постачальник</span>
               <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={inp + " w-52 pr-7"}>
                 <option value="">— оберу пізніше —</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </label>
             <button onClick={createPo} disabled={busy}
-              className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
+              className="h-9 rounded-[3px] bg-[#007B6E] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50">
               {busy ? "Створюємо…" : "Створити замовлення"}
             </button>
           </div>

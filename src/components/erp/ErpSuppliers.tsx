@@ -8,7 +8,7 @@ type Supplier = {
 };
 
 function uah(v: number) { return Math.round(v).toLocaleString("uk-UA") + " ₴"; }
-const inp = "h-9 rounded-[3px] border border-[#e2ddd5] bg-white px-3 text-[13px] focus:border-[#13a89e] focus:outline-none";
+const inp = "h-9 rounded-[3px] border border-[#E0E0E0] bg-white px-3 text-[13px] focus:border-[#007B6E] focus:outline-none";
 
 export function ErpSuppliers() {
   const [rows, setRows] = useState<Supplier[]>([]);
@@ -29,9 +29,9 @@ export function ErpSuppliers() {
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-[20px] font-light tracking-tight">Постачальники</h1>
-          <p className="text-[12px] text-[#9c8f7d]">Довідник постачальників і закупівельна аналітика по кожному.</p>
+          <p className="text-[12px] text-[#9E9E9E]">Довідник постачальників і закупівельна аналітика по кожному.</p>
         </div>
-        <button onClick={() => setCreating(true)} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">+ Постачальник</button>
+        <button onClick={() => setCreating(true)} className="h-9 rounded-[3px] bg-[#007B6E] px-5 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85">+ Постачальник</button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
@@ -40,17 +40,17 @@ export function ErpSuppliers() {
           { l: "Закуплено одиниць", v: totals.units.toLocaleString("uk-UA") },
           { l: "Сума закупівель", v: uah(totals.spent) },
         ].map((k) => (
-          <div key={k.l} className="rounded-[4px] border border-[#e2ddd5] bg-white p-3">
+          <div key={k.l} className="rounded-[4px] border border-[#E0E0E0] bg-white p-3">
             <p className="text-[20px] font-light tabular-nums">{k.v}</p>
-            <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#9c8f7d]">{k.l}</p>
+            <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#9E9E9E]">{k.l}</p>
           </div>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-[4px] border border-[#e2ddd5] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#E0E0E0] bg-white">
         <table className="w-full min-w-[760px] text-[13px]">
           <thead>
-            <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <tr className="border-b border-[#EEEEEE] text-[10px] uppercase tracking-wider text-[#9E9E9E]">
               <th className="px-4 py-3 text-left">Постачальник</th>
               <th className="px-4 py-3 text-left">Контакт</th>
               <th className="px-4 py-3 text-right">Приходів</th>
@@ -60,21 +60,21 @@ export function ErpSuppliers() {
               <th className="px-4 py-3 w-8" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f7f4f0]">
-            {loading && !rows.length && <tr><td colSpan={7} className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</td></tr>}
-            {!loading && rows.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-[12px] text-[#9c8f7d]">Постачальників ще немає</td></tr>}
+          <tbody className="divide-y divide-[#FAFAFA]">
+            {loading && !rows.length && <tr><td colSpan={7} className="py-12 text-center text-[12px] text-[#9E9E9E]">Завантаження…</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={7} className="py-12 text-center text-[12px] text-[#9E9E9E]">Постачальників ще немає</td></tr>}
             {rows.map((r) => (
-              <tr key={r.id} onClick={() => setEditing(r)} className="cursor-pointer hover:bg-[#fafaf8]">
+              <tr key={r.id} onClick={() => setEditing(r)} className="cursor-pointer hover:bg-[#FAFAFA]">
                 <td className="px-4 py-2.5">
-                  <p className="font-medium text-[#17130f]">{r.name || "—"}</p>
-                  {r.note && <p className="truncate text-[11px] text-[#9c8f7d]">{r.note}</p>}
+                  <p className="font-medium text-[#212121]">{r.name || "—"}</p>
+                  {r.note && <p className="truncate text-[11px] text-[#9E9E9E]">{r.note}</p>}
                 </td>
-                <td className="px-4 py-2.5 text-[12px] text-[#9c8f7d]">{[r.contact, r.phone].filter(Boolean).join(" · ") || "—"}</td>
+                <td className="px-4 py-2.5 text-[12px] text-[#9E9E9E]">{[r.contact, r.phone].filter(Boolean).join(" · ") || "—"}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{r.receipts}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{r.units.toLocaleString("uk-UA")}</td>
                 <td className="px-4 py-2.5 text-right font-medium tabular-nums">{uah(r.total)}</td>
-                <td className="px-4 py-2.5 text-[12px] text-[#9c8f7d]">{r.last_receipt ? new Date(r.last_receipt).toLocaleDateString("uk-UA") : "—"}</td>
-                <td className="px-4 py-2.5 text-right text-[#b9ae9b]">›</td>
+                <td className="px-4 py-2.5 text-[12px] text-[#9E9E9E]">{r.last_receipt ? new Date(r.last_receipt).toLocaleDateString("uk-UA") : "—"}</td>
+                <td className="px-4 py-2.5 text-right text-[#BDBDBD]">›</td>
               </tr>
             ))}
           </tbody>
@@ -119,29 +119,29 @@ function SupplierModal({ supplier, onClose, onSaved }: { supplier: Supplier | nu
         <h2 className="mb-4 text-[15px]">{supplier ? "Постачальник" : "Новий постачальник"}</h2>
         <div className="space-y-3">
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Назва *</span>
+            <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Назва *</span>
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="ТОВ Дистриб'юція" className={inp + " mt-1 w-full"} autoFocus />
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Контактна особа</span>
+              <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Контактна особа</span>
               <input value={contact} onChange={(e) => setContact(e.target.value)} className={inp + " mt-1 w-full"} />
             </label>
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Телефон</span>
+              <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Телефон</span>
               <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inp + " mt-1 w-full"} />
             </label>
           </div>
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Нотатка</span>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-[3px] border border-[#e2ddd5] bg-white px-3 py-2 text-[13px] focus:border-[#13a89e] focus:outline-none" />
+            <span className="text-[10px] uppercase tracking-wider text-[#9E9E9E]">Нотатка</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="mt-1 w-full resize-none rounded-[3px] border border-[#E0E0E0] bg-white px-3 py-2 text-[13px] focus:border-[#007B6E] focus:outline-none" />
           </label>
         </div>
         <div className="mt-5 flex items-center justify-between">
-          {supplier ? <button onClick={remove} className="text-[12px] uppercase tracking-wider text-[#9c8f7d] hover:text-red-600">Видалити</button> : <span />}
+          {supplier ? <button onClick={remove} className="text-[12px] uppercase tracking-wider text-[#9E9E9E] hover:text-red-600">Видалити</button> : <span />}
           <div className="flex gap-2">
-            <button onClick={onClose} className="h-9 rounded-[3px] border border-[#e2ddd5] px-4 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#13a89e]">Скасувати</button>
-            <button onClick={save} disabled={!name.trim() || busy} className="h-9 rounded-[3px] bg-[#13a89e] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-40">{busy ? "…" : "Зберегти"}</button>
+            <button onClick={onClose} className="h-9 rounded-[3px] border border-[#E0E0E0] px-4 text-[11px] uppercase tracking-wider text-[#9E9E9E] hover:text-[#007B6E]">Скасувати</button>
+            <button onClick={save} disabled={!name.trim() || busy} className="h-9 rounded-[3px] bg-[#007B6E] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-40">{busy ? "…" : "Зберегти"}</button>
           </div>
         </div>
       </div>

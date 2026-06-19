@@ -170,10 +170,17 @@ function BrandMarquee({
   if (brands.length === 0) return null;
   // Resolve each brand's logo, sort logo-first, cap so the static strip stays
   // tidy. The full list lives in the header «Бренди» menu and the catalog.
-  const withLogo = brands.map((b) => ({ ...b, logo: resolveBrandLogo(b.name, logoMap) }));
-  const ordered = [...withLogo]
-    .sort((a, b) => (a.logo ? 0 : 1) - (b.logo ? 0 : 1))
-    .slice(0, 18);
+  // Deduplicate families sharing the same logo URL, keep shortest name
+  const byLogoUrl = new Map<string, { name: string; slug: string; logo: string }>();
+  for (const b of brands) {
+    const logo = resolveBrandLogo(b.name, logoMap);
+    if (!logo) continue;
+    const existing = byLogoUrl.get(logo);
+    if (!existing || b.name.length < existing.name.length) {
+      byLogoUrl.set(logo, { ...b, logo });
+    }
+  }
+  const ordered = [...byLogoUrl.values()].slice(0, 24);
   return (
     <section id="brands" className="border-y border-line py-9 md:py-11">
       <div className="wrap">
@@ -183,7 +190,7 @@ function BrandMarquee({
             Європейські марки в одному місці
           </h2>
         </div>
-        <ul className="flex flex-wrap items-center justify-center gap-x-9 gap-y-5 md:gap-x-12">
+        <ul className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 md:gap-x-12">
           {ordered.map((brand) => (
             <li key={brand.slug}>
               <Link
@@ -194,7 +201,7 @@ function BrandMarquee({
                 <BrandLogo
                   name={brand.name}
                   src={brand.logo}
-                  imgClass="h-7 w-auto max-w-[140px] object-contain opacity-60 transition-opacity hover:opacity-100 md:h-8"
+                  imgClass="h-7 w-auto max-w-[140px] object-contain opacity-55 transition-opacity hover:opacity-90 md:h-8"
                   textClass="whitespace-nowrap font-display text-lg tracking-wide text-ink/55 transition-colors hover:text-ink md:text-xl"
                 />
               </Link>

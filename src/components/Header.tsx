@@ -10,11 +10,23 @@ import { BrandLogo } from "./BrandLogo";
 
 type Brand = { name: string; slug: string };
 
-/** Resolve + sort brands logo-first against a {brand:url} map. */
-function orderBrands(brands: Brand[], logoMap: Record<string, string>) {
-  return brands
-    .map((b) => ({ ...b, logo: logoMap[b.name] || null }))
-    .sort((a, b) => (a.logo ? 0 : 1) - (b.logo ? 0 : 1));
+type BrandWithLogo = Brand & { logo: string | null };
+
+/** Resolve logos, deduplicate families sharing the same logo, sort logo-first. */
+function orderBrands(brands: Brand[], logoMap: Record<string, string>): BrandWithLogo[] {
+  // Group by logo URL: when several brands share a URL, keep the shortest name (root brand)
+  const byLogoUrl = new Map<string, BrandWithLogo>();
+  const noLogo: BrandWithLogo[] = [];
+
+  for (const b of brands) {
+    const logo = logoMap[b.name] || null;
+    if (!logo) { noLogo.push({ ...b, logo: null }); continue; }
+    const existing = byLogoUrl.get(logo);
+    if (!existing || b.name.length < existing.name.length) {
+      byLogoUrl.set(logo, { ...b, logo });
+    }
+  }
+  return [...byLogoUrl.values(), ...noLogo];
 }
 import { CartDrawer } from "./CartDrawer";
 import { Grain } from "./Grain";
@@ -533,40 +545,67 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
 
 function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<string, string> }) {
   const ordered = orderBrands(brands, logoMap);
+  const withLogo = ordered.filter((b) => b.logo);
+  const textOnly = ordered.filter((b) => !b.logo);
+
   return (
     <div className="absolute inset-x-0 top-full hidden border-b border-line bg-paper text-ink shadow-[0_28px_44px_-28px_rgba(23,19,15,0.35)] md:block">
-      <div className="wrap py-10">
-        <div className="mb-7 flex items-end justify-between">
+      <div className="wrap py-8">
+        <div className="mb-6 flex items-end justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-luxe text-muted">Бренди</p>
-            <h3 className="mt-1.5 font-display text-2xl text-ink">
-              Усі бренди в одному місці
-            </h3>
+            <p className="text-[11px] uppercase tracking-luxe text-muted">Наші бренди</p>
+            <h3 className="mt-1 font-display text-2xl text-ink">Усі бренди в одному місці</h3>
           </div>
-          <Link
-            href="/catalog"
-            className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink"
-          >
+          <Link href="/catalog" className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink">
             Весь каталог →
           </Link>
         </div>
-        <ul className="grid grid-cols-4 gap-x-8 gap-y-1 lg:grid-cols-6">
-          {ordered.map((b) => (
-            <li key={b.slug}>
-              <Link
-                href={`/catalog?brand=${b.slug}`}
-                className="flex h-10 items-center transition-opacity hover:opacity-100"
-              >
-                <BrandLogo
-                  name={b.name}
-                  src={b.logo}
-                  imgClass="h-6 w-auto max-w-[110px] object-contain object-left opacity-70 transition-opacity hover:opacity-100"
-                  textClass="text-sm text-ink/75 transition-colors hover:text-ink"
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
+
+        {/* Logo brands — image grid */}
+        {withLogo.length > 0 && (
+          <ul className="grid grid-cols-5 gap-x-6 gap-y-0.5 lg:grid-cols-8 xl:grid-cols-10">
+            {withLogo.map((b) => (
+              <li key={b.slug}>
+                <Link
+                  href={`/catalog?brand=${b.slug}`}
+                  className="flex h-11 items-center justify-start transition-opacity hover:opacity-100"
+                  title={b.name}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={b.logo!}
+                    alt={b.name}
+                    loading="lazy"
+                    className="h-6 w-auto max-w-[100px] object-contain object-left opacity-55 transition-opacity hover:opacity-100"
+                    onError={(e) => {
+                      // Hide broken logos; parent li stays
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Text-only brands — compact list */}
+        {textOnly.length > 0 && (
+          <div className={withLogo.length > 0 ? "mt-5 border-t border-line/40 pt-5" : ""}>
+            <p className="mb-2 text-[10px] uppercase tracking-luxe text-muted/60">Також</p>
+            <ul className="flex flex-wrap gap-x-5 gap-y-1">
+              {textOnly.map((b) => (
+                <li key={b.slug}>
+                  <Link
+                    href={`/catalog?brand=${b.slug}`}
+                    className="font-display text-[15px] text-ink/55 transition-colors hover:text-ink"
+                  >
+                    {b.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

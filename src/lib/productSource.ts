@@ -215,15 +215,20 @@ export async function getCatalogCategories(): Promise<WcCategory[]> {
 
 // ── Single product ─────────────────────────────────────────────────────
 
+export type SizeVariant = { size: string; qty: number; inStock: boolean };
+
 export type DbProductDetail = {
   product: Product;
   images: { src: string }[];
   sizes: string[];
+  sizeVariants: SizeVariant[]; // from ERP product_variants (authoritative)
   composition?: string;
   color?: string;
   season?: string;
   country?: string;
   inStock: boolean;
+  metaTitle?: string;
+  metaDescription?: string;
 };
 
 export async function dbProductById(id: string): Promise<DbProductDetail | null> {
@@ -231,19 +236,44 @@ export async function dbProductById(id: string): Promise<DbProductDetail | null>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row = await q1<any>("SELECT * FROM products WHERE id = $1", [Number(id)]);
   if (!row) return null;
-  if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null; // home-fragrance section removed
-  const sizes = (asAttrs(row.attributes).find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? [])
-    .map((t: { name: string }) => t.name);
+  if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null;
+
+  // Load ERP variants — authoritative per-size stock
+  const variantRows = await q<{ size: string; stock_qty: string }>(
+    `SELECT size, stock_qty FROM product_variants WHERE product_id = $1 AND active = TRUE ORDER BY size`,
+    [Number(id)]
+  );
+  const sizeVariants: SizeVariant[] = variantRows.map((v) => ({
+    size: v.size,
+    qty: Number(v.stock_qty),
+    inStock: Number(v.stock_qty) > 0,
+  }));
+
+  // Sizes: prefer ERP variants, fallback to WP attributes
+  const sizes = sizeVariants.length > 0
+    ? sizeVariants.map((v) => v.size)
+    : (asAttrs(row.attributes).find((a: { taxonomy: string }) => a.taxonomy === "pa_size")?.terms ?? [])
+        .map((t: { name: string }) => t.name);
+
   const images = asImages(row.images).filter((i) => i?.src);
+
+  // inStock: true if ANY variant has stock, or legacy is_in_stock flag
+  const erpInStock = sizeVariants.length > 0
+    ? sizeVariants.some((v) => v.inStock)
+    : row.is_in_stock === true;
+
   return {
     product: rowToProduct(row),
     images,
     sizes,
+    sizeVariants,
     composition: translateMaterials(row.composition) || undefined,
     color: row.color ? colorLabel(row.color) : undefined,
     season: translateSeason(row.season) || undefined,
     country: translateCountry(row.country) || undefined,
-    inStock: row.is_in_stock === true,
+    inStock: erpInStock,
+    metaTitle: row.meta_title || undefined,
+    metaDescription: row.meta_description || undefined,
   };
 }
 
