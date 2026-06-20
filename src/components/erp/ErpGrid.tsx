@@ -10,7 +10,7 @@ type GProduct = {
   price: number; cost_price: number | null; status: string;
   variants: GVariant[];
 };
-type GData = { products: GProduct[]; sizes: string[]; brands: string[]; total: number };
+type GData = { products: GProduct[]; sizes: string[]; brands: string[]; categories: string[]; total: number };
 type Snapshot = { id: number; label: string; created_at: string; item_count: number };
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -43,6 +43,11 @@ export function ErpGrid() {
   const [searchInput, setSearchInput] = useState("");
   const [brand, setBrand] = useState("");
   const [status, setStatus] = useState("");
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  const [catMenuOpen, setCatMenuOpen] = useState(false);
+  // Fill-down: which size column is being bulk-filled + the value/formula entered.
+  const [fillCol, setFillCol] = useState<string | null>(null);
+  const [fillValue, setFillValue] = useState("");
 
   // localQty: cellKey → modified qty (only cells that differ from DB)
   const [localQty, setLocalQty] = useState<Map<string, number>>(new Map());
@@ -53,6 +58,8 @@ export function ErpGrid() {
   // value at focus-start, so blur can compute "what changed in this edit session"
   const preFocusVal = useRef<Map<string, number>>(new Map());
 
+  // product-level field edits (price / cost), key = `${productId}:price|cost`
+  const [localField, setLocalField] = useState<Map<string, number>>(new Map());
   // formula: key → formula string (cells with "=" prefix)
   const [formulaMap, setFormulaMap] = useState<Map<string, string>>(new Map());
   // which cell is actively being formula-edited (shows raw formula in input)
@@ -83,6 +90,7 @@ export function ErpGrid() {
     if (search) sp.set("q", search);
     if (brand) sp.set("brand", brand);
     if (status) sp.set("status", status);
+    if (selectedCats.length) sp.set("category", selectedCats.join(","));
     try {
       const r = await fetch(`/api/erp/grid?${sp}`);
       const d: GData = await r.json();
@@ -94,7 +102,7 @@ export function ErpGrid() {
     } finally {
       setLoading(false);
     }
-  }, [search, brand, status]);
+  }, [search, brand, status, selectedCats]);
 
   useEffect(() => { load(page); }, [page, load]);
 
@@ -187,12 +195,83 @@ export function ErpGrid() {
     }
   }, [namedTables, localQty]);
 
+  /* ── price / cost cell edit (with formula support) ── */
+  const onFieldChange = useCallback((pid: number, field: "price" | "cost", raw: string, product: GProduct, sizes: string[], original: number) => {
+    const fkey = `${pid}:${field}`;
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("=")) {
+      const formula = trimmed.slice(1);
+      const val = Math.max(0, Math.round(runFormula(formula, product, sizes)));
+      setFormulaMap((fm) => { const n = new Map(fm); n.set(fkey, formula); return n; });
+      setLocalField((lf) => { const n = new Map(lf); n.set(fkey, val); return n; });
+      return;
+    }
+    setFormulaMap((fm) => { const n = new Map(fm); n.delete(fkey); return n; });
+    const val = Math.max(0, Math.round(Number(trimmed) || 0));
+    setLocalField((lf) => {
+      const n = new Map(lf);
+      if (val === Math.round(original)) n.delete(fkey);
+      else n.set(fkey, val);
+      return n;
+    });
+  }, [runFormula]);
+
   const onCellFocus = useCallback((key: string, displayQty: number, label: string) => {
     preFocusVal.current.set(key, displayQty);
     setActiveCell({ key, label });
     // If it's a formula cell, enter formula edit mode
     if (formulaMap.has(key)) setFormulaEditKey(key);
   }, [formulaMap]);
+
+  /* ── Excel fill-down: apply a value or =formula to a whole size column ── */
+  const fillColumn = useCallback((sz: string, raw: string) => {
+    const trimmed = raw.trim();
+    if (!data) return;
+    const isFormula = trimmed.startsWith("=");
+    const formula = isFormula ? trimmed.slice(1) : "";
+    const nextQty = new Map(localQty);
+    const nextFormula = new Map(formulaMap);
+    for (const p of data.products) {
+      const variant = p.variants.find((v) => v.size === sz);
+      const key = cellKey(p.id, sz, variant?.id ?? null);
+      const original = keyMeta.get(key)?.originalQty ?? variant?.qty ?? 0;
+      if (isFormula) {
+        nextFormula.set(key, formula);
+        nextQty.set(key, Math.max(0, Math.round(runFormula(formula, p, data.sizes))));
+      } else {
+        nextFormula.delete(key);
+        const num = Math.max(0, parseInt(trimmed, 10) || 0);
+        if (num === original) nextQty.delete(key);
+        else nextQty.set(key, num);
+      }
+    }
+    setLocalQty(nextQty);
+    setFormulaMap(nextFormula);
+    setFillCol(null);
+    setFillValue("");
+  }, [data, localQty, formulaMap, keyMeta, runFormula]);
+
+  /* ── Excel paste: a multi-line clipboard column fills downward from a cell ── */
+  const onCellPaste = useCallback((e: React.ClipboardEvent, rowIdx: number, sz: string) => {
+    const text = e.clipboardData.getData("text");
+    // Single value → let the browser handle a normal paste into one cell.
+    if (!/[\n\t]/.test(text)) return;
+    e.preventDefault();
+    if (!data) return;
+    // Take the first column of each pasted row (Excel copies tab-separated).
+    const values = text.split(/\r?\n/).map((l) => l.split("\t")[0].trim()).filter((l) => l !== "");
+    const nextQty = new Map(localQty);
+    for (let i = 0; i < values.length && rowIdx + i < data.products.length; i++) {
+      const p = data.products[rowIdx + i];
+      const variant = p.variants.find((v) => v.size === sz);
+      const key = cellKey(p.id, sz, variant?.id ?? null);
+      const original = keyMeta.get(key)?.originalQty ?? variant?.qty ?? 0;
+      const num = Math.max(0, parseInt(values[i], 10) || 0);
+      if (num === original) nextQty.delete(key);
+      else nextQty.set(key, num);
+    }
+    setLocalQty(nextQty);
+  }, [data, localQty, keyMeta]);
 
   const onCellBlur = useCallback((key: string, product: GProduct, sizes: string[]) => {
     setFormulaEditKey(null);
@@ -260,19 +339,25 @@ export function ErpGrid() {
       const m = keyMeta.get(key)!;
       return { variantId: m.variantId, productId: m.productId, size: m.size, qty };
     });
-    if (!changes.length) return;
+    const fields = [...localField.entries()].map(([key, value]) => {
+      const [pid, f] = key.split(":");
+      return { productId: Number(pid), field: (f === "cost" ? "cost_price" : "price") as "price" | "cost_price", value };
+    });
+    if (!changes.length && !fields.length) return;
     setSaving(true);
     setSaveMsg("");
     try {
-      const label = `Таблиця — ${changes.length} змін, ${new Date().toLocaleString("uk-UA")}`;
+      const label = `Таблиця — ${changes.length + fields.length} змін, ${new Date().toLocaleString("uk-UA")}`;
       const r = await fetch("/api/erp/grid/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ changes, label }),
+        body: JSON.stringify({ changes, fields, label }),
       });
       const res = await r.json();
       if (res.ok) {
-        setSaveMsg(`✓ Збережено ${res.applied} змін (знімок #${res.snapshotId})`);
+        const parts = [res.applied ? `${res.applied} залишків` : "", res.fieldsApplied ? `${res.fieldsApplied} цін/собівартостей` : ""].filter(Boolean).join(" + ");
+        setSaveMsg(`✓ Збережено ${parts || res.applied} (знімок #${res.snapshotId})`);
+        setLocalField(new Map());
         await load(page);
       } else {
         setSaveMsg("Помилка: " + (res.error ?? "невідома"));
@@ -301,6 +386,7 @@ export function ErpGrid() {
   /* ── discard local changes ── */
   function discard() {
     setLocalQty(new Map());
+    setLocalField(new Map());
     setFormulaMap(new Map());
     setUndoStack([]);
     setSaveMsg("");
@@ -332,7 +418,7 @@ export function ErpGrid() {
     }
   }
 
-  const changeCount = localQty.size + formulaMap.size;
+  const changeCount = localQty.size + formulaMap.size + localField.size;
   const sizes = data?.sizes ?? [];
   const products = data?.products ?? [];
   const totalPages = Math.ceil((data?.total ?? 0) / PER_PAGE);
@@ -361,6 +447,48 @@ export function ErpGrid() {
           )}
         </form>
 
+        {/* Category multi-select (Intertop-style checkbox dropdown) */}
+        <div className="relative">
+          <button type="button" onClick={() => setCatMenuOpen((v) => !v)}
+            className={`flex h-8 items-center gap-1.5 rounded-[3px] border px-2.5 text-[12px] transition-colors ${
+              selectedCats.length || catMenuOpen ? "border-[#007B6E] text-[#007B6E]" : "border-[#E0E0E0] text-[#616161] hover:border-[#007B6E]"
+            } bg-white`}>
+            Категорія
+            {selectedCats.length > 0 && <span className="rounded-full bg-[#007B6E] px-1.5 text-[10px] text-white">{selectedCats.length}</span>}
+            <span className="text-[9px]">{catMenuOpen ? "▲" : "▼"}</span>
+          </button>
+          {catMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setCatMenuOpen(false)} />
+              <div className="absolute left-0 top-full z-40 mt-1 max-h-[320px] w-56 overflow-y-auto border border-[#E0E0E0] bg-white shadow-lg">
+                {(data?.categories ?? []).length === 0 && (
+                  <p className="px-3 py-3 text-[12px] text-[#9E9E9E]">Категорій немає</p>
+                )}
+                {(data?.categories ?? []).map((c) => {
+                  const checked = selectedCats.includes(c);
+                  return (
+                    <label key={c} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[13px] hover:bg-[#FAFAFA]">
+                      <input type="checkbox" checked={checked}
+                        onChange={() => {
+                          setSelectedCats((prev) => checked ? prev.filter((x) => x !== c) : [...prev, c]);
+                          setPage(1);
+                        }}
+                        className="h-3.5 w-3.5 accent-[#007B6E]" />
+                      <span className="text-[#424242]">{c}</span>
+                    </label>
+                  );
+                })}
+                {selectedCats.length > 0 && (
+                  <button onClick={() => { setSelectedCats([]); setPage(1); }}
+                    className="w-full border-t border-[#F5F5F5] px-3 py-2 text-left text-[12px] text-[#9E9E9E] hover:text-[#007B6E]">
+                    Очистити вибір
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Brand filter */}
         <select value={brand} onChange={(e) => { setBrand(e.target.value); setPage(1); }}
           className="h-8 rounded-[3px] border border-[#E0E0E0] px-2 text-[12px] focus:border-[#007B6E] focus:outline-none bg-white">
@@ -380,7 +508,7 @@ export function ErpGrid() {
         <div className="flex-1" />
 
         {/* Hint */}
-        <span className="text-[11px] text-[#9E9E9E]">Tab/Enter — навігація · Ctrl+Z — відмінити</span>
+        <span className="text-[11px] text-[#9E9E9E]">Клік на розмір — заповнити колонку · Встав з Excel — заповнить вниз · Ctrl+Z</span>
 
         {/* Export */}
         <button onClick={exportXlsx}
@@ -461,7 +589,7 @@ export function ErpGrid() {
           </span>
         )}
         <div className="ml-2 shrink-0 text-[10px] text-[#BDBDBD]">
-          SUM · IF · VLOOKUP/ВПР · MARGIN · MARKUP · PERCENT · таблиці: RECEIPTS ORDERS SUPPLIERS PRODUCTS
+          SUM · IF · VLOOKUP/ВПР · ROUND · CLAMP · MEDIAN · MARGIN · MARKUP · PERCENT · поля: PRICE COST STOCK · таблиці: RECEIPTS ORDERS SUPPLIERS PRODUCTS
         </div>
       </div>
 
@@ -486,12 +614,43 @@ export function ErpGrid() {
                     {h}
                   </th>
                 ))}
-                {/* Size cols */}
+                {/* Size cols — click header to fill the whole column (Excel fill-down) */}
                 {sizes.map((sz) => (
                   <th key={sz}
-                    style={{ position: "sticky", top: 0, zIndex: 20, minWidth: 52, width: 52 }}
-                    className="border-b border-r border-[#E0E0E0] bg-[#F5F5F5] px-1 py-2 text-center text-[10px] uppercase tracking-[0.06em] text-[#9E9E9E] whitespace-nowrap">
-                    {sz}
+                    style={{ position: "sticky", top: 0, zIndex: fillCol === sz ? 40 : 20, minWidth: 52, width: 52 }}
+                    className="relative border-b border-r border-[#E0E0E0] bg-[#F5F5F5] px-1 py-2 text-center text-[10px] uppercase tracking-[0.06em] text-[#9E9E9E] whitespace-nowrap">
+                    <button type="button"
+                      onClick={() => { setFillCol(fillCol === sz ? null : sz); setFillValue(""); }}
+                      title={`Заповнити колонку ${sz}`}
+                      className={`inline-flex items-center gap-0.5 transition-colors hover:text-[#007B6E] ${fillCol === sz ? "text-[#007B6E] font-semibold" : ""}`}>
+                      {sz}
+                      <span className="text-[8px] opacity-50">▼</span>
+                    </button>
+                    {fillCol === sz && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setFillCol(null)} />
+                        <div className="absolute left-1/2 top-full z-40 mt-1 w-56 -translate-x-1/2 border border-[#E0E0E0] bg-white p-2.5 text-left shadow-lg normal-case">
+                          <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-[#9E9E9E]">Заповнити колонку «{sz}»</p>
+                          <input
+                            autoFocus
+                            value={fillValue}
+                            onChange={(e) => setFillValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") fillColumn(sz, fillValue); if (e.key === "Escape") setFillCol(null); }}
+                            placeholder="напр. 0  або  =ROUND(STOCK/5)"
+                            className="h-8 w-full border border-[#E0E0E0] px-2 text-[12px] text-[#212121] focus:border-[#007B6E] focus:outline-none"
+                          />
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-[10px] text-[#BDBDBD]">{products.length} рядків</span>
+                            <div className="flex gap-1">
+                              <button onClick={() => setFillCol(null)}
+                                className="h-7 border border-[#E0E0E0] px-2.5 text-[11px] text-[#9E9E9E] hover:border-[#007B6E]">Скасувати</button>
+                              <button onClick={() => fillColumn(sz, fillValue)}
+                                className="h-7 bg-[#007B6E] px-3 text-[11px] font-medium text-white hover:bg-[#006B5E]">Заповнити</button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -519,17 +678,42 @@ export function ErpGrid() {
                       {p.sku && <span className="text-[10px] text-[#BDBDBD]">{p.sku}</span>}
                     </td>
 
-                    {/* Price */}
-                    <td style={{ position: "sticky", left: STICKY_LEFT[2], zIndex: 10, width: STICKY_COL_W[2] }}
-                      className="border-b border-r border-[#F5F5F5] bg-white group-hover:bg-[#FAFAFA] px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[#212121]">
-                      {uah(p.price)}
-                    </td>
+                    {/* Price (editable, formula-aware) */}
+                    {(() => {
+                      const fkey = `${p.id}:price`;
+                      const hasF = formulaMap.has(fkey);
+                      const edited = localField.has(fkey);
+                      const val = edited ? localField.get(fkey)! : p.price;
+                      return (
+                        <td style={{ position: "sticky", left: STICKY_LEFT[2], zIndex: 10, width: STICKY_COL_W[2] }}
+                          className={`border-b border-r border-[#F5F5F5] p-0 ${hasF ? "bg-blue-50" : edited ? "bg-amber-50" : "bg-white group-hover:bg-[#FAFAFA]"}`}>
+                          <input type="text" defaultValue={hasF ? "=" + formulaMap.get(fkey) : String(Math.round(val))}
+                            onFocus={(e) => { e.target.select(); setActiveCell({ key: fkey, label: `${p.name} · Ціна` }); }}
+                            onChange={(e) => onFieldChange(p.id, "price", e.target.value, p, sizes, p.price)}
+                            onBlur={(e) => { if (!e.target.value.startsWith("=")) e.target.value = String(Math.round(localField.get(fkey) ?? p.price)); }}
+                            className="h-full w-full bg-transparent px-2 py-1.5 text-right tabular-nums text-[#212121] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#007B6E]" />
+                        </td>
+                      );
+                    })()}
 
-                    {/* Cost */}
-                    <td style={{ position: "sticky", left: STICKY_LEFT[3], zIndex: 10, width: STICKY_COL_W[3] }}
-                      className="border-b border-r border-[#F5F5F5] bg-white group-hover:bg-[#FAFAFA] px-2 py-1.5 text-right tabular-nums whitespace-nowrap text-[#9E9E9E]">
-                      {p.cost_price ? uah(p.cost_price) : "—"}
-                    </td>
+                    {/* Cost (editable, formula-aware) */}
+                    {(() => {
+                      const fkey = `${p.id}:cost`;
+                      const hasF = formulaMap.has(fkey);
+                      const edited = localField.has(fkey);
+                      const val = edited ? localField.get(fkey)! : (p.cost_price ?? 0);
+                      return (
+                        <td style={{ position: "sticky", left: STICKY_LEFT[3], zIndex: 10, width: STICKY_COL_W[3] }}
+                          className={`border-b border-r border-[#F5F5F5] p-0 ${hasF ? "bg-blue-50" : edited ? "bg-amber-50" : "bg-white group-hover:bg-[#FAFAFA]"}`}>
+                          <input type="text" defaultValue={hasF ? "=" + formulaMap.get(fkey) : (p.cost_price ? String(Math.round(p.cost_price)) : "")}
+                            placeholder="—"
+                            onFocus={(e) => { e.target.select(); setActiveCell({ key: fkey, label: `${p.name} · Собівартість` }); }}
+                            onChange={(e) => onFieldChange(p.id, "cost", e.target.value, p, sizes, p.cost_price ?? 0)}
+                            onBlur={(e) => { if (!e.target.value.startsWith("=")) { const v = localField.get(fkey) ?? p.cost_price ?? 0; e.target.value = v ? String(Math.round(v)) : ""; } }}
+                            className="h-full w-full bg-transparent px-2 py-1.5 text-right tabular-nums text-[#9E9E9E] placeholder:text-[#BDBDBD] focus:bg-white focus:text-[#212121] focus:outline-none focus:ring-1 focus:ring-[#007B6E]" />
+                        </td>
+                      );
+                    })()}
 
                     {/* Size cells */}
                     {sizes.map((sz, colIdx) => {
@@ -572,6 +756,7 @@ export function ErpGrid() {
                             }}
                             onChange={(e) => onCellChange(key, e.target.value)}
                             onBlur={() => onCellBlur(key, p, sizes)}
+                            onPaste={(e) => onCellPaste(e, rowIdx, sz)}
                             onKeyDown={(e) => {
                               if (isEditing && (e.key === "Tab" || e.key === "Enter")) {
                                 e.currentTarget.blur();

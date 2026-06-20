@@ -28,8 +28,18 @@ export type GridData = {
   products: GridProduct[];
   sizes: string[];
   brands: string[];
+  categories: string[];
   total: number;
 };
+
+/**
+ * Junk categories left over from the WooCommerce import that the clothing
+ * catalog should NOT surface (the operator's brief: only Аксесуари / Взуття /
+ * Одяг and their real Cyrillic siblings — hide the English top-levels + makeup).
+ */
+export const HIDDEN_GRID_CATEGORIES = [
+  "Beauty", "Home", "Jewelry", "Services", "Макияж", "Макіяж", "Uncategorized", "Без категорії",
+];
 
 const SIZE_ORDER = ["XXS","XS","S","M","L","XL","XXL","XXXL","3XL","4XL","5XL","One size","Один розмір","Onesize"];
 
@@ -47,6 +57,7 @@ function sortSizes(sizes: string[]): string[] {
 
 export async function getGridData(opts: {
   q?: string; page?: number; perPage?: number; brand?: string; status?: string;
+  categories?: string[];
 }): Promise<GridData> {
   const page = Math.max(1, opts.page ?? 1);
   const perPage = Math.min(200, opts.perPage ?? 100);
@@ -65,11 +76,23 @@ export async function getGridData(opts: {
     bind.push(opts.status.trim());
     conds.push(`p.status = $${bind.length}`);
   }
+  const cats = (opts.categories ?? []).filter(Boolean);
+  if (cats.length) {
+    bind.push(cats);
+    conds.push(`p.category = ANY($${bind.length})`);
+  }
   const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
 
-  const [countRow, brands] = await Promise.all([
+  const [countRow, brands, catRows] = await Promise.all([
     q1<{ n: string }>(`SELECT COUNT(*)::text AS n FROM products p ${where}`, bind),
     q<{ brand: string }>("SELECT DISTINCT brand FROM products WHERE brand <> '' ORDER BY brand"),
+    // Real categories only: those with products, minus the curated junk set.
+    q<{ category: string }>(
+      `SELECT category, COUNT(*)::int AS n FROM products
+        WHERE category <> '' AND category <> ALL($1)
+        GROUP BY category HAVING COUNT(*) > 0 ORDER BY category`,
+      [HIDDEN_GRID_CATEGORIES],
+    ),
   ]);
 
   const rows = await q<{
@@ -116,6 +139,7 @@ export async function getGridData(opts: {
     products: [...productMap.values()],
     sizes: sortSizes([...allSizes]),
     brands: brands.map((b) => b.brand),
+    categories: catRows.map((c) => c.category),
     total: Number(countRow?.n ?? 0),
   };
 }
@@ -127,11 +151,19 @@ export type GridSaveChange = {
   qty: number;
 };
 
+// Product-level field edits (price / cost) made in the spreadsheet grid.
+export type GridFieldChange = {
+  productId: number;
+  field: "price" | "cost_price";
+  value: number;
+};
+
 export async function saveGridChanges(
   changes: GridSaveChange[],
   label?: string,
-): Promise<{ snapshotId: number; applied: number }> {
-  if (!changes.length) return { snapshotId: 0, applied: 0 };
+  fieldChanges: GridFieldChange[] = [],
+): Promise<{ snapshotId: number; applied: number; fieldsApplied: number }> {
+  if (!changes.length && !fieldChanges.length) return { snapshotId: 0, applied: 0, fieldsApplied: 0 };
 
   const client = await pool.connect();
   try {
@@ -202,8 +234,27 @@ export async function saveGridChanges(
       );
     }
 
+    // Product-level price / cost edits (formulas already resolved client-side).
+    let fieldsApplied = 0;
+    for (const fc of fieldChanges) {
+      const val = Math.max(0, Math.round(fc.value));
+      if (fc.field === "price") {
+        // Editing the selling price sets both price and the regular (list) price.
+        await client.query(
+          "UPDATE products SET price=$2, regular_price=$2, updated_at=now() WHERE id=$1",
+          [fc.productId, val],
+        );
+      } else if (fc.field === "cost_price") {
+        await client.query(
+          "UPDATE products SET cost_price=$2, cost_source='manual', updated_at=now() WHERE id=$1",
+          [fc.productId, val > 0 ? val : null],
+        );
+      } else continue;
+      fieldsApplied++;
+    }
+
     await client.query("COMMIT");
-    return { snapshotId, applied };
+    return { snapshotId, applied, fieldsApplied };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;

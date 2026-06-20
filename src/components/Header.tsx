@@ -561,14 +561,14 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
           </Link>
         </div>
 
-        {/* Logo brands — image grid */}
+        {/* Logo brands — clean contained tiles (logos are square wordmarks) */}
         {withLogo.length > 0 && (
-          <ul className="grid grid-cols-5 gap-x-6 gap-y-0.5 lg:grid-cols-8 xl:grid-cols-10">
+          <ul className="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-6">
             {withLogo.map((b) => (
               <li key={b.slug}>
                 <Link
                   href={`/catalog?brand=${b.slug}`}
-                  className="flex h-11 items-center justify-start transition-opacity hover:opacity-100"
+                  className="flex h-[72px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
                   title={b.name}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -576,12 +576,16 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
                     src={b.logo!}
                     alt={b.name}
                     loading="lazy"
-                    className="h-6 w-auto max-w-[100px] object-contain object-left opacity-55 transition-opacity hover:opacity-100"
+                    className="max-h-[44px] max-w-full object-contain"
                     onError={(e) => {
-                      // Hide broken logos; parent li stays
-                      (e.target as HTMLImageElement).style.display = "none";
+                      // Fall back to a text wordmark when the logo is broken
+                      const img = e.target as HTMLImageElement;
+                      img.style.display = "none";
+                      const span = img.nextElementSibling as HTMLElement | null;
+                      if (span) span.style.display = "block";
                     }}
                   />
+                  <span className="hidden font-display text-[15px] text-ink/70">{b.name}</span>
                 </Link>
               </li>
             ))}

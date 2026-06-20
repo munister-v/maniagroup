@@ -190,19 +190,20 @@ function BrandMarquee({
             Європейські марки в одному місці
           </h2>
         </div>
-        <ul className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 md:gap-x-12">
+        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
           {ordered.map((brand) => (
             <li key={brand.slug}>
               <Link
                 href={`/catalog?brand=${brand.slug}`}
                 aria-label={brand.name}
-                className="flex items-center"
+                className="flex h-[76px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
+                title={brand.name}
               >
                 <BrandLogo
                   name={brand.name}
                   src={brand.logo}
-                  imgClass="h-7 w-auto max-w-[140px] object-contain opacity-55 transition-opacity hover:opacity-90 md:h-8"
-                  textClass="whitespace-nowrap font-display text-lg tracking-wide text-ink/55 transition-colors hover:text-ink md:text-xl"
+                  imgClass="max-h-[46px] max-w-full object-contain"
+                  textClass="whitespace-nowrap font-display text-[17px] tracking-wide text-ink/70"
                 />
               </Link>
             </li>
