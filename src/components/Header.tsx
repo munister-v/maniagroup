@@ -563,7 +563,7 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
 
         {/* Logo brands — clean contained tiles (logos are square wordmarks) */}
         {withLogo.length > 0 && (
-          <ul className="grid grid-cols-4 gap-3 sm:grid-cols-5 lg:grid-cols-6">
+          <ul className="grid max-h-[52vh] grid-cols-4 gap-3 overflow-y-auto pr-1 sm:grid-cols-5 lg:grid-cols-7">
             {withLogo.map((b) => (
               <li key={b.slug}>
                 <Link

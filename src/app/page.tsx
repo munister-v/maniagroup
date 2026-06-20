@@ -180,35 +180,46 @@ function BrandMarquee({
       byLogoUrl.set(logo, { ...b, logo });
     }
   }
-  const ordered = [...byLogoUrl.values()].slice(0, 24);
+  // Curated wall: 18 key brands on desktop (6×3), 8 on mobile (rest hidden).
+  const ordered = [...byLogoUrl.values()].slice(0, 18);
   return (
     <section id="brands" className="border-y border-line py-9 md:py-11">
       <div className="wrap">
-        <div className="mb-7 text-center">
-          <p className="text-[11px] uppercase tracking-luxe text-muted">Наші бренди</p>
-          <h2 className="mt-2 font-display text-2xl text-ink md:text-3xl">
-            Європейські марки в одному місці
-          </h2>
+        <div className="mb-7 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-luxe text-muted">Наші бренди</p>
+            <h2 className="mt-2 font-display text-2xl text-ink md:text-3xl">
+              Європейські марки в одному місці
+            </h2>
+          </div>
+          <Link href="/catalog" className="link-underline hidden shrink-0 whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink sm:block">
+            Усі бренди →
+          </Link>
         </div>
-        <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-          {ordered.map((brand) => (
-            <li key={brand.slug}>
+        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
+          {ordered.map((brand, i) => (
+            <li key={brand.slug} className={i >= 8 ? "hidden sm:block" : ""}>
               <Link
                 href={`/catalog?brand=${brand.slug}`}
                 aria-label={brand.name}
-                className="flex h-[76px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
+                className="flex h-[68px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-4 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)] md:h-[76px] md:px-5"
                 title={brand.name}
               >
                 <BrandLogo
                   name={brand.name}
                   src={brand.logo}
-                  imgClass="max-h-[46px] max-w-full object-contain"
-                  textClass="whitespace-nowrap font-display text-[17px] tracking-wide text-ink/70"
+                  imgClass="max-h-[42px] max-w-full object-contain md:max-h-[46px]"
+                  textClass="whitespace-nowrap font-display text-[15px] tracking-wide text-ink/70 md:text-[17px]"
                 />
               </Link>
             </li>
           ))}
         </ul>
+        <div className="mt-5 text-center sm:hidden">
+          <Link href="/catalog" className="link-underline text-[11px] uppercase tracking-luxe text-ink">
+            Усі бренди →
+          </Link>
+        </div>
       </div>
     </section>
   );
