@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { isAdmin } from "@/lib/adminAuth";
 import { CONNECTION_STRING } from "@/lib/pg";
+import { logActivity } from "@/lib/activity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   if (!(await isAdmin())) return new Response("Unauthorized", { status: 401 });
 
+  logActivity("export", "Завантажено повний дамп бази (.sql)");
   const child = spawn("pg_dump", ["--no-owner", "--no-privileges", "--clean", "--if-exists", CONNECTION_STRING], {
     stdio: ["ignore", "pipe", "pipe"],
   });

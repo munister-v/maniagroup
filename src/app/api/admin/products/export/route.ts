@@ -1,5 +1,6 @@
 import { isAdmin } from "@/lib/adminAuth";
 import { exportAdminProducts, parseFilterParams } from "@/lib/products";
+import { logActivity } from "@/lib/activity";
 import * as XLSX from "xlsx";
 
 /**
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
   const cols = colsParam ? colsParam.split(",").map((c) => c.trim()).filter(Boolean) : null;
 
   const rows = await exportAdminProducts({ ...parseFilterParams(searchParams), ids });
+  logActivity("export", `Каталог → ${format.toUpperCase()} (${rows.length} товарів)`, rows.length);
 
   // Flatten to localized, ordered columns for human-friendly spreadsheets.
   const ALL: Record<string, (r: typeof rows[number]) => string | number> = {

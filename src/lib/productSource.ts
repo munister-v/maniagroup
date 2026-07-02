@@ -1,13 +1,18 @@
 /**
- * Product source — Postgres only. Mania Group's own store engine is now the
- * single source of truth; WooCommerce is no longer queried at runtime (it is
- * only used by the one-shot import script in catalogImport.ts / wc-import).
+ * Product source — Postgres only, READ-ONLY. Powers the public storefront
+ * (catalog listing, product page, search) — never writes to `products` or
+ * `product_variants`. WooCommerce is no longer queried at runtime.
+ *
+ * Writers are lib/products.ts (admin CRUD) and lib/erp.ts / stockImport.ts
+ * (variant stock + the products.is_in_stock mirror) — see lib/erp.ts header
+ * for the mirror contract between the two.
  */
 
 import type { Product } from "./catalog";
 import { q, q1 } from "./pg";
 import { ukrainianize, expandSearchTerms, translateMaterials, translateSeason, translateCountry } from "./uk";
 import { colorLabel } from "./colors";
+import { getSetting } from "./settings";
 
 // WcCategory shape kept for callers; categories now come from our own table.
 export type WcCategory = { id: number; name: string; slug: string; parent: number; count: number };
@@ -77,6 +82,8 @@ export type CatalogQuery = {
   size?: string;
   sizes?: string[];
   inStock?: boolean;
+  /** Only products with an active discount (sale_price < regular_price). */
+  onSale?: boolean;
   minPrice?: number;
   maxPrice?: number;
   /** Storefront default: only show products that have a photo. Pass false to include photoless. */
@@ -104,6 +111,7 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   const bind: unknown[] = [];
   const p = (v: unknown) => { bind.push(v); return `$${bind.length}`; };
 
+  let relevance: string | null = null;
   if (params.q && params.q.trim()) {
     const term = params.q.trim();
     const ors: string[] = [];
@@ -128,7 +136,26 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
       ors.push(`${strip("sku")} ILIKE ${p("%" + compact + "%")}`);
       ors.push(`${strip("name")} ILIKE ${p("%" + compact + "%")}`);
     }
+    // Trigram fuzzy match (pg_trgm) — catches typos/close spellings the exact
+    // ILIKE patterns above miss (e.g. one wrong letter in a brand or product
+    // name). word_similarity(), not similarity(): `name` is a long composite
+    // string ("Сукня EA7 жіноча (3DTA62 TJ01Z 1200)") — whole-string
+    // similarity() against a short query gets diluted by the brand/article
+    // noise and never crosses a sane threshold. word_similarity() instead
+    // finds the best-matching substring, which is what "typo in one word"
+    // actually needs.
+    const termParam = p(term);
+    ors.push(`word_similarity(${termParam}, name) > 0.4`);
+    ors.push(`word_similarity(${termParam}, brand) > 0.4`);
     conds.push(`(${ors.join(" OR ")})`);
+
+    // Relevance score for ORDER BY — otherwise matches come back in arbitrary
+    // id order regardless of how well they match the query. name > sku > brand.
+    relevance = `GREATEST(
+      word_similarity(${termParam}, name),
+      similarity(sku, ${termParam}) * 0.85,
+      word_similarity(${termParam}, brand) * 0.7
+    )`;
   }
   if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
   if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
@@ -152,18 +179,30 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
     conds.push(`(${ors.join(" OR ")})`);
   }
   if (params.inStock)       conds.push(`is_in_stock = TRUE`);
+  if (params.onSale)        conds.push(`sale_price IS NOT NULL AND sale_price < regular_price`);
   if (params.minPrice)      conds.push(`price >= ${p(params.minPrice)}`);
   if (params.maxPrice)      conds.push(`price <= ${p(params.maxPrice)}`);
 
   const hasImg = `(images IS NOT NULL AND images::text NOT IN ('[]','null',''))`;
-  // Storefront only shows photographed products by default ("свіжі і з фото скрізь").
-  if (params.requireImage !== false) conds.push(hasImg);
+  // Storefront hides photoless products by default ("свіжі і з фото скрізь") —
+  // callers that need the opposite (feed/export) pass requireImage explicitly.
+  // Everyone else follows the admin-configurable "require_product_photo"
+  // setting (Налаштування → Магазин), so a bulk import that lands products
+  // without photos can be made visible instantly without editing every row.
+  const requireImage = params.requireImage !== undefined
+    ? params.requireImage
+    : (await getSetting("require_product_photo")) !== "0";
+  if (requireImage) conds.push(hasImg);
 
   const where = conds.join(" AND ");
   const order =
     params.orderby === "price"
       ? `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, price ${(params.order ?? "asc").toUpperCase() === "DESC" ? "DESC" : "ASC"}`
-      : `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, id DESC`;
+      // A text search ranks by how well the row matches the query first —
+      // otherwise "best match" and "row #6000" look equally good to the user.
+      : relevance
+        ? `ORDER BY ${relevance} DESC, is_in_stock DESC, ${hasImg}::int DESC, id DESC`
+        : `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, id DESC`;
 
   const limit = params.perPage ?? 24;
   const offset = ((params.page ?? 1) - 1) * limit;
@@ -205,12 +244,23 @@ export async function dbSizeFacets(params: { categorySlug?: string; q?: string }
 
 // ── Categories ─────────────────────────────────────────────────────────
 
+/**
+ * Derived live from `products` (category, category_slug) rather than the
+ * separate `categories` table — nothing writes to that table anymore since
+ * the old TRUNCATE-based catalog importer was removed, and the current ERP
+ * import (lib/stockImport.ts) only ever sets the text fields on `products`.
+ * Deriving on the fly means the nav can never go stale after a fresh import.
+ */
 export async function getCatalogCategories(): Promise<WcCategory[]> {
-  const rows = await q<WcCategory>(
-    "SELECT id, name, slug, parent, count FROM categories WHERE slug <> $1 ORDER BY count DESC, name ASC",
+  const rows = await q<{ name: string; slug: string; count: string }>(
+    `SELECT category AS name, category_slug AS slug, count(*)::text AS count
+       FROM products
+      WHERE status = 'publish' AND category_slug <> '' AND category_slug <> $1
+      GROUP BY category, category_slug
+      ORDER BY count(*) DESC, category ASC`,
     [HIDDEN_CATEGORY_SLUG],
   );
-  return rows.map((c) => ({ ...c, name: ukrainianize(c.name) }));
+  return rows.map((c, i) => ({ id: i + 1, name: ukrainianize(c.name), slug: c.slug, parent: 0, count: Number(c.count) }));
 }
 
 // ── Single product ─────────────────────────────────────────────────────

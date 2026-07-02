@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { getExportRows, buildExport, EXPORT_FORMATS, type ExportFormat, type ExportFilters } from "@/lib/channelExport";
+import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = await getExportRows(filters);
+  logActivity("export", `Каталог (ERP) → ${format.toUpperCase()} (${rows.length})`, rows.length);
   const { filename, contentType, body } = buildExport(format, rows);
 
   return new NextResponse(body as BodyInit, {

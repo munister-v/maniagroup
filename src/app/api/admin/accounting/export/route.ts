@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { q, q1 } from "@/lib/pg";
+import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export async function GET(req: NextRequest) {
   const to     = sp.get("to")   ?? "";
   const status = sp.get("status") ?? "";
   const search = sp.get("q") ?? "";
+  logActivity("export", `Облік (${report}) → ${format.toUpperCase()}`);
 
   // ── Build data ────────────────────────────────────────────────────────
   if (report === "register") {

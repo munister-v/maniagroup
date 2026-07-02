@@ -2,13 +2,14 @@
 
 /* ── Mania Group · design tokens ──────────────────────────────── */
 @theme {
-  /* Warm premium neutrals — paper & ink, restrained palette */
-  --color-ink: #17130f; /* near-black, warm */
-  --color-paper: #f6f3ee; /* off-white background */
-  --color-cloud: #ece7df; /* tile / hairline fill */
-  --color-line: #ddd6cb; /* hairlines & borders */
-  --color-muted: #8c8174; /* secondary text */
+  /* Light minimalist neutrals — near-white paper, faint warm undertone */
+  --color-ink: #1a1714; /* near-black */
+  --color-paper: #fbfaf8; /* near-white background, faint warmth */
+  --color-cloud: #f2efea; /* tile / hairline fill */
+  --color-line: #e7e2d9; /* hairlines & borders */
+  --color-muted: #908676; /* secondary text */
   --color-accent: #7a5c3e; /* bronze — used sparingly */
+  --color-sale: #c1352a; /* sale / discount red */
 
   --font-sans: var(--font-jost), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
@@ -101,11 +102,11 @@ body {
   background-size: 140px 140px;
 }
 .grain-soft {
-  opacity: 0.09;
+  opacity: 0.05;
   mix-blend-mode: multiply;
 }
 .grain-strong {
-  opacity: 0.16;
+  opacity: 0.1;
   mix-blend-mode: soft-light;
 }
 

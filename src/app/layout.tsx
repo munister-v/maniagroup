@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Jost } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { WishlistProvider } from "@/components/WishlistContext";
 import { getSiteContent, announcementActive } from "@/lib/siteContent";
 import { dbBrands } from "@/lib/productSource";
 import { getResolvedBrandLogoMap } from "@/lib/brandLogos";
@@ -109,10 +110,12 @@ export default async function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-        <AnnouncementBar />
-        <Header brands={brands} brandLogos={brandLogos} />
-        <main className="flex-1 pb-14 md:pb-0">{children}</main>
-        <Footer />
+        <WishlistProvider>
+          <AnnouncementBar />
+          <Header brands={brands} brandLogos={brandLogos} />
+          <main className="flex-1 pb-14 md:pb-0">{children}</main>
+          <Footer />
+        </WishlistProvider>
       </body>
     </html>
   );

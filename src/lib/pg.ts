@@ -85,6 +85,30 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   val TEXT NOT NULL DEFAULT ''
 );
 
+-- Admin login brute-force protection. Postgres-backed (not in-memory) because
+-- PM2 runs 2 cluster workers behind a shared port — an in-memory counter
+-- would only see half the attempts on each worker, roughly halving the
+-- effective lockout threshold.
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+  ip            TEXT PRIMARY KEY,
+  count         INT NOT NULL DEFAULT 1,
+  first_attempt TIMESTAMPTZ NOT NULL DEFAULT now(),
+  locked_until  TIMESTAMPTZ
+);
+
+-- Unified admin activity log — one row per meaningful operation (import,
+-- export, bulk save, delete, backup, login…). Powers the Monitoring section
+-- so import/export/saving are all observable in one feed instead of scattered.
+CREATE TABLE IF NOT EXISTS admin_activity (
+  id         BIGSERIAL PRIMARY KEY,
+  action     TEXT NOT NULL,                 -- import | export | save | delete | backup | login | login_fail | photos | settings
+  summary    TEXT NOT NULL DEFAULT '',      -- human-readable one-liner
+  count      INT,                           -- affected rows, when relevant
+  author     TEXT NOT NULL DEFAULT 'admin',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_activity_created ON admin_activity(created_at DESC);
+
 CREATE TABLE IF NOT EXISTS store_settings (
   key TEXT PRIMARY KEY,
   val TEXT NOT NULL DEFAULT ''
@@ -529,12 +553,32 @@ CREATE TABLE IF NOT EXISTS grid_snapshot_items (
 CREATE INDEX IF NOT EXISTS idx_grid_snap_items ON grid_snapshot_items(snapshot_id);
 `;
 
-/** Idempotent schema creation. Awaited by every data-layer call via withDb(). */
+/**
+ * Idempotent schema creation. Uses a PostgreSQL advisory lock so that two
+ * cluster workers starting simultaneously don't deadlock on concurrent DDL
+ * (each ALTER TABLE acquires AccessExclusiveLock; two workers racing = deadlock).
+ * pg_advisory_xact_lock(N) is held for the duration of the transaction and
+ * auto-released on commit — the second worker then runs IF NOT EXISTS no-ops.
+ */
 export function ensureSchema(): Promise<void> {
-  if (!global.__mgSchemaReady) {
-    global.__mgSchemaReady = pool.query(SCHEMA).then(() => undefined);
-  }
-  return global.__mgSchemaReady;
+  if (global.__mgSchemaReady) return global.__mgSchemaReady;
+  const p = (async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(887766554)");
+      await client.query(SCHEMA);
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK").catch(() => {});
+      global.__mgSchemaReady = undefined; // allow retry on next request
+      throw e;
+    } finally {
+      client.release();
+    }
+  })();
+  global.__mgSchemaReady = p;
+  return p;
 }
 
 /** Run a query after guaranteeing the schema exists. */

@@ -40,6 +40,7 @@ export default async function CatalogPage({
     color?: string;
     colors?: string;
     inStock?: string;
+    sale?: string;
     q?: string;
     sort?: string;
     size?: string;
@@ -63,6 +64,7 @@ export default async function CatalogPage({
   const sizeSlugs = Array.from(new Set([...parseList(sp.sizes), ...(sp.size ? [sp.size] : [])]));
   const seasonSlugs = parseList(sp.seasons).filter((s) => s === "summer" || s === "winter");
   const inStock = sp.inStock === "1";
+  const onSale = sp.sale === "1";
 
   const sortKey = sp.sort && SORTS[sp.sort] ? sp.sort : "newest";
   const { orderby, order } = SORTS[sortKey];
@@ -86,6 +88,7 @@ export default async function CatalogPage({
     q,
     sizes: sizeSlugs,
     inStock,
+    onSale,
     minPrice: min ? Number(min) : undefined,
     maxPrice: max ? Number(max) : undefined,
     orderby: orderby === "price" ? "price" : "date",
@@ -118,6 +121,7 @@ export default async function CatalogPage({
     brandGroupTitle ??
     categories.find((c) => c.slug === categorySlug)?.name ??
     GENDERS.find((g) => g.slug === gender)?.label ??
+    (onSale ? "Знижки" : undefined) ??
     (q ? `Пошук: ${q}` : "Усі товари");
 
   const activeFilters = {
@@ -129,6 +133,7 @@ export default async function CatalogPage({
     sizes: sizeSlugs,
     seasons: seasonSlugs,
     inStock,
+    onSale,
     q,
     sort: sortKey,
     min,
@@ -145,6 +150,7 @@ export default async function CatalogPage({
     if (sizeSlugs.length) p.sizes = sizeSlugs.join(",");
     if (seasonSlugs.length) p.seasons = seasonSlugs.join(",");
     if (inStock) p.inStock = "1";
+    if (onSale) p.sale = "1";
     if (q) p.q = q;
     if (min) p.min = min;
     if (max) p.max = max;
@@ -170,41 +176,52 @@ export default async function CatalogPage({
         </div>
       </Reveal>
 
+      {/* Quick chips — prominent shortcuts (Sale / gender / new) */}
+      <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {(() => {
+          const noFacets = { category: undefined, gender: undefined, sale: undefined, brands: undefined, brandGroup: undefined, page: undefined };
+          const chips: { label: string; href: string; active: boolean; sale?: boolean }[] = [
+            { label: "Усі товари", href: buildHref(noFacets), active: !onSale && !gender && !categorySlug && !brandSlugs.length },
+            { label: "🔥 Sale", href: buildHref({ ...noFacets, sale: "1" }), active: onSale, sale: true },
+            { label: "Жінкам", href: buildHref({ ...noFacets, gender: "women" }), active: gender === "women" },
+            { label: "Чоловікам", href: buildHref({ ...noFacets, gender: "men" }), active: gender === "men" },
+          ];
+          return chips.map((c) => (
+            <Link
+              key={c.label}
+              href={c.href}
+              className={`shrink-0 whitespace-nowrap border px-5 py-2.5 text-[11px] uppercase tracking-luxe transition-colors ${
+                c.active
+                  ? c.sale
+                    ? "border-[var(--color-sale)] bg-[var(--color-sale)] text-white"
+                    : "border-ink bg-ink text-paper"
+                  : c.sale
+                    ? "border-[var(--color-sale)]/40 text-[var(--color-sale)] hover:border-[var(--color-sale)]"
+                    : "border-line text-ink hover:border-ink"
+              }`}
+            >
+              {c.label}
+            </Link>
+          ));
+        })()}
+      </div>
+
       <div className="mt-6 grid gap-4 md:mt-8 lg:grid-cols-[220px_1fr] lg:gap-12">
         <div className="lg:pt-1">
           <CatalogFilters facets={facets} active={activeFilters} />
         </div>
 
         <div className="min-w-0">
-          {/* Gender toggle + mobile sort */}
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="flex gap-2">
-              {GENDERS.map((g) => {
-                const active = gender === g.slug;
-                return (
-                  <Link
-                    key={g.slug}
-                    href={buildHref({ gender: active ? undefined : g.slug, page: undefined })}
-                    className={`border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors sm:px-5 ${
-                      active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
-                    }`}
-                  >
-                    {g.label}
-                  </Link>
-                );
-              })}
-            </div>
-            {/* mobile sort dropdown — desktop uses the inline link row below */}
-            <div className="md:hidden">
-              <CatalogSort
-                value={sortKey}
-                options={Object.entries(SORTS).map(([key, s]) => ({
-                  key,
-                  label: s.short,
-                  href: buildHref({ sort: key === "newest" ? undefined : key, page: undefined }),
-                }))}
-              />
-            </div>
+          {/* Mobile sort dropdown — desktop uses the inline link row below */}
+          <div className="mb-4 flex items-center justify-end md:hidden">
+            <CatalogSort
+              value={sortKey}
+              options={Object.entries(SORTS).map(([key, s]) => ({
+                key,
+                label: s.short,
+                href: buildHref({ sort: key === "newest" ? undefined : key, page: undefined }),
+              }))}
+            />
           </div>
 
           {/* Brand chips — horizontal scroll (tablet/desktop only; mobile uses Фільтри).

@@ -1,0 +1,30 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /account/
+Disallow: /cart/
+Disallow: /checkout/
+
+# Block AI crawlers from catalog filter combinations (prevent traffic explosion)
+User-agent: GPTBot
+Disallow: /catalog?*
+
+User-agent: meta-externalagent
+Disallow: /catalog?*
+
+User-agent: FacebookBot
+Disallow: /catalog?*
+
+User-agent: CCBot
+Disallow: /catalog?*
+
+User-agent: anthropic-ai
+Disallow: /catalog?*
+
+User-agent: Claude-Web
+Disallow: /catalog?*
+
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: https://maniagroup.munister.com.ua/sitemap.xml

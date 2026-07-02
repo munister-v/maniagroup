@@ -1,10 +1,9 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
-import { Grain } from "@/components/Grain";
 import { NewsletterForm } from "@/components/NewsletterForm";
+import { ProductRail } from "@/components/ProductRail";
 import { CATEGORIES, type Product } from "@/lib/catalog";
 import { getProducts, getFeaturedProducts, dbBrands } from "@/lib/productSource";
 import { getResolvedBrandLogoMap, resolveBrandLogo } from "@/lib/brandLogos";
@@ -18,7 +17,7 @@ export const metadata = {
 export default async function Home() {
   let products: Product[] = [];
   try {
-    const res = await getProducts({ perPage: 8, orderby: "date", order: "desc" });
+    const res = await getProducts({ perPage: 12, orderby: "date", order: "desc" });
     products = res.products;
   } catch {
     products = [];
@@ -27,7 +26,7 @@ export default async function Home() {
   const content = await getSiteContent();
 
   let featured: Product[] = [];
-  try { featured = await getFeaturedProducts(8); } catch { featured = []; }
+  try { featured = await getFeaturedProducts(12); } catch { featured = []; }
 
   let brands: { name: string; slug: string }[] = [];
   try { brands = await dbBrands(); } catch { brands = []; }
@@ -35,8 +34,6 @@ export default async function Home() {
   let brandLogos: Record<string, string> = {};
   try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
 
-  // Keep the hero "брендів" stat truthful: replace its value with the live
-  // brand count (rounded down to a tidy 10), leaving the admin's other stats.
   const hero = brands.length
     ? {
         ...content.hero,
@@ -50,17 +47,15 @@ export default async function Home() {
 
   const sectionMap: Record<string, React.ReactNode> = {
     hero: <Hero hero={hero} />,
-    marquee: <BrandMarquee brands={brands} logoMap={brandLogos} />,
-    categories: <CategoryTrio />,
-    featured: <Featured products={featured} />,
-    newArrivals: <NewArrivals products={products} />,
-    editorial: <Editorial />,
+    marquee: <BrandStrip brands={brands} logoMap={brandLogos} />,
+    categories: <PromoTiles />,
+    featured: <ProductRail title="Обране" eyebrow="Кураторський вибір" href="/catalog" products={featured} />,
+    newArrivals: <ProductRail title="Нові надходження" eyebrow="Щойно завезли" href="/catalog" products={products} />,
+    editorial: <PromoBanner />,
     services: <ServiceRow services={content.services} />,
     newsletter: <Newsletter />,
   };
 
-  // Render in admin-configured order; append any sections missing from the
-  // saved config (e.g. newly added) so nothing silently disappears.
   const configured = content.homeSections.filter((s) => sectionMap[s.id]);
   const missing = Object.keys(sectionMap)
     .filter((id) => !configured.some((s) => s.id === id))
@@ -79,187 +74,104 @@ export default async function Home() {
 }
 
 /* ─────────────────────────────────────────────────────────── Hero */
+// Answear-style: full-bleed campaign photo, bold uppercase sans headline,
+// clean CTAs, followed by a thin benefits bar.
 function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string; stats: { value: string; label: string }[] } }) {
   return (
-    <section className="relative isolate -mt-16 overflow-hidden bg-ink text-paper md:-mt-[120px]">
-      <Image
-        src="/images/hero.webp"
-        alt="Mania Group — нова колекція"
-        fill
-        priority
-        sizes="100vw"
-        className="absolute inset-0 -z-20 object-cover object-center"
-      />
-      <div
-        className="absolute inset-0 -z-10"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, rgba(18,14,10,0.92) 0%, rgba(18,14,10,0.62) 38%, rgba(18,14,10,0.18) 70%, rgba(18,14,10,0.45) 100%)",
-        }}
-      />
-      <Grain variant="strong" />
-
-      <div className="wrap relative flex min-h-[88vh] flex-col justify-center py-20 md:py-28">
-        <p
-          className="hero-rise text-[11px] uppercase tracking-luxe text-paper/55"
-          style={{ animationDelay: "0ms" }}
-        >
-          {hero.eyebrow}
-        </p>
-        <h1
-          className="hero-rise mt-6 max-w-[15ch] font-display text-[clamp(2.8rem,8vw,7rem)] font-semibold leading-[0.93] tracking-tight"
-          style={{ animationDelay: "90ms" }}
-        >
-          {hero.titleLine1}{" "}
-          <span className="italic text-[#d8c7a8]">{hero.titleAccent}</span>
-        </h1>
-        <p
-          className="hero-rise mt-7 max-w-md text-base leading-relaxed text-paper/70"
-          style={{ animationDelay: "180ms" }}
-        >
-          {hero.subtitle}
-        </p>
+    <>
+      <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(440px, 50vw, 580px)" }}>
+        <Image
+          src="/images/hero.webp"
+          alt="Mania Group — нова колекція"
+          fill
+          priority
+          sizes="100vw"
+          className="absolute inset-0 -z-20 object-cover object-[60%_top]"
+        />
         <div
-          className="hero-rise mt-9 flex flex-wrap items-center gap-5"
-          style={{ animationDelay: "270ms" }}
-        >
-          <Link
-            href="/catalog"
-            className="inline-flex h-12 items-center bg-paper px-8 text-[12px] uppercase tracking-luxe text-ink transition-opacity hover:opacity-85"
-          >
-            Перейти до каталогу
-          </Link>
-          <Link
-            href="/catalog"
-            className="link-underline text-[12px] uppercase tracking-luxe text-paper"
-          >
-            Усі бренди →
-          </Link>
-        </div>
-        <dl
-          className="hero-rise mt-10 grid max-w-md grid-cols-3 gap-4 border-t border-paper/15 pt-6 md:mt-12 md:gap-6"
-          style={{ animationDelay: "340ms" }}
-        >
-          {hero.stats.map((s) => (
-            <div key={s.label}>
-              <dt className="font-display text-2xl text-paper md:text-3xl">{s.value}</dt>
-              <dd className="mt-1 whitespace-nowrap text-[10px] uppercase tracking-luxe text-paper/55">{s.label}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
+          className="absolute inset-0 -z-10"
+          style={{
+            background:
+              "linear-gradient(95deg, rgba(12,10,8,0.78) 0%, rgba(12,10,8,0.55) 32%, rgba(12,10,8,0.18) 58%, rgba(12,10,8,0.0) 78%)",
+          }}
+        />
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-6 hidden justify-center md:flex">
-        <span className="text-[10px] uppercase tracking-luxe text-paper/45">
-          Гортайте ↓
-        </span>
-      </div>
-    </section>
-  );
-}
-
-/* ───────────────────────────────────────────────── Brand strip */
-// Static (non-scrolling) strip of every brand in the catalog, logos first.
-function BrandMarquee({
-  brands,
-  logoMap,
-}: {
-  brands: { name: string; slug: string }[];
-  logoMap: Record<string, string>;
-}) {
-  if (brands.length === 0) return null;
-  // Resolve each brand's logo, sort logo-first, cap so the static strip stays
-  // tidy. The full list lives in the header «Бренди» menu and the catalog.
-  // Deduplicate families sharing the same logo URL, keep shortest name
-  const byLogoUrl = new Map<string, { name: string; slug: string; logo: string }>();
-  for (const b of brands) {
-    const logo = resolveBrandLogo(b.name, logoMap);
-    if (!logo) continue;
-    const existing = byLogoUrl.get(logo);
-    if (!existing || b.name.length < existing.name.length) {
-      byLogoUrl.set(logo, { ...b, logo });
-    }
-  }
-  // Curated wall: 18 key brands on desktop (6×3), 8 on mobile (rest hidden).
-  const ordered = [...byLogoUrl.values()].slice(0, 18);
-  return (
-    <section id="brands" className="border-y border-line py-9 md:py-11">
-      <div className="wrap">
-        <div className="mb-7 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-luxe text-muted">Наші бренди</p>
-            <h2 className="mt-2 font-display text-2xl text-ink md:text-3xl">
-              Європейські марки в одному місці
-            </h2>
+        <div className="wrap relative flex h-full flex-col justify-center py-14 md:py-16">
+          <p className="hero-rise text-[11px] font-semibold uppercase tracking-[0.25em] text-paper/70" style={{ animationDelay: "0ms" }}>
+            {hero.eyebrow}
+          </p>
+          <h1 className="hero-rise mt-3 max-w-[16ch] font-sans leading-[0.92] tracking-tight text-paper" style={{ animationDelay: "80ms" }}>
+            <span className="block text-[clamp(2.4rem,5.4vw,4.6rem)] font-black uppercase">{hero.titleLine1}</span>
+            <span className="block text-[clamp(2.4rem,5.4vw,4.6rem)] font-black uppercase">{hero.titleAccent}</span>
+          </h1>
+          <p className="hero-rise mt-5 max-w-[40ch] text-[14px] leading-relaxed text-paper/70" style={{ animationDelay: "150ms" }}>
+            {hero.subtitle}
+          </p>
+          <div className="hero-rise mt-10 flex flex-wrap items-center gap-3 md:mt-7" style={{ animationDelay: "220ms" }}>
+            <Link href="/catalog" className="inline-flex h-12 items-center bg-paper px-8 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-opacity hover:opacity-90">
+              До каталогу
+            </Link>
+            <Link href="/sale" className="inline-flex h-12 items-center bg-[#c1352a] px-8 text-[12px] font-bold uppercase tracking-[0.14em] text-paper transition-opacity hover:opacity-90">
+              Sale −50%
+            </Link>
           </div>
-          <Link href="/catalog" className="link-underline hidden shrink-0 whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink sm:block">
-            Усі бренди →
-          </Link>
         </div>
-        <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3 md:grid-cols-6">
-          {ordered.map((brand, i) => (
-            <li key={brand.slug} className={i >= 8 ? "hidden sm:block" : ""}>
-              <Link
-                href={`/catalog?brand=${brand.slug}`}
-                aria-label={brand.name}
-                className="flex h-[68px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-4 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)] md:h-[76px] md:px-5"
-                title={brand.name}
-              >
-                <BrandLogo
-                  name={brand.name}
-                  src={brand.logo}
-                  imgClass="max-h-[42px] max-w-full object-contain md:max-h-[46px]"
-                  textClass="whitespace-nowrap font-display text-[15px] tracking-wide text-ink/70 md:text-[17px]"
-                />
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-5 text-center sm:hidden">
-          <Link href="/catalog" className="link-underline text-[11px] uppercase tracking-luxe text-ink">
-            Усі бренди →
-          </Link>
-        </div>
-      </div>
-    </section>
+      </section>
+
+      <BenefitsBar />
+    </>
   );
 }
 
-/* ──────────────────────────────────────────────── Category trio */
-function CategoryTrio() {
+/* ─────────────────────────────────────────────── Benefits bar */
+function BenefitsBar() {
+  const items = [
+    { t: "Доставка Новою Поштою", s: "по всій Україні", d: "M3 13l1-5h13l3 4v4h-2M5 17H3v-4m2 4a2 2 0 104 0m-4 0a2 2 0 114 0m10 0a2 2 0 11-4 0m4 0a2 2 0 10-4 0m4-4h-5" },
+    { t: "100% оригінал", s: "офіційні бренди", d: "M9 12l2 2 4-4m-1.4-5.7a3 3 0 00-3.2 0l-1 .6a3 3 0 01-1.5.4H6a3 3 0 00-3 3v1.4a3 3 0 01-.4 1.5l-.6 1a3 3 0 000 3.2l.6 1a3 3 0 01.4 1.5V18a3 3 0 003 3h1.4a3 3 0 011.5.4l1 .6a3 3 0 003.2 0l1-.6a3 3 0 011.5-.4H18a3 3 0 003-3v-1.4a3 3 0 01.4-1.5l.6-1a3 3 0 000-3.2l-.6-1a3 3 0 01-.4-1.5V6a3 3 0 00-3-3h-1.4a3 3 0 01-1.5-.4z" },
+    { t: "Обмін і повернення", s: "протягом 14 днів", d: "M3 12a9 9 0 019-9 9 9 0 016.7 3M21 12a9 9 0 01-9 9 9 9 0 01-6.7-3M21 3v6h-6M3 21v-6h6" },
+    { t: "Оплата при отриманні", s: "або онлайн-карткою", d: "M3 10h18M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" },
+  ];
   return (
-    <section className="wrap py-16 md:py-24">
-      <div className="grid gap-4 md:grid-cols-2">
-        {CATEGORIES.map((cat, i) => (
-          <Reveal key={cat.href} delay={i * 80}>
-            <Link
-              href={cat.href}
-              style={{ backgroundColor: cat.tone }}
-              className="group relative flex aspect-[3/4] flex-col justify-end overflow-hidden p-7 md:aspect-[4/5]"
-            >
-              <Image
-                src={cat.image}
-                alt={cat.label}
-                fill
-                sizes="(min-width: 768px) 33vw, 100vw"
-                className="object-cover transition-transform duration-[1300ms] ease-out group-hover:scale-105"
-              />
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundImage:
-                    "linear-gradient(180deg, rgba(23,19,15,0) 28%, rgba(23,19,15,0.66) 100%)",
-                }}
-              />
-              <Grain />
-              <div className="pointer-events-none absolute inset-4 border border-paper/15" />
-              <div className="relative text-paper">
-                <h3 className="font-display text-3xl md:text-4xl">{cat.label}</h3>
-                <p className="mt-1.5 text-[12px] uppercase tracking-luxe text-paper/85">
-                  {cat.caption}
-                </p>
-                <span className="mt-5 inline-flex h-11 items-center bg-paper px-6 text-[11px] uppercase tracking-luxe text-ink transition-opacity group-hover:opacity-85">
-                  Дивитися каталог →
+    <div className="border-b border-line bg-white">
+      <div className="wrap grid grid-cols-2 gap-x-4 gap-y-4 py-5 lg:grid-cols-4">
+        {items.map((it) => (
+          <div key={it.t} className="flex items-center gap-3">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6 shrink-0 text-ink"><path d={it.d} strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold leading-tight text-ink">{it.t}</p>
+              <p className="text-[11px] leading-tight text-muted">{it.s}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────── Promo tiles */
+// Answear-style promo grid: two big category tiles + a bold SALE tile.
+function PromoTiles() {
+  const tiles = [
+    { label: CATEGORIES[0]?.label ?? "Жінкам", caption: CATEGORIES[0]?.caption ?? "", href: CATEGORIES[0]?.href ?? "/catalog", image: CATEGORIES[0]?.image ?? "/images/cat-women.webp", dark: false },
+    { label: CATEGORIES[1]?.label ?? "Чоловікам", caption: CATEGORIES[1]?.caption ?? "", href: CATEGORIES[1]?.href ?? "/catalog", image: CATEGORIES[1]?.image ?? "/images/cat-men.webp", dark: false },
+  ];
+  return (
+    <section className="wrap py-10 md:py-14">
+      <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+        {tiles.map((t, i) => (
+          <Reveal key={t.label} delay={i * 60}>
+            <Link href={t.href} className="group relative flex aspect-[4/5] flex-col justify-end overflow-hidden md:aspect-[3/4]">
+              <Image src={t.image} alt={t.label} fill sizes="(min-width:768px) 33vw, 100vw"
+                className="object-cover transition-transform duration-[1100ms] ease-out group-hover:scale-[1.05]" />
+              <div className="absolute inset-0" style={{ backgroundImage: t.dark
+                ? "linear-gradient(180deg, rgba(193,53,42,0.15) 0%, rgba(120,20,14,0.85) 100%)"
+                : "linear-gradient(180deg, rgba(23,19,15,0) 38%, rgba(23,19,15,0.74) 100%)" }} />
+              <div className="relative p-6 text-paper md:p-7">
+                {t.dark && <span className="mb-2 inline-block bg-paper px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#c1352a]">−50%</span>}
+                <h3 className="text-[2rem] font-black uppercase leading-none tracking-tight md:text-[2.6rem]">{t.label}</h3>
+                {t.caption && <p className="mt-2 text-[12px] text-paper/75">{t.caption}</p>}
+                <span className="mt-5 inline-flex h-11 items-center bg-paper px-6 text-[11px] font-bold uppercase tracking-[0.14em] text-ink transition-colors group-hover:bg-ink group-hover:text-paper">
+                  Переглянути →
                 </span>
               </div>
             </Link>
@@ -270,108 +182,62 @@ function CategoryTrio() {
   );
 }
 
-/* ───────────────────────────────────────────────── New arrivals */
-function Featured({ products }: { products: Product[] }) {
-  if (products.length === 0) return null;
+/* ───────────────────────────────────────────────── Brand strip */
+function BrandStrip({ brands, logoMap }: { brands: { name: string; slug: string }[]; logoMap: Record<string, string> }) {
+  if (brands.length === 0) return null;
+  const byLogoUrl = new Map<string, { name: string; slug: string; logo: string }>();
+  for (const b of brands) {
+    const logo = resolveBrandLogo(b.name, logoMap);
+    if (!logo) continue;
+    const existing = byLogoUrl.get(logo);
+    if (!existing || b.name.length < existing.name.length) byLogoUrl.set(logo, { ...b, logo });
+  }
+  const ordered = [...byLogoUrl.values()].slice(0, 18);
   return (
-    <section className="wrap pb-16 md:pb-24">
-      <Reveal>
-        <div className="mb-8 flex items-end justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-luxe text-muted">Кураторський вибір</p>
-            <h2 className="mt-2 font-display text-3xl text-ink md:text-4xl">Обране</h2>
-          </div>
-          <Link href="/catalog" className="link-underline hidden text-[12px] uppercase tracking-luxe text-ink sm:block">
-            Дивитися все →
-          </Link>
+    <section id="brands" className="border-y border-line bg-white py-9 md:py-12">
+      <div className="wrap">
+        <div className="mb-6 flex items-end justify-between gap-4">
+          <h2 className="text-[1.6rem] font-extrabold uppercase leading-none tracking-tight text-ink md:text-[2.1rem]">Бренди</h2>
+          <Link href="/brands" className="text-[12px] font-semibold uppercase tracking-[0.12em] text-ink underline-offset-4 hover:underline">Усі бренди →</Link>
         </div>
-      </Reveal>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-        {products.map((product, i) => (
-          <Reveal key={product.id} delay={(i % 4) * 70}>
-            <ProductCard product={product} />
-          </Reveal>
-        ))}
+        <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-2.5 md:grid-cols-6">
+          {ordered.map((brand, i) => (
+            <li key={brand.slug} className={i >= 9 ? "hidden sm:block" : ""}>
+              <Link href={`/catalog?brand=${brand.slug}`} aria-label={brand.name} title={brand.name}
+                className="flex h-[64px] items-center justify-center border border-line bg-white px-3 transition-all hover:border-ink/30 hover:shadow-[0_2px_12px_-6px_rgba(23,19,15,0.3)] md:h-[76px] md:px-4">
+                <BrandLogo name={brand.name} src={brand.logo}
+                  imgClass="max-h-[40px] max-w-full object-contain md:max-h-[46px]"
+                  textClass="whitespace-nowrap font-display text-[13px] tracking-wide text-ink/65 md:text-[15px]" />
+              </Link>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
 }
 
-function NewArrivals({ products }: { products: Product[] }) {
+/* ─────────────────────────────────────────────────── Promo banner */
+// Wide full-bleed campaign strip (Answear "shop the collection" banner).
+function PromoBanner() {
   return (
-    <section id="women" className="wrap pb-16 md:pb-24">
+    <section id="men" className="wrap py-10 md:py-14">
       <Reveal>
-        <div className="mb-8 flex items-end justify-between">
-          <div>
-            <p className="text-[11px] uppercase tracking-luxe text-muted">
-              Щойно завезли
+        <Link href="/catalog" className="group relative flex min-h-[300px] items-center overflow-hidden md:min-h-[420px]">
+          <Image src="/images/origine-authentic-detail.png" alt="Нова колекція — Mania Group" fill
+            sizes="100vw" className="object-cover object-center transition-transform duration-[1200ms] ease-out group-hover:scale-[1.04]" />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(12,10,8,0.8) 0%, rgba(12,10,8,0.4) 45%, rgba(12,10,8,0) 75%)" }} />
+          <div className="relative max-w-[44ch] px-7 py-12 text-paper md:px-14">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-paper/65">Нова колекція</p>
+            <h2 className="mt-3 text-[2.2rem] font-black uppercase leading-[0.9] tracking-tight md:text-[3.4rem]">Сезон<br />оригіналів</h2>
+            <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-paper/70">
+              Європейські бренди напряму — без реплік, із гарантією та доставкою Новою Поштою.
             </p>
-            <h2 className="mt-2 font-display text-3xl text-ink md:text-4xl">
-              Нові надходження
-            </h2>
+            <span className="mt-7 inline-flex h-12 items-center bg-paper px-8 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-colors group-hover:bg-[#c1352a] group-hover:text-paper">
+              Дивитись колекцію →
+            </span>
           </div>
-          <Link
-            href="/catalog"
-            className="link-underline hidden text-[12px] uppercase tracking-luxe text-ink sm:block"
-          >
-            Дивитися все →
-          </Link>
-        </div>
-      </Reveal>
-
-      <div className="grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-        {products.map((product, i) => (
-          <Reveal key={product.id} delay={(i % 4) * 70}>
-            <ProductCard product={product} />
-          </Reveal>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-/* ─────────────────────────────────────────────────── Editorial */
-function Editorial() {
-  return (
-    <section id="men" className="wrap py-8">
-      <Reveal>
-        <div className="grid items-center gap-8 overflow-hidden bg-ink text-paper md:grid-cols-2">
-          <div className="relative min-h-[320px] md:min-h-[480px]">
-            <Image
-              src="/images/origine-authentic-detail.png"
-              alt="Оригінальна деталь — Mania Group"
-              fill
-              sizes="(min-width: 768px) 50vw, 100vw"
-              className="object-cover object-center"
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage:
-                  "linear-gradient(160deg, rgba(23,19,15,0) 50%, rgba(23,19,15,0.35) 100%)",
-              }}
-            />
-          </div>
-          <div className="px-8 py-12 md:px-12 md:py-16">
-            <p className="text-[11px] uppercase tracking-luxe text-paper/60">
-              Чому Mania Group
-            </p>
-            <h2 className="mt-4 font-display text-3xl leading-snug md:text-[2.6rem]">
-              Кожна деталь —<br />оригінал
-            </h2>
-            <p className="mt-5 max-w-md text-sm leading-relaxed text-paper/75">
-              Ми працюємо напряму з європейськими брендами та офіційними
-              дистриб&rsquo;юторами. Жодних реплік — лише автентичні речі з повним
-              пакетом гарантій, дбайливою упаковкою та доставкою Новою Поштою.
-            </p>
-            <Link
-              href="/about"
-              className="mt-8 inline-flex h-12 items-center border border-paper/40 px-8 text-[12px] uppercase tracking-luxe text-paper transition-colors hover:bg-paper hover:text-ink"
-            >
-              Про нас
-            </Link>
-          </div>
-        </div>
+        </Link>
       </Reveal>
     </section>
   );
@@ -380,19 +246,20 @@ function Editorial() {
 /* ─────────────────────────────────────────────── Service row */
 function ServiceRow({ services }: { services: { title: string; text: string }[] }) {
   return (
-    <section id="delivery" className="wrap py-16 md:py-20">
-      <Reveal>
-        <div className="grid gap-px overflow-hidden border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
-          {services.map((s) => (
-            <div key={s.title} className="bg-paper p-7">
-              <h3 className="text-[12px] uppercase tracking-luxe text-ink">
-                {s.title}
-              </h3>
-              <p className="mt-3 text-sm leading-relaxed text-muted">{s.text}</p>
-            </div>
-          ))}
-        </div>
-      </Reveal>
+    <section id="delivery" className="border-t border-line bg-cloud/40 py-12 md:py-16">
+      <div className="wrap">
+        <Reveal>
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            {services.map((s) => (
+              <div key={s.title}>
+                <h3 className="text-[12px] font-bold uppercase tracking-[0.16em] text-ink">{s.title}</h3>
+                <div className="mt-3 h-0.5 w-8 bg-[#c1352a]" />
+                <p className="mt-3 text-[13px] leading-[1.7] text-muted">{s.text}</p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+      </div>
     </section>
   );
 }
@@ -400,20 +267,25 @@ function ServiceRow({ services }: { services: { title: string; text: string }[] 
 /* ─────────────────────────────────────────────── Newsletter */
 function Newsletter() {
   return (
-    <section id="home" className="wrap">
-      <Reveal>
-        <div className="flex flex-col items-center border-t border-line py-16 text-center md:py-20">
-          <p className="text-[11px] uppercase tracking-luxe text-muted">
-            Lookbook &amp; приватні розпродажі
-          </p>
-          <h2 className="mt-3 max-w-xl font-display text-3xl text-ink md:text-4xl">
-            Першими дізнавайтесь про нові надходження
-          </h2>
-          <div className="mt-8 flex w-full justify-center">
-            <NewsletterForm source="home" />
+    <section id="home" className="bg-ink text-paper">
+      <div className="wrap">
+        <Reveal>
+          <div className="flex flex-col items-center py-16 text-center md:flex-row md:justify-between md:py-20 md:text-left">
+            <div className="md:max-w-[46%]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-paper/50">−10% на перше замовлення</p>
+              <h2 className="mt-3 text-[2rem] font-black uppercase leading-[0.95] tracking-tight md:text-[2.8rem]">
+                Підпишись на розсилку
+              </h2>
+              <p className="mt-3 max-w-md text-[13px] leading-relaxed text-paper/55">
+                Нові надходження, закриті розпродажі та персональні пропозиції — раз на тиждень, без спаму.
+              </p>
+            </div>
+            <div className="mt-8 w-full md:mt-0 md:w-auto md:min-w-[360px]">
+              <NewsletterForm source="home" tone="dark" />
+            </div>
           </div>
-        </div>
-      </Reveal>
+        </Reveal>
+      </div>
     </section>
   );
 }

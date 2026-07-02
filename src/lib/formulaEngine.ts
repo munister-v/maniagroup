@@ -246,9 +246,22 @@ class Eval {
       case "CEIL":   case "ПОТОЛОК": return Math.ceil(flat(args[0]));
       case "FLOOR":  case "ПОЛ":     return Math.floor(flat(args[0]));
       case "TRUNC":                  return Math.trunc(flat(args[0]));
+      case "INT":   case "ЦЕЛОЕ":    return Math.floor(flat(args[0]));
       case "SQRT":                   return Math.sqrt(Math.abs(flat(args[0])));
-      case "POW":                    return Math.pow(flat(args[0]), flat(args[1]));
-      case "MOD":                    { const d = flat(args[1]); return d !== 0 ? flat(args[0]) % d : 0; }
+      case "POW":   case "СТЕПЕНЬ":  return Math.pow(flat(args[0]), flat(args[1]));
+      case "MOD":   case "ОСТАТ":    { const d = flat(args[1]); return d !== 0 ? flat(args[0]) % d : 0; }
+      case "SIGN":                   { const n = flat(args[0]); return n > 0 ? 1 : n < 0 ? -1 : 0; }
+      case "CLAMP": {
+        // CLAMP(value, lo, hi) — pin a number into the [lo, hi] range.
+        const v = flat(args[0]), lo = flat(args[1]), hi = flat(args[2]);
+        return Math.min(hi, Math.max(lo, v));
+      }
+      case "MEDIAN": case "МЕДИАНА": {
+        const n = nums().slice().sort((a, b) => a - b);
+        if (!n.length) return 0;
+        const mid = Math.floor(n.length / 2);
+        return n.length % 2 ? n[mid] : (n[mid - 1] + n[mid]) / 2;
+      }
 
       /* ── logic ── */
       case "IF":   case "ЕСЛИ": {

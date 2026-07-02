@@ -9,6 +9,15 @@
  * on a passive seed (which would wrongly zero out freshly-imported products).
  *
  * Every change writes a stock_movements row for a full audit trail.
+ *
+ * DESYNC GOTCHA: lib/products.ts (admin grid — CatalogGrid bulk actions
+ * "В наявн." / "Немає", or an inline is_in_stock edit) writes products.is_in_stock
+ * directly, bypassing the variant mirror above. The next stockImport.ts import
+ * or ERP stock edit recomputes the mirror from product_variants and silently
+ * overwrites that manual override. If a manually-toggled stock flag "reverts
+ * itself" after an import, this is why — the fix is to edit variant stock
+ * (ERP), not the products-table flag, for anything that should survive a
+ * re-import.
  */
 
 import type { PoolClient } from "pg";
@@ -241,10 +250,23 @@ async function recomputeProductStock(client: PoolClient, productId: number): Pro
   return total;
 }
 
+/** Sortable columns whitelist → SQL ORDER BY expression (prevents injection). */
+const ERP_SORT_COLS: Record<string, string> = {
+  name: "p.name",
+  brand: "p.brand",
+  price: "p.price",
+  stock: "COALESCE(p.stock_qty,0)",
+  status: "p.status",
+  created: "p.created_at",
+  updated: "p.updated_at",
+  category: "p.category",
+};
+
 /** Product list for the ERP grid, with stock summary. */
 export async function listErpProducts(opts: {
   q?: string; page?: number; perPage?: number; stock?: "in" | "out" | ""; status?: string;
   categories?: string[]; brands?: string[]; gender?: string; season?: string;
+  sortBy?: string; sortDir?: "asc" | "desc";
 }): Promise<{ products: ErpProductRow[]; total: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const perPage = Math.min(100, opts.perPage ?? 50);
@@ -253,8 +275,14 @@ export async function listErpProducts(opts: {
   const conds: string[] = [];
   const bind: unknown[] = [];
   if (opts.q?.trim()) {
+    // Extended search: name / brand / sku / factory_article, plus variant
+    // barcode & offer_code via EXISTS (find a product by scanning a size).
     bind.push("%" + opts.q.trim() + "%");
-    conds.push(`(p.name ILIKE $${bind.length} OR p.brand ILIKE $${bind.length} OR p.sku ILIKE $${bind.length})`);
+    const i = bind.length;
+    conds.push(`(p.name ILIKE $${i} OR p.brand ILIKE $${i} OR p.sku ILIKE $${i}
+      OR p.factory_article ILIKE $${i}
+      OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id
+                 AND (v.barcode ILIKE $${i} OR v.offer_code ILIKE $${i})))`);
   }
   if (opts.status && (ERP_STATUSES as string[]).includes(opts.status)) {
     bind.push(opts.status);
@@ -271,6 +299,13 @@ export async function listErpProducts(opts: {
   if (opts.season?.trim()) { bind.push(opts.season.trim()); conds.push(`p.season = $${bind.length}`); }
   const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
 
+  // ORDER BY: whitelisted column + direction, or default in-stock-first.
+  const sortExpr = opts.sortBy && ERP_SORT_COLS[opts.sortBy];
+  const dir = opts.sortDir === "asc" ? "ASC" : "DESC";
+  const orderBy = sortExpr
+    ? `${sortExpr} ${dir} NULLS LAST, p.id`
+    : "p.is_in_stock DESC, p.brand, p.name";
+
   const countRow = await q1<{ n: string }>(`SELECT COUNT(*)::text AS n FROM products p ${where}`, bind);
   const rows = await q<ErpProductRow & { price: string; stock_qty: string; variant_count: string; variant_units: string }>(
     `SELECT p.id::text, p.name, p.brand, p.sku, p.factory_article, p.category,
@@ -281,7 +316,7 @@ export async function listErpProducts(opts: {
             (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id)::text AS variant_count,
             (SELECT COALESCE(SUM(stock_qty),0) FROM product_variants v WHERE v.product_id = p.id)::text AS variant_units
      FROM products p ${where}
-     ORDER BY p.is_in_stock DESC, p.brand, p.name
+     ORDER BY ${orderBy}
      LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`,
     bind,
   );
@@ -345,10 +380,157 @@ export async function getProduct(productId: number) {
             sale_price::float::text AS sale_price, cost_price::float::text AS cost_price,
             image_src, images, is_in_stock, COALESCE(stock_qty,0)::text AS stock_qty,
             color, composition, season, country, collection, description,
+            meta_title, meta_description,
             created_at, updated_at
        FROM products WHERE id = $1`,
     [productId],
   );
+}
+
+/* ── Data quality: scan the catalogue for missing / inconsistent data ─────── */
+
+export type DataQualityIssue = {
+  key: string;
+  label: string;
+  severity: "error" | "warn" | "info";
+  count: number;
+  /** WHERE clause used by the drill-down list endpoint. */
+  filter: string;
+};
+
+/**
+ * One pass over the products table counting every common data gap. Each issue
+ * carries the SQL predicate so the UI can drill into the exact rows and the
+ * operator can jump straight to fixing them. Built for the XLS-imported catalog
+ * where descriptive fields are routinely empty.
+ */
+export async function dataQualityReport(): Promise<{ total: number; issues: DataQualityIssue[] }> {
+  const CHECKS: { key: string; label: string; severity: "error" | "warn" | "info"; filter: string }[] = [
+    { key: "no_price",    label: "Без ціни (= 0)",            severity: "error", filter: "COALESCE(p.regular_price,0) <= 0" },
+    { key: "no_brand",    label: "Без бренду",                severity: "error", filter: "p.brand = '' OR p.brand = 'Mania Group'" },
+    { key: "no_category", label: "Без категорії",             severity: "warn",  filter: "p.category = ''" },
+    { key: "no_photo",    label: "Без фото",                  severity: "warn",  filter: "p.image_src = '' AND (p.images = '[]'::jsonb OR p.images IS NULL)" },
+    { key: "no_variants", label: "Без розмірів (варіантів)",  severity: "warn",  filter: "NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id)" },
+    { key: "no_cost",     label: "Без собівартості",          severity: "info",  filter: "p.cost_price IS NULL" },
+    { key: "no_color",    label: "Без кольору",               severity: "info",  filter: "p.color = ''" },
+    { key: "no_composition", label: "Без складу тканини",      severity: "info",  filter: "p.composition = ''" },
+    { key: "no_seo",      label: "Без SEO (meta-title)",      severity: "info",  filter: "p.meta_title = ''" },
+    { key: "no_factory_article", label: "Без заводського артикулу", severity: "info", filter: "p.factory_article = ''" },
+    { key: "published_no_stock", label: "Активні, але немає в наявності", severity: "warn", filter: "p.status = 'publish' AND NOT p.is_in_stock" },
+    { key: "stock_mismatch", label: "Залишок ≠ сумі варіантів", severity: "warn",
+      filter: "COALESCE(p.stock_qty,0) <> COALESCE((SELECT SUM(stock_qty) FROM product_variants v WHERE v.product_id = p.id AND v.active),0)" },
+  ];
+
+  // Single grouped query: count every predicate in one table scan.
+  const selectParts = CHECKS.map((c, i) => `COUNT(*) FILTER (WHERE ${c.filter})::int AS c${i}`).join(",\n");
+  const row = await q1<Record<string, number | string>>(
+    `SELECT COUNT(*)::int AS total, ${selectParts} FROM products p`,
+  );
+  const total = Number(row?.total ?? 0);
+  const issues = CHECKS.map((c, i) => ({
+    key: c.key, label: c.label, severity: c.severity,
+    count: Number(row?.[`c${i}`] ?? 0),
+    filter: c.filter,
+  })).filter((iss) => iss.count > 0);
+
+  return { total, issues };
+}
+
+/** Drill-down: the product rows matching one data-quality predicate. */
+export async function dataQualityRows(issueKey: string, limit = 200): Promise<ErpProductRow[]> {
+  const CHECKS: Record<string, string> = {
+    no_price: "COALESCE(p.regular_price,0) <= 0",
+    no_brand: "p.brand = '' OR p.brand = 'Mania Group'",
+    no_category: "p.category = ''",
+    no_photo: "p.image_src = '' AND (p.images = '[]'::jsonb OR p.images IS NULL)",
+    no_variants: "NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = p.id)",
+    no_cost: "p.cost_price IS NULL",
+    no_color: "p.color = ''",
+    no_composition: "p.composition = ''",
+    no_seo: "p.meta_title = ''",
+    no_factory_article: "p.factory_article = ''",
+    published_no_stock: "p.status = 'publish' AND NOT p.is_in_stock",
+    stock_mismatch: "COALESCE(p.stock_qty,0) <> COALESCE((SELECT SUM(stock_qty) FROM product_variants v WHERE v.product_id = p.id AND v.active),0)",
+  };
+  const filter = CHECKS[issueKey];
+  if (!filter) return [];
+  const rows = await q<ErpProductRow & { price: string; stock_qty: string; variant_count: string; variant_units: string }>(
+    `SELECT p.id::text, p.name, p.brand, p.sku, p.factory_article, p.category,
+            p.color, p.season, p.status, p.image_src, p.is_in_stock,
+            p.price::float::text AS price, COALESCE(p.stock_qty,0)::text AS stock_qty,
+            p.created_at, p.updated_at,
+            (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id)::text AS variant_count,
+            (SELECT COALESCE(SUM(stock_qty),0) FROM product_variants v WHERE v.product_id = p.id)::text AS variant_units
+     FROM products p WHERE ${filter}
+     ORDER BY p.brand, p.name LIMIT ${Math.min(500, limit)}`,
+  );
+  return rows.map((r) => ({
+    id: r.id, name: r.name, brand: r.brand, sku: r.sku, factory_article: r.factory_article,
+    category: r.category, color: r.color, season: r.season, status: r.status,
+    image_src: r.image_src, is_in_stock: r.is_in_stock,
+    price: Number(r.price), stock_qty: Number(r.stock_qty),
+    created_at: r.created_at, updated_at: r.updated_at,
+    variant_count: Number(r.variant_count), variant_units: Number(r.variant_units),
+  }));
+}
+
+/** Recompute the products mirror for EVERY product (fixes stock_mismatch en masse). */
+export async function recomputeAllMirrors(): Promise<number> {
+  const res = await pool.query(
+    `UPDATE products p SET
+        stock_qty = sub.total,
+        is_in_stock = (sub.total > 0),
+        updated_at = now()
+     FROM (
+       SELECT p2.id AS pid,
+              COALESCE((SELECT SUM(stock_qty) FROM product_variants v WHERE v.product_id = p2.id AND v.active), 0) AS total
+       FROM products p2
+     ) sub
+     WHERE p.id = sub.pid
+       AND (p.stock_qty IS DISTINCT FROM sub.total OR p.is_in_stock <> (sub.total > 0))`,
+  );
+  return res.rowCount ?? 0;
+}
+
+/* ── Activity log: global audit feed across all products ──────────────────── */
+
+export type ActivityRow = {
+  id: number; product_id: string; product_name: string; brand: string;
+  size: string; type: string; delta: number; qty_after: number | null;
+  note: string; author: string; created_at: string;
+};
+
+export async function getActivityLog(opts: {
+  type?: string; author?: string; page?: number; perPage?: number;
+}): Promise<{ rows: ActivityRow[]; total: number }> {
+  const page = Math.max(1, opts.page ?? 1);
+  const perPage = Math.min(200, opts.perPage ?? 60);
+  const conds: string[] = [];
+  const bind: unknown[] = [];
+  if (opts.type?.trim()) { bind.push(opts.type.trim()); conds.push(`sm.type = $${bind.length}`); }
+  if (opts.author?.trim()) { bind.push("%" + opts.author.trim() + "%"); conds.push(`sm.author ILIKE $${bind.length}`); }
+  const where = conds.length ? "WHERE " + conds.join(" AND ") : "";
+
+  const countRow = await q1<{ n: string }>(`SELECT COUNT(*)::text AS n FROM stock_movements sm ${where}`, bind);
+  const rows = await q<ActivityRow & { delta: string; qty_after: string | null }>(
+    `SELECT sm.id, sm.product_id::text, COALESCE(p.name,'—') AS product_name, COALESCE(p.brand,'') AS brand,
+            sm.size, sm.type, sm.delta, sm.qty_after, sm.note, sm.author, sm.created_at
+     FROM stock_movements sm
+     LEFT JOIN products p ON p.id = sm.product_id
+     ${where}
+     ORDER BY sm.created_at DESC, sm.id DESC
+     LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`,
+    bind,
+  );
+  return {
+    total: Number(countRow?.n ?? 0),
+    rows: rows.map((r) => ({
+      id: r.id, product_id: r.product_id, product_name: r.product_name, brand: r.brand,
+      size: r.size, type: r.type, delta: Number(r.delta),
+      qty_after: r.qty_after == null ? null : Number(r.qty_after),
+      note: r.note, author: r.author, created_at: r.created_at,
+    })),
+  };
 }
 
 /**

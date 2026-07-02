@@ -23,6 +23,15 @@ export type StoreSettings = {
   telegram_bot_token: string;
   telegram_chat_id: string;
   low_stock_threshold: string;
+  smtp_enabled: string;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_user: string;
+  smtp_pass: string;
+  smtp_from: string;
+  /** "1" (default) = storefront hides products with no photo. "0" = show
+   *  photoless products too (with a placeholder) — see productSource.ts. */
+  require_product_photo: string;
 };
 
 const DEFAULTS: StoreSettings = {
@@ -33,6 +42,13 @@ const DEFAULTS: StoreSettings = {
   telegram_bot_token: "",
   telegram_chat_id: "",
   low_stock_threshold: "3",
+  smtp_enabled: "",
+  smtp_host: "smtp.gmail.com",
+  smtp_port: "587",
+  smtp_user: "",
+  smtp_pass: "",
+  smtp_from: "",
+  require_product_photo: "1",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
@@ -47,6 +63,13 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     telegram_bot_token: get("telegram_bot_token"),
     telegram_chat_id: get("telegram_chat_id"),
     low_stock_threshold: get("low_stock_threshold"),
+    smtp_enabled: get("smtp_enabled"),
+    smtp_host: get("smtp_host"),
+    smtp_port: get("smtp_port"),
+    smtp_user: get("smtp_user"),
+    smtp_pass: get("smtp_pass"),
+    smtp_from: get("smtp_from"),
+    require_product_photo: get("require_product_photo"),
   };
 }
 

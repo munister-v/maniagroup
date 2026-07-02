@@ -12,6 +12,7 @@ export type ActiveFilters = {
   sizes: string[];
   seasons: string[];
   inStock: boolean;
+  onSale: boolean;
   q?: string;
   sort: string;
   min?: string;
@@ -33,6 +34,7 @@ export function catalogHref(active: ActiveFilters, patch: FilterPatch = {}): str
   if (next.sizes.length) p.set("sizes", next.sizes.join(","));
   if (next.seasons.length) p.set("seasons", next.seasons.join(","));
   if (next.inStock) p.set("inStock", "1");
+  if (next.onSale) p.set("sale", "1");
   if (next.q) p.set("q", next.q);
   if (next.min) p.set("min", next.min);
   if (next.max) p.set("max", next.max);
@@ -57,6 +59,7 @@ export function activeCount(a: ActiveFilters): number {
     (a.brandGroup ? 1 : 0) +
     (a.gender ? 1 : 0) +
     (a.inStock ? 1 : 0) +
+    (a.onSale ? 1 : 0) +
     (a.min || a.max ? 1 : 0)
   );
 }

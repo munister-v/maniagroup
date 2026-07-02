@@ -132,8 +132,8 @@ export const DEFAULT_CONTENT: SiteContent = {
   },
   hero: {
     eyebrow: "Колекція SS'26 · Україна",
-    titleLine1: "Гардероб, що",
-    titleAccent: "говорить тихо",
+    titleLine1: "Гардероб,",
+    titleAccent: "що говорить",
     subtitle:
       "EA7, Moschino, Antony Morato, MC2 Saint Barth та інші — оригінальні речі, дбайливо відібрані у європейських домів моди.",
     stats: [

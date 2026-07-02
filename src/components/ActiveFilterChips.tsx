@@ -68,6 +68,9 @@ export function ActiveFilterChips({
   if (active.inStock) {
     chips.push({ key: "stock", label: "В наявності", href: catalogHref(active, { inStock: false }) });
   }
+  if (active.onSale) {
+    chips.push({ key: "sale", label: "Знижка", href: catalogHref(active, { onSale: false }) });
+  }
   if (active.min || active.max) {
     const label = `${active.min ? active.min : "0"} – ${active.max ? active.max : "∞"} ₴`;
     chips.push({ key: "price", label, href: catalogHref(active, { min: undefined, max: undefined }) });
@@ -85,6 +88,7 @@ export function ActiveFilterChips({
     sizes: [],
     seasons: [],
     inStock: false,
+    onSale: false,
     min: undefined,
     max: undefined,
   });

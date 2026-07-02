@@ -1,7 +1,7 @@
-import { ErpWorkspace } from "@/components/erp/ErpWorkspace";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default function ErpPage() {
-  return <ErpWorkspace />;
+  redirect("/admin");
 }

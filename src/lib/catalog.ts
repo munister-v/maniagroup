@@ -1,6 +1,8 @@
-// Mock catalog for the redesign demo.
-// Structured to map cleanly onto a real headless source (WooCommerce Store API
-// / Medusa) once we have backend access — products keep id/slug/brand/category.
+// NOT a product data layer — real products/stock/price live in Postgres via
+// lib/products.ts (admin CRUD) and lib/productSource.ts (storefront reads).
+// This file is static storefront config only: nav, mega-menu, brand→logo
+// maps, journal teasers, and small formatting helpers (formatPrice,
+// discountPercent, brandMark) shared across storefront components.
 
 export type Gender = "women" | "men" | "home";
 export type Tag = "new" | "sale" | "last";
@@ -105,126 +107,6 @@ export const CATEGORIES: {
   },
 ];
 
-export const PRODUCTS: Product[] = [
-  {
-    id: "p01",
-    slug: "ea7-core-id-jacket",
-    name: "Куртка Core ID",
-    brand: "EA7 Emporio Armani",
-    price: 12900,
-    oldPrice: 16400,
-    gender: "men",
-    category: "Верхній одяг",
-    tone: "#c9bdab",
-    tag: "sale",
-  },
-  {
-    id: "p02",
-    slug: "moschino-logo-tape-dress",
-    name: "Сукня Logo Tape",
-    brand: "Moschino",
-    price: 18700,
-    gender: "women",
-    category: "Одяг",
-    tone: "#cbbfbd",
-    tag: "new",
-  },
-  {
-    id: "p03",
-    slug: "antony-morato-slim-shirt",
-    name: "Сорочка Slim Fit",
-    brand: "Antony Morato",
-    price: 4200,
-    gender: "men",
-    category: "Одяг",
-    tone: "#e3ddd1",
-  },
-  {
-    id: "p04",
-    slug: "harmont-blaine-vintage-polo",
-    name: "Поло Vintage Dog",
-    brand: "Harmont & Blaine",
-    price: 5600,
-    gender: "men",
-    category: "Одяг",
-    tone: "#c4c2ac",
-  },
-  {
-    id: "p05",
-    slug: "mc2-saint-barth-swim-shorts",
-    name: "Шорти Beachwear",
-    brand: "MC2 Saint Barth",
-    price: 6300,
-    gender: "men",
-    category: "Пляжний одяг",
-    tone: "#dccfb6",
-    tag: "new",
-  },
-  {
-    id: "p06",
-    slug: "kocca-midi-dress",
-    name: "Сукня Midi",
-    brand: "Kocca",
-    price: 7900,
-    gender: "women",
-    category: "Одяг",
-    tone: "#cbb8a4",
-  },
-  {
-    id: "p07",
-    slug: "ea7-track-suit",
-    name: "Спортивний костюм",
-    brand: "EA7 Emporio Armani",
-    price: 11400,
-    gender: "women",
-    category: "Спорт",
-    tone: "#c4bcb0",
-  },
-  {
-    id: "p08",
-    slug: "fred-mello-hidden-puffer",
-    name: "Пуховик Hidden",
-    brand: "Fred Mello",
-    price: 14200,
-    oldPrice: 17800,
-    gender: "women",
-    category: "Верхній одяг",
-    tone: "#d6d3cc",
-    tag: "sale",
-  },
-  {
-    id: "p09",
-    slug: "jb4-slim-jeans",
-    name: "Джинси Slim",
-    brand: "J.B4",
-    price: 3900,
-    gender: "men",
-    category: "Одяг",
-    tone: "#cfc7bd",
-  },
-  {
-    id: "p11",
-    slug: "harmont-blaine-low-sneakers",
-    name: "Кросівки Low",
-    brand: "Harmont & Blaine",
-    price: 8800,
-    gender: "men",
-    category: "Взуття",
-    tone: "#e3ddd1",
-  },
-  {
-    id: "p12",
-    slug: "kocca-mini-bag",
-    name: "Сумка Mini",
-    brand: "Kocca",
-    price: 6900,
-    gender: "women",
-    category: "Аксесуари",
-    tone: "#cbbfbd",
-    tag: "last",
-  },
-];
-
 export const TAG_LABELS: Record<Tag, string> = {
   new: "Новинка",
   sale: "Sale",
@@ -308,28 +190,9 @@ export type MegaMenu = {
 export const MEGA_MENU: MegaMenu[] = [
   {
     label: "Бренди",
-    href: "/catalog",
-    columns: [
-      {
-        title: "Популярні",
-        links: [
-          { label: "EA7 Emporio Armani", slug: "ea7", href: "/catalog?brandGroup=ea7", logo: "/images/brands/ea7-emporio-armani.png" },
-          { label: "Moschino", slug: "moschino-love", href: "/catalog?brandGroup=moschino", logo: "/images/brands/moschino.png" },
-          { label: "Antony Morato", slug: "antony-morato", href: "/catalog?brand=antony-morato", logo: "/images/brands/antony-morato.png" },
-          { label: "Harmont & Blaine", slug: "harmont-blaine", href: "/catalog?brand=harmont-blaine", logo: "/images/brands/harmont-blaine.png" },
-        ],
-      },
-      {
-        title: "Ще бренди",
-        links: [
-          { label: "MC2 Saint Barth", slug: "mc2-saint-barth", href: "/catalog?brand=mc2-saint-barth", logo: "/images/brands/mc2-saint-barth.png" },
-          { label: "Fred Mello", slug: "fred-mello", href: "/catalog?brand=fred-mello", logo: "/images/brands/fred-mello.png" },
-          { label: "J.B4", slug: "j-b4-just-before", href: "/catalog?brand=j-b4-just-before" },
-          { label: "Kocca", slug: "kocca", href: "/catalog?brand=kocca" },
-        ],
-      },
-    ],
-    featured: { title: "J.B4 · SS’26", caption: "Нова колекція", tone: "#c9bdab", slug: "j-b4-just-before", href: "/catalog?brand=j-b4-just-before", image: "/images/01_dropdown-season-ss26.webp" },
+    href: "/brands",
+    columns: [],
+    featured: { title: "Усі бренди", caption: "Переглянути", tone: "#c9bdab", slug: "brands", href: "/brands" },
   },
   {
     label: "Жінкам",
@@ -338,19 +201,38 @@ export const MEGA_MENU: MegaMenu[] = [
       {
         title: "Одяг",
         links: [
-          { label: "Сукні", slug: "zhenskie-platya" },
-          { label: "Верхній одяг", slug: "zhenskaya-verhniaya-odezhda" },
-          { label: "Спортивний одяг", slug: "muzhskaya-sportivnaya-odezhda-zhenskoe" },
-          { label: "Пляжний одяг", slug: "plyazh-jenskoe" },
+          { label: "Сукні",          slug: "plate",          href: "/catalog?category=plate" },
+          { label: "Блузи та топи",  slug: "bluza",          href: "/catalog?category=bluza" },
+          { label: "Футболки",       slug: "futbolka",       href: "/catalog?category=futbolka&gender=women" },
+          { label: "Джинси",         slug: "dzhinsy",        href: "/catalog?category=dzhinsy&gender=women" },
+          { label: "Штани",          slug: "bryuki",         href: "/catalog?category=bryuki&gender=women" },
+          { label: "Спідниці",       slug: "yubka",          href: "/catalog?category=yubka" },
+          { label: "Светри",         slug: "sviter",         href: "/catalog?category=sviter&gender=women" },
+          { label: "Куртки",         slug: "kurtka",         href: "/catalog?category=kurtka&gender=women" },
+          { label: "Пальта",         slug: "palto",          href: "/catalog?category=palto" },
         ],
       },
       {
-        title: "Взуття та аксесуари",
+        title: "Спорт та відпочинок",
         links: [
-          { label: "Взуття", slug: "zhenskaya-obuv" },
-          { label: "Сумки", slug: "zhenskie-sumki-i-ryukzaki" },
-          { label: "Аксесуари", slug: "aksessuaryi" },
-          { label: "Білизна", slug: "spidnia-bilyzna-zhenskaya-odezhda" },
+          { label: "Спорткостюм",    slug: "sportivnyi-kostyum", href: "/catalog?category=sportivnyi-kostyum&gender=women" },
+          { label: "Шорти",          slug: "shorty",         href: "/catalog?category=shorty&gender=women" },
+          { label: "Купальники",     slug: "kupalnik",       href: "/catalog?category=kupalnik" },
+        ],
+      },
+      {
+        title: "Сумки та аксесуари",
+        links: [
+          { label: "Сумки",          slug: "sumka",          href: "/catalog?category=sumka" },
+          { label: "Пояси",          slug: "remen",          href: "/catalog?category=remen" },
+          { label: "Шапки",          slug: "shapka",         href: "/catalog?category=shapka" },
+        ],
+      },
+      {
+        title: "Білизна",
+        links: [
+          { label: "Бюстгалтери",    slug: "byustgalter",    href: "/catalog?category=byustgalter" },
+          { label: "Труси",          slug: "trusy",          href: "/catalog?category=trusy" },
         ],
       },
     ],
@@ -363,19 +245,31 @@ export const MEGA_MENU: MegaMenu[] = [
       {
         title: "Одяг",
         links: [
-          { label: "Сорочки", slug: "muzhskie-rubashki" },
-          { label: "Поло", slug: "muzhskie-polo" },
-          { label: "Верхній одяг", slug: "muzhskaya-verhnyaya-odezhda" },
-          { label: "Спортивний одяг", slug: "muzhskaya-sportivnaya-odezhda" },
+          { label: "Футболки",       slug: "futbolka-m",     href: "/catalog?category=futbolka&gender=men" },
+          { label: "Сорочки",        slug: "rubashka",       href: "/catalog?category=rubashka" },
+          { label: "Поло",           slug: "polo",           href: "/catalog?category=polo" },
+          { label: "Джинси",         slug: "dzhinsy-m",      href: "/catalog?category=dzhinsy&gender=men" },
+          { label: "Штани",          slug: "bryuki-m",       href: "/catalog?category=bryuki&gender=men" },
+          { label: "Светри",         slug: "sviter-m",       href: "/catalog?category=sviter&gender=men" },
+          { label: "Куртки",         slug: "kurtka-m",       href: "/catalog?category=kurtka&gender=men" },
+          { label: "Піджаки",        slug: "zhaket",         href: "/catalog?category=zhaket" },
         ],
       },
       {
-        title: "Взуття та аксесуари",
+        title: "Спорт та відпочинок",
         links: [
-          { label: "Взуття", slug: "muzhskaya-obuv" },
-          { label: "Аксесуари", slug: "muzhskie-aksessuaryi" },
-          { label: "Пляжний одяг", slug: "plyazh-mujskoe" },
-          { label: "Сумки", slug: "muzhskie-sumki" },
+          { label: "Спорткостюм",    slug: "sportivnyi-kostyum-m", href: "/catalog?category=sportivnyi-kostyum&gender=men" },
+          { label: "Шорти",          slug: "shorty-m",       href: "/catalog?category=shorty&gender=men" },
+          { label: "Плавки",         slug: "plav-shorty",    href: "/catalog?category=plav-shorty" },
+        ],
+      },
+      {
+        title: "Аксесуари",
+        links: [
+          { label: "Сумки",          slug: "sumka-m",        href: "/catalog?category=sumka&gender=men" },
+          { label: "Пояси",          slug: "remen-m",        href: "/catalog?category=remen" },
+          { label: "Шапки",          slug: "shapka-m",       href: "/catalog?category=shapka" },
+          { label: "Гаманці",        slug: "koshelek",       href: "/catalog?category=koshelek" },
         ],
       },
     ],
@@ -383,9 +277,3 @@ export const MEGA_MENU: MegaMenu[] = [
   },
 ];
 
-export type CartLine = { product: Product; size: string; qty: number };
-
-export const SAMPLE_CART: CartLine[] = [
-  { product: PRODUCTS[0], size: "M", qty: 1 },
-  { product: PRODUCTS[1], size: "S", qty: 1 },
-];

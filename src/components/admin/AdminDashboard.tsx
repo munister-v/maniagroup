@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { SiteContent } from "@/lib/siteContent";
 import { HOME_SECTIONS } from "@/lib/homeSections";
@@ -10,12 +10,13 @@ import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
-import { AdminCatalogHub } from "./AdminCatalogHub";
+import { MonitoringSection } from "./MonitoringSection";
+import { ErpImportTabs } from "@/components/erp/ErpImportTabs";
 import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -31,6 +32,7 @@ type Stats = {
   products_total: number;
   in_stock: number;
   out_of_stock: number;
+  no_photo_live: number;
   orders_total: number;
   pending: number;
   processing: number;
@@ -55,21 +57,11 @@ type SyncState = {
 
 /* ─── Nav ─── */
 
-const NAV: { id: Section; label: string; d: string }[] = [
+const NAV_MAIN: { id: Section; label: string; d: string }[] = [
   {
     id: "overview",
     label: "Огляд",
     d: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
-  },
-  {
-    id: "content",
-    label: "Контент",
-    d: "M4 6h16M4 12h10M4 18h16",
-  },
-  {
-    id: "media",
-    label: "Медіа",
-    d: "M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z",
   },
   {
     id: "products",
@@ -77,14 +69,9 @@ const NAV: { id: Section; label: string; d: string }[] = [
     d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
   },
   {
-    id: "brands",
-    label: "Бренди",
-    d: "M3 7h18M3 12h18M3 17h18",
-  },
-  {
     id: "catalog",
-    label: "Імпорт XLS",
-    d: "M4 4h16v4H4V4zm0 6h16v10H4V10zm4 3h8",
+    label: "Імпорт",
+    d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
   },
   {
     id: "orders",
@@ -110,6 +97,29 @@ const NAV: { id: Section; label: string; d: string }[] = [
     id: "accounting",
     label: "Облік",
     d: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
+  },
+];
+
+const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
+  {
+    id: "brands",
+    label: "Бренди",
+    d: "M3 7h18M3 12h18M3 17h18",
+  },
+  {
+    id: "media",
+    label: "Медіа",
+    d: "M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z",
+  },
+  {
+    id: "content",
+    label: "Контент",
+    d: "M4 6h16M4 12h10M4 18h16",
+  },
+  {
+    id: "monitoring",
+    label: "Моніторинг",
+    d: "M3 12h4l3 8 4-16 3 8h4",
   },
   {
     id: "backup",
@@ -157,7 +167,27 @@ export function AdminDashboard({
   const [sync, setSync] = useState<SyncState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
+  // Bumped after an import so Overview + Catalog + facets re-read fresh data.
+  const [dataVersion, setDataVersion] = useState(0);
+  // One-shot filter request for the Catalog grid — e.g. the Overview's "N
+  // товарів без фото" task jumps straight to that pre-filtered list instead
+  // of dropping the admin on an unfiltered table they have to filter by hand.
+  const [catalogFocus, setCatalogFocus] = useState<{ stock?: string; siteStatus?: string; token: number } | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function goToImport() {
+    setSection("catalog");
+    setNavOpen(false);
+  }
+  function goToCatalog() {
+    setSection("products");
+    setNavOpen(false);
+  }
+  function goToCatalogFocus(focus: { stock?: string; siteStatus?: string }) {
+    setCatalogFocus({ ...focus, token: Date.now() });
+    setSection("products");
+    setNavOpen(false);
+  }
 
   const router = useRouter();
 
@@ -167,14 +197,20 @@ export function AdminDashboard({
     toastRef.current = setTimeout(() => setToast(null), 2600);
   }
 
-  // Load stats + recent orders + sync state on mount
-  useEffect(() => {
-    fetch("/api/admin/stats").then((r) => r.json()).then((data: Stats) => setStats(data));
+  // Refetch dashboard KPIs + sync state. Called on mount, when the user opens
+  // the Overview, and after an import (dataVersion bump) so nothing goes stale.
+  const loadDashboard = useCallback(() => {
+    fetch("/api/admin/stats").then((r) => r.json()).then((data: Stats) => setStats(data)).catch(() => {});
     fetch("/api/admin/orders?per_page=6")
       .then((r) => r.json())
-      .then((d: { orders?: RecentOrder[] }) => setRecentOrders(d.orders ?? []));
-    fetch("/api/admin/sync").then((r) => r.json()).then((s: SyncState) => setSync(s));
+      .then((d: { orders?: RecentOrder[] }) => setRecentOrders(d.orders ?? []))
+      .catch(() => {});
+    fetch("/api/admin/sync").then((r) => r.json()).then((s: SyncState) => setSync(s)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (section === "overview") loadDashboard();
+  }, [section, dataVersion, loadDashboard]);
 
   function update(fn: (c: SiteContent) => SiteContent) {
     setContent(fn);
@@ -186,7 +222,7 @@ export function AdminDashboard({
     router.refresh();
   }
 
-  const navLabel = NAV.find((n) => n.id === section)?.label ?? "";
+  const navLabel = [...NAV_MAIN, ...NAV_ADMIN].find((n) => n.id === section)?.label ?? "";
 
   return (
     <div className="fixed inset-0 z-[60] flex overflow-hidden bg-[#f7f5f2] font-sans text-[#17130f]">
@@ -200,36 +236,50 @@ export function AdminDashboard({
           <p className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-white/35">Адмін-панель</p>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-4">
-          {NAV.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { setSection(item.id); setNavOpen(false); }}
-              className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] transition-colors ${
-                section === item.id
-                  ? "bg-white/12 text-white"
-                  : "text-white/40 hover:bg-white/6 hover:text-white/65"
-              }`}
-            >
-              <SvgIcon d={item.d} />
-              {item.label}
-              {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
-                <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c0392b] px-1 text-[9px] tabular-nums text-white">
-                  {stats.pending + stats.processing}
-                </span>
-              )}
-            </button>
-          ))}
+        <nav className="flex-1 overflow-y-auto px-2 py-4">
+          <div className="space-y-0.5">
+            {NAV_MAIN.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { setSection(item.id); setNavOpen(false); }}
+                className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] transition-colors ${
+                  section === item.id
+                    ? "bg-white/12 text-white"
+                    : "text-white/40 hover:bg-white/6 hover:text-white/65"
+                }`}
+              >
+                <SvgIcon d={item.d} />
+                {item.label}
+                {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
+                  <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c0392b] px-1 text-[9px] tabular-nums text-white">
+                    {stats.pending + stats.processing}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          <div className="my-3 border-t border-white/8" />
+
+          <div className="space-y-0.5">
+            {NAV_ADMIN.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { setSection(item.id); setNavOpen(false); }}
+                className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] transition-colors ${
+                  section === item.id
+                    ? "bg-white/12 text-white"
+                    : "text-white/30 hover:bg-white/6 hover:text-white/55"
+                }`}
+              >
+                <SvgIcon d={item.d} />
+                {item.label}
+              </button>
+            ))}
+          </div>
         </nav>
 
         <div className="space-y-0.5 border-t border-white/10 px-2 py-3">
-          <a
-            href="/erp"
-            className="flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-white/35 transition-colors hover:text-white/55"
-          >
-            <SvgIcon d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" />
-            ERP
-          </a>
           <a
             href="/"
             target="_blank"
@@ -269,6 +319,8 @@ export function AdminDashboard({
               recentOrders={recentOrders}
               sync={sync}
               onNavigate={setSection}
+              onFocusCatalog={goToCatalogFocus}
+              onImport={goToImport}
             />
           )}
           {section === "content" && (
@@ -280,9 +332,14 @@ export function AdminDashboard({
             />
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
-          {section === "catalog" && <AdminCatalogHub />}
+          {section === "catalog" && (
+            <ErpImportTabs
+              onImported={(msg) => { showToast(msg); setDataVersion((v) => v + 1); }}
+              onGoToCatalog={goToCatalog}
+            />
+          )}
           {section === "products" && (
-            <CatalogGrid onToast={showToast} onImport={() => setSection("catalog")} />
+            <CatalogGrid onToast={showToast} onImport={goToImport} dataVersion={dataVersion} focus={catalogFocus} />
           )}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
@@ -290,6 +347,7 @@ export function AdminDashboard({
           {section === "coupons" && <CouponsSection onToast={showToast} />}
           {section === "subscribers" && <SubscribersSection />}
           {section === "accounting" && <AdminAccounting onToast={showToast} />}
+          {section === "monitoring" && <MonitoringSection />}
           {section === "backup" && <BackupSection />}
           {section === "settings" && <SettingsSection />}
         </main>
@@ -298,7 +356,7 @@ export function AdminDashboard({
       {/* AI floating assistant */}
       <AiAssistant />
 
-      {/* Toast */}
+{/* Toast */}
       {toast && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-[4px] bg-[#17130f] px-5 py-3 text-[12px] tracking-wide text-white shadow-lg">
           {toast}
@@ -319,19 +377,27 @@ function OverviewSection({
   recentOrders,
   sync,
   onNavigate,
+  onFocusCatalog,
+  onImport,
 }: {
   stats: Stats | null;
   recentOrders: RecentOrder[];
   sync: SyncState | null;
   onNavigate: (s: Section) => void;
+  onFocusCatalog: (focus: { stock?: string; siteStatus?: string }) => void;
+  onImport: () => void;
 }) {
   const loading = stats === null;
   const maxRev = stats ? Math.max(1, ...stats.revenue_series.map((d) => d.total)) : 1;
+  const [requirePhoto, setRequirePhoto] = useState(true);
+  useEffect(() => {
+    fetch("/api/admin/settings").then((r) => r.json()).then((d) => setRequirePhoto(d.require_product_photo !== "0")).catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-7">
       {/* Today's tasks */}
-      <TodayBlock stats={stats} onNavigate={onNavigate} />
+      <TodayBlock stats={stats} onNavigate={onNavigate} onFocusCatalog={onFocusCatalog} />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -366,27 +432,41 @@ function OverviewSection({
           </div>
         </div>
 
-        {/* Catalog health */}
+        {/* Catalog funnel — where products actually leak before reaching the site */}
         <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
-          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Каталог</h2>
-          <button onClick={() => onNavigate("products")} className="mb-3 flex w-full items-baseline justify-between text-left">
-            <span className="text-3xl font-light tabular-nums text-[#17130f]">{loading ? "…" : stats!.products_total.toLocaleString("uk-UA")}</span>
-            <span className="text-[11px] uppercase tracking-wider text-[#9c8f7d]">товарів</span>
-          </button>
-          <div className="space-y-2 text-[12px]">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-[#9c8f7d]"><span className="h-2 w-2 rounded-full bg-emerald-500" />В наявності</span>
-              <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.in_stock.toLocaleString("uk-UA")}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-[#9c8f7d]"><span className="h-2 w-2 rounded-full bg-[#d0c8be]" />Немає в наявності</span>
-              <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.out_of_stock.toLocaleString("uk-UA")}</span>
-            </div>
-            <div className="flex items-center justify-between border-t border-[#f0ece6] pt-2">
-              <span className="text-[#9c8f7d]">Нових клієнтів · 30 днів</span>
-              <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.new_customers_30d}</span>
-            </div>
-          </div>
+          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Шлях товару до сайту</h2>
+          {(() => {
+            const total = stats?.products_total ?? 0;
+            const withStock = stats?.in_stock ?? 0;
+            const withPhoto = Math.max(0, withStock - (stats?.no_photo_live ?? 0));
+            const live = requirePhoto ? withPhoto : withStock;
+            const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+            const rows: { label: string; value: number; color: string; focus: { stock?: string; siteStatus?: string } }[] = [
+              { label: "Всього", value: total, color: "bg-[#d0c8be]", focus: {} },
+              { label: "Зі залишком", value: withStock, color: "bg-[#b9ae9b]", focus: { stock: "in" } },
+              { label: "З фото", value: withPhoto, color: "bg-amber-400", focus: { siteStatus: "live" } },
+              { label: "LIVE на сайті", value: live, color: "bg-emerald-500", focus: requirePhoto ? { siteStatus: "live" } : { stock: "in" } },
+            ];
+            return (
+              <div className="space-y-2.5">
+                {rows.map((r) => (
+                  <button key={r.label} onClick={() => onFocusCatalog(r.focus)} className="block w-full text-left">
+                    <div className="mb-1 flex items-center justify-between text-[12px]">
+                      <span className="text-[#6b6253]">{r.label}</span>
+                      <span className="tabular-nums text-[#17130f]">{loading ? "—" : r.value.toLocaleString("uk-UA")}</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f0ece6]">
+                      <div className={`h-full rounded-full ${r.color} transition-all`} style={{ width: `${loading ? 0 : pct(r.value)}%` }} />
+                    </div>
+                  </button>
+                ))}
+                <div className="flex items-center justify-between border-t border-[#f0ece6] pt-2 text-[12px]">
+                  <span className="text-[#9c8f7d]">Нових клієнтів · 30 днів</span>
+                  <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.new_customers_30d}</span>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -446,14 +526,14 @@ function OverviewSection({
       <AnalyticsCard />
 
       {/* Catalog source status (Postgres, fed by the XLS import) */}
-      <SyncCard sync={sync} onNavigate={onNavigate} />
+      <SyncCard sync={sync} onNavigate={onNavigate} onImport={onImport} />
     </div>
   );
 }
 
 type ErpSnapshot = { low_stock: { id: string; name: string; brand: string; size: string; qty: number }[]; reconciliation: { drift: number } };
 
-function TodayBlock({ stats, onNavigate }: { stats: Stats | null; onNavigate: (s: Section) => void }) {
+function TodayBlock({ stats, onNavigate, onFocusCatalog }: { stats: Stats | null; onNavigate: (s: Section) => void; onFocusCatalog: (focus: { stock?: string; siteStatus?: string }) => void }) {
   const [erp, setErp] = useState<ErpSnapshot | null>(null);
 
   useEffect(() => {
@@ -466,13 +546,14 @@ function TodayBlock({ stats, onNavigate }: { stats: Stats | null; onNavigate: (s
   const pendingOrders = stats ? stats.pending + stats.processing : 0;
   const lowStockCount = erp?.low_stock.length ?? 0;
   const driftCount = erp?.reconciliation.drift ?? 0;
-  const hasAnyTask = pendingOrders > 0 || lowStockCount > 0 || driftCount > 0;
+  const noPhotoCount = stats?.no_photo_live ?? 0;
+  const hasAnyTask = pendingOrders > 0 || lowStockCount > 0 || driftCount > 0 || noPhotoCount > 0;
 
   return (
     <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Що зробити сьогодні</h2>
-        {hasAnyTask && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c0392b] px-1.5 text-[10px] tabular-nums text-white">{pendingOrders + lowStockCount + driftCount}</span>}
+        {hasAnyTask && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c0392b] px-1.5 text-[10px] tabular-nums text-white">{pendingOrders + lowStockCount + driftCount + noPhotoCount}</span>}
       </div>
       {!hasAnyTask && stats !== null && erp !== null ? (
         <p className="py-2 text-[13px] text-[#9c8f7d]">✓ Все гаразд — термінових задач немає</p>
@@ -489,24 +570,34 @@ function TodayBlock({ stats, onNavigate }: { stats: Stats | null; onNavigate: (s
             </button>
           )}
           {lowStockCount > 0 && (
-            <a href="/erp?section=products" className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+            <button onClick={() => onNavigate("products")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff8e6] text-[14px]">⚠️</span>
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-[#17130f]">{lowStockCount} варіантів на межі запасу</p>
                 <p className="text-[11px] text-[#9c8f7d]">Залишок ≤ порогу — потрібне поповнення</p>
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </a>
+            </button>
           )}
           {driftCount > 0 && (
-            <a href="/erp?section=stocktake" className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+            <button onClick={() => onNavigate("products")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[14px]">🔄</span>
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-[#17130f]">{driftCount} позицій — розбіжність залишків</p>
                 <p className="text-[11px] text-[#9c8f7d]">Дані магазину розходяться з ERP — потрібна звірка</p>
               </div>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </a>
+            </button>
+          )}
+          {noPhotoCount > 0 && (
+            <button onClick={() => onFocusCatalog({ siteStatus: "no_photo" })} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff3e0] text-[14px]">🖼️</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-[#17130f]">{noPhotoCount} товарів не на сайті — немає фото</p>
+                <p className="text-[11px] text-[#9c8f7d]">Є в наявності, але вітрина ховає товари без фото — Каталог → «Фото масово»</p>
+              </div>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
           )}
           {(stats === null || erp === null) && !hasAnyTask && (
             <p className="py-2 text-[13px] text-[#b9ae9b]">Завантаження…</p>
@@ -660,7 +751,7 @@ function KpiCard({ label, value, sub, accent, warn, onClick }: {
   );
 }
 
-function SyncCard({ sync, onNavigate }: { sync: SyncState | null; onNavigate: (s: Section) => void }) {
+function SyncCard({ sync, onNavigate, onImport }: { sync: SyncState | null; onNavigate: (s: Section) => void; onImport: () => void }) {
   const lastSync = sync?.last_sync
     ? new Date(sync.last_sync).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : null;
@@ -682,7 +773,7 @@ function SyncCard({ sync, onNavigate }: { sync: SyncState | null; onNavigate: (s
       </div>
 
       <button
-        onClick={() => onNavigate("catalog")}
+        onClick={onImport}
         className="flex h-8 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:border-[#17130f]"
       >
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1513,6 +1604,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -1527,22 +1619,23 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   }
   useEffect(() => { load(); }, []);
 
-  async function upload(list: FileList | null) {
-    if (!list || list.length === 0) return;
+  async function upload(list: FileList | File[] | null) {
+    const arr = list ? Array.from(list) : [];
+    if (arr.length === 0) return;
     setUploading(true);
-    let ok = 0;
-    for (const file of Array.from(list)) {
+    // Parallel — a batch of a dozen photos no longer crawls one-at-a-time.
+    const results = await Promise.all(arr.map(async (file) => {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-      if (res.ok) ok++;
-      else {
-        const d = await res.json().catch(() => ({}));
-        onToast?.(d.error ?? `Не вдалося завантажити ${file.name}`);
-      }
-    }
+      if (res.ok) return true;
+      const d = await res.json().catch(() => ({}));
+      onToast?.(d.error ?? `Не вдалося завантажити ${file.name}`);
+      return false;
+    }));
     setUploading(false);
     if (inputRef.current) inputRef.current.value = "";
+    const ok = results.filter(Boolean).length;
     if (ok) onToast?.(`Завантажено: ${ok}`);
     load();
   }
@@ -1571,11 +1664,16 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.round(b / 1024)} КБ` : `${(b / 1024 / 1024).toFixed(1)} МБ`);
 
   return (
-    <div className="max-w-4xl">
+    <div
+      className="max-w-4xl"
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
+    >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-[#17130f]">Медіа-бібліотека</h2>
-          <p className="text-[12px] text-[#9c8f7d]">{files.length} зображень · jpg, png, webp, avif, gif · до 8 МБ</p>
+          <p className="text-[12px] text-[#9c8f7d]">{files.length} зображень · jpg, png, webp, avif, gif · до 8 МБ · перетягніть файли будь-де на сторінці</p>
         </div>
         <input ref={inputRef} type="file" accept="image/*" multiple hidden
           onChange={(e) => upload(e.target.files)} />
@@ -1593,8 +1691,8 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
           {[1,2,3,4,5,6,7,8].map((i) => <div key={i} className="aspect-square animate-pulse bg-[#f3efe8]" />)}
         </div>
       ) : files.length === 0 ? (
-        <div className="rounded-[3px] border border-dashed border-[#d8d2c8] bg-white px-4 py-16 text-center text-sm text-[#9c8f7d]">
-          Бібліотека порожня. Завантажте перше зображення.
+        <div className={`rounded-[3px] border border-dashed px-4 py-16 text-center text-sm transition-colors ${dragOver ? "border-[#17130f] bg-[#f7f5f2] text-[#17130f]" : "border-[#d8d2c8] bg-white text-[#9c8f7d]"}`}>
+          {dragOver ? "Відпустіть, щоб завантажити" : "Бібліотека порожня. Перетягніть фото сюди або натисніть «Завантажити»."}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -1706,6 +1804,75 @@ function SubscribersSection() {
 
 /* ─── Backup ─── */
 
+type BackupFile = { name: string; size: number; mtime: string };
+
+function fmtBackupBytes(n: number): string {
+  return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} КБ` : `${(n / 1024 / 1024).toFixed(1)} МБ`;
+}
+function fmtBackupDate(iso: string): string {
+  return new Date(iso).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function AutoBackupsCard() {
+  const [files, setFiles] = useState<BackupFile[] | null>(null);
+  const [running, setRunning] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const load = useCallback(() => {
+    fetch("/api/admin/backups").then((r) => r.json()).then((d) => setFiles(d.files ?? [])).catch(() => setFiles([]));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function runNow() {
+    setRunning(true);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/backups", { method: "POST" });
+      const d = await res.json();
+      if (res.ok) { setMsg("✓ Копію створено"); load(); }
+      else setMsg(`✗ ${d.error ?? "Помилка"}`);
+    } catch {
+      setMsg("✗ Помилка мережі");
+    } finally {
+      setRunning(false);
+      setTimeout(() => setMsg(""), 4000);
+    }
+  }
+
+  return (
+    <Card title="Автоматичні резервні копії" subtitle="Щоночі о 03:00 — повний дамп PostgreSQL, зберігається останні 14 днів">
+      <div className="mb-4 flex items-center gap-3">
+        <button onClick={runNow} disabled={running}
+          className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-50">
+          {running ? "Створюємо…" : "Створити копію зараз"}
+        </button>
+        {msg && <span className={`text-[11px] ${msg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{msg}</span>}
+      </div>
+
+      {files === null ? (
+        <p className="text-[12px] text-[#9c8f7d]">Завантаження…</p>
+      ) : files.length === 0 ? (
+        <p className="text-[12px] text-[#b9ae9b]">Ще немає жодної автоматичної копії.</p>
+      ) : (
+        <div className="divide-y divide-[#F5F5F5] rounded-[4px] border border-[#e8e4de] bg-white">
+          {files.map((f) => (
+            <div key={f.name} className="flex items-center gap-3 px-4 py-2.5 text-[12px]">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+              <span className="min-w-0 flex-1 truncate font-medium text-[#212121]">{f.name}</span>
+              <span className="shrink-0 tabular-nums text-[#9c8f7d]">{fmtBackupBytes(f.size)}</span>
+              <span className="shrink-0 text-[11px] text-[#BDBDBD]">{fmtBackupDate(f.mtime)}</span>
+              <a href={`/api/admin/backups/download?file=${encodeURIComponent(f.name)}`} download
+                className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#17130f] hover:underline">
+                ↓ Завантажити
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function BackupSection() {
   const [importStatus, setImportStatus] = useState<"idle" | "importing" | "success" | "error">("idle");
   const [importMsg, setImportMsg] = useState("");
@@ -1741,7 +1908,9 @@ function BackupSection() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <Card title="Повна копія бази даних" subtitle="Дамп PostgreSQL: товари, замовлення, клієнти, підписники, налаштування">
+      <AutoBackupsCard />
+
+      <Card title="Повна копія бази даних (вручну)" subtitle="Дамп PostgreSQL: товари, замовлення, клієнти, підписники, налаштування">
         <div className="flex flex-wrap items-center gap-4">
           <a
             href="/api/admin/backup"
@@ -1813,349 +1982,10 @@ function BackupSection() {
   );
 }
 
-/* ─── Catalog import (XLS) ─── */
-
-type CatalogImportResult = {
-  inStock: number; archived: number; total: number; withImages: number; categories: number; ms?: number;
-};
-
-type ImportHistoryEntry = {
-  at: string; mg: string; wp: string;
-  inStock: number; archived: number; total: number; withImages: number; categories: number;
-};
-type SyncMeta = {
-  last_sync?: string; source?: string; total_products?: number; history?: ImportHistoryEntry[];
-};
-
-function fmtBytes(n: number): string {
-  return n < 1024 * 1024 ? `${Math.round(n / 1024)} КБ` : `${(n / 1024 / 1024).toFixed(1)} МБ`;
-}
-// Guess which slot a dropped file belongs to from its name.
-function detectSlot(name: string): "mg" | "wp" | null {
-  const u = name.toUpperCase();
-  if (/\bMG\b|MG\.|_MG|-MG| MG/.test(u) || u.includes("MG")) return "mg";
-  if (/\bWP\b|WP\.|_WP|-WP| WP/.test(u) || u.includes("WP")) return "wp";
-  return null;
-}
-
-const IMPORT_STEPS = ["Файли", "MG.xls", "WP.xls", "Фото", "База даних", "Готово"];
-
-function msgToStep(msg: string): number | null {
-  if (/Парсинг MG|MG:/i.test(msg)) return 1;
-  if (/Парсинг WP|WP:/i.test(msg)) return 2;
-  if (/Store API|Завантаження фото/i.test(msg)) return 3;
-  if (/Запис у БД/i.test(msg)) return 4;
-  return null;
-}
-
-function CatalogImportSection() {
-  const [mg, setMg] = useState<File | null>(null);
-  const [wp, setWp] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "importing" | "done" | "error">("idle");
-  const [step, setStep] = useState(0);
-  const [progress, setProgress] = useState<string[]>([]);
-  const [result, setResult] = useState<CatalogImportResult | null>(null);
-  const [error, setError] = useState("");
-  const [meta, setMeta] = useState<SyncMeta | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const logRef = useRef<HTMLDivElement>(null);
-
-  const loadMeta = () => fetch("/api/admin/sync").then((r) => r.json()).then(setMeta).catch(() => {});
-  useEffect(() => { loadMeta(); }, []);
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [progress]);
-
-  function assign(files: FileList | File[]) {
-    let curMg = mg, curWp = wp;
-    for (const f of Array.from(files)) {
-      if (!/\.xlsx?$/i.test(f.name)) continue;
-      const slot = detectSlot(f.name);
-      if (slot === "mg") curMg = f;
-      else if (slot === "wp") curWp = f;
-      else if (!curMg) curMg = f;
-      else curWp = f;
-    }
-    setMg(curMg); setWp(curWp);
-  }
-
-  async function run() {
-    if (!mg || !wp) return;
-    setStatus("importing"); setProgress([]); setError(""); setResult(null); setStep(0);
-    const fd = new FormData();
-    fd.append("mg", mg); fd.append("wp", wp);
-    try {
-      const res = await fetch("/api/admin/import-catalog", { method: "POST", body: fd });
-      if (!res.body) { setStatus("error"); setError("Немає відповіді від сервера"); return; }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const d = JSON.parse(line.slice(6));
-            if (d.type === "progress") {
-              setProgress((p) => [...p, d.message]);
-              const s = msgToStep(d.message);
-              if (s !== null) setStep((prev) => Math.max(prev, s));
-            } else if (d.type === "done") {
-              setStatus("done"); setResult(d); setStep(5); loadMeta();
-            } else if (d.type === "error") {
-              setStatus("error"); setError(d.message);
-            }
-          } catch {}
-        }
-      }
-      if (status === "importing") setStatus("error"), setError("З'єднання перервано");
-    } catch {
-      setStatus("error"); setError("Не вдалося з'єднатися з сервером");
-    }
-  }
-
-  const fileSlot = (label: string, file: File | null, onSet: (f: File | null) => void, hint: string) => (
-    <div className={`flex-1 rounded-[4px] border-2 p-4 transition-all ${file ? "border-emerald-400 bg-emerald-50/50" : "border-dashed border-[#ddd7ce] bg-white hover:border-[#b9ae9b]"}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#9c8f7d]">{label}</span>
-          {file ? (
-            <div className="mt-1.5">
-              <p className="truncate text-[13px] font-medium text-[#17130f]">{file.name}</p>
-              <p className="text-[11px] text-[#9c8f7d]">{fmtBytes(file.size)}</p>
-            </div>
-          ) : (
-            <label className="mt-1.5 flex cursor-pointer items-center gap-1 text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
-              {hint}
-              <input type="file" accept=".xls,.xlsx" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) onSet(f); }} />
-            </label>
-          )}
-        </div>
-        {file ? (
-          <button onClick={() => onSet(null)} className="mt-0.5 rounded-full p-0.5 text-[#9c8f7d] hover:bg-red-50 hover:text-red-500" aria-label="Прибрати">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" /></svg>
-          </button>
-        ) : (
-          <div className="rounded-full bg-[#f5f1ea] p-2">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-5 w-5 text-[#b9ae9b]">
-              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" strokeLinecap="round" />
-            </svg>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const isRunning = status === "importing";
-  const canRun = !!mg && !!wp && !isRunning;
-
-  return (
-    <div className="max-w-3xl space-y-6">
-      <Card title="Імпорт каталогу з XLS" subtitle="Завантажте обидва файли-вигрузки — MG (повний перелік) і WP (поточні залишки WooCommerce). Автовизначення за назвою файлу.">
-
-        {/* Step wizard */}
-        <div className="mb-6 flex items-center">
-          {IMPORT_STEPS.map((s, i) => (
-            <div key={i} className="flex items-center">
-              <div className="flex flex-col items-center gap-1">
-                <div className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold transition-all duration-300 ${
-                  i < step ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
-                  i === step && isRunning ? "animate-pulse bg-[#17130f] text-white" :
-                  i === step && status === "done" ? "bg-emerald-500 text-white" :
-                  "bg-[#f0ece5] text-[#b9ae9b]"
-                }`}>
-                  {i < step || status === "done" ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-3.5 w-3.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                  ) : i + 1}
-                </div>
-                <span className={`text-[9px] whitespace-nowrap text-center ${i <= step ? "text-[#17130f]" : "text-[#c8c0b4]"}`}>{s}</span>
-              </div>
-              {i < IMPORT_STEPS.length - 1 && (
-                <div className={`mx-1 mb-4 h-px w-8 transition-all duration-500 ${i < step ? "bg-emerald-400" : "bg-[#e8e4de]"}`} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Drop zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => { e.preventDefault(); setDragOver(false); assign(e.dataTransfer.files); }}
-          className={`mb-4 rounded-[4px] border-2 border-dashed px-4 py-5 text-center transition-all ${dragOver ? "border-[#17130f] bg-[#f7f5f2] scale-[0.99]" : "border-[#e0dacf] hover:border-[#b9ae9b]"}`}
-        >
-          <svg viewBox="0 0 24 24" className="mx-auto h-8 w-8 text-[#c8c0b4]" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <p className="mt-2 text-[13px] text-[#17130f]">Перетягніть MG.xls і WP.xls сюди</p>
-          <label className="mt-1 inline-block cursor-pointer text-[12px] text-[#9c8f7d] underline-offset-2 hover:text-[#17130f] hover:underline">
-            або оберіть кілька файлів
-            <input type="file" accept=".xls,.xlsx" multiple className="sr-only" onChange={(e) => e.target.files && assign(e.target.files)} />
-          </label>
-        </div>
-
-        {/* File slots */}
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-          {fileSlot("MG — повний перелік", mg, setMg, "вибрати MG.xls")}
-          {fileSlot("WP — поточні залишки", wp, setWp, "вибрати WP.xls")}
-        </div>
-
-        {/* Run button */}
-        <button
-          onClick={run}
-          disabled={!canRun}
-          className="inline-flex h-11 items-center gap-2 rounded-[3px] bg-[#17130f] px-8 text-[11px] uppercase tracking-[0.14em] text-white transition-all hover:opacity-90 disabled:opacity-35"
-        >
-          {isRunning ? (
-            <>
-              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              Імпортується…
-            </>
-          ) : (
-            <>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4">
-                <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12V4m0 0L8 8m4-4l4 4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Запустити імпорт
-            </>
-          )}
-        </button>
-
-        {/* Live progress log */}
-        {isRunning && progress.length > 0 && (
-          <div
-            ref={logRef}
-            className="mt-4 max-h-44 overflow-y-auto rounded-[3px] bg-[#17130f] px-4 py-3 font-mono text-[11px] leading-relaxed"
-          >
-            {progress.map((msg, i) => (
-              <p key={i} className="text-emerald-400">
-                <span className="mr-2 text-emerald-700">›</span>{msg}
-              </p>
-            ))}
-            <p className="text-emerald-700 animate-pulse">_</p>
-          </div>
-        )}
-
-        {/* Error */}
-        {status === "error" && (
-          <div className="mt-4 flex items-start gap-3 rounded-[3px] border border-red-200 bg-red-50 px-4 py-3">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mt-0.5 h-4 w-4 shrink-0 text-red-500"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" strokeLinecap="round" /></svg>
-            <p className="text-[12px] text-red-700">{error}</p>
-          </div>
-        )}
-
-        {/* Success result */}
-        {status === "done" && result && (
-          <div className="mt-4 space-y-3">
-            <div className="flex items-center gap-2 text-[12px] font-medium text-emerald-700">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M9 12l2 2 4-4M22 12A10 10 0 112 12a10 10 0 0120 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Імпорт завершено успішно
-              {result.ms && <span className="font-normal text-emerald-600">· {(result.ms / 1000).toFixed(1)} с</span>}
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {[
-                { l: "У наявності", v: result.inStock.toLocaleString("uk-UA"), color: "text-emerald-700" },
-                { l: "В архіві", v: result.archived.toLocaleString("uk-UA"), color: "text-[#9c8f7d]" },
-                { l: "Усього", v: result.total.toLocaleString("uk-UA"), color: "text-[#17130f]" },
-                { l: "З фото", v: result.withImages.toLocaleString("uk-UA"), color: "text-[#17130f]" },
-                { l: "Категорій", v: result.categories.toLocaleString("uk-UA"), color: "text-[#17130f]" },
-              ].map((s) => (
-                <div key={s.l} className="rounded-[3px] border border-[#eae5dd] bg-[#faf8f5] p-3 text-center">
-                  <p className={`text-[18px] font-semibold tabular-nums ${s.color}`}>{s.v}</p>
-                  <p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#b9ae9b]">{s.l}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Current state */}
-      <Card title="Поточний стан каталогу">
-        <dl className="grid grid-cols-3 gap-3">
-          {[
-            { l: "Джерело", v: meta?.source === "xls" ? "XLS-імпорт" : meta?.source || "—" },
-            { l: "Товарів у БД", v: meta?.total_products != null ? Number(meta.total_products).toLocaleString("uk-UA") : "—" },
-            { l: "Останній імпорт", v: meta?.last_sync ? new Date(meta.last_sync).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—" },
-          ].map((s) => (
-            <div key={s.l} className="rounded-[3px] border border-[#eee7db] bg-[#faf8f5] px-4 py-3">
-              <p className="text-[16px] font-semibold text-[#17130f]">{s.v}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-wider text-[#9c8f7d]">{s.l}</p>
-            </div>
-          ))}
-        </dl>
-      </Card>
-
-      {/* Import history */}
-      {meta?.history && meta.history.length > 0 && (
-        <Card title="Журнал імпортів" subtitle={`Останні ${meta.history.length} завантаження`}>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[540px] text-[12px]">
-              <thead>
-                <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
-                  <th className="py-2 pr-4 text-left">Дата</th>
-                  <th className="py-2 pr-4 text-left">Файли</th>
-                  <th className="py-2 pr-4 text-right">У наявн.</th>
-                  <th className="py-2 pr-4 text-right">Архів</th>
-                  <th className="py-2 pr-4 text-right">З фото</th>
-                  <th className="py-2 text-right">Усього</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f7f4f0]">
-                {meta.history.map((h, i) => (
-                  <tr key={i} className="group hover:bg-[#faf8f5]">
-                    <td className="py-2.5 pr-4 tabular-nums text-[#17130f]">
-                      {new Date(h.at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                    </td>
-                    <td className="max-w-[180px] truncate py-2.5 pr-4 text-[#9c8f7d]" title={`${h.mg} · ${h.wp}`}>
-                      {h.mg} · {h.wp}
-                    </td>
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-emerald-700">{h.inStock.toLocaleString("uk-UA")}</td>
-                    <td className="py-2.5 pr-4 text-right tabular-nums text-[#9c8f7d]">{h.archived.toLocaleString("uk-UA")}</td>
-                    <td className="py-2.5 pr-4 text-right tabular-nums">{h.withImages.toLocaleString("uk-UA")}</td>
-                    <td className="py-2.5 text-right font-medium tabular-nums">{h.total.toLocaleString("uk-UA")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* How it works */}
-      <Card title="Як це працює">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {[
-            { icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v10a2 2 0 01-2 2z", t: "MG.xls", d: "Бренд, стать, склад, колір, ціни, розміри — основний перелік" },
-            { icon: "M3 10h11M9 21V3m12 7h-4m-4 10l4-4-4-4", t: "WP.xls", d: "Категорії, поточні залишки та ціни з WooCommerce" },
-            { icon: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14", t: "Фото", d: "Підтягуються зі Store API за кодом SKU автоматично" },
-            { icon: "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138", t: "Атомарне оновлення", d: "Сайт не гальмує під час імпорту — swap відбувається одразу" },
-          ].map((item) => (
-            <div key={item.t} className="flex gap-3 rounded-[3px] border border-[#f0ece5] p-3">
-              <div className="mt-0.5 rounded-[3px] bg-[#f5f1ea] p-1.5">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4 text-[#9c8f7d]"><path d={item.icon} strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </div>
-              <div>
-                <p className="text-[12px] font-medium text-[#17130f]">{item.t}</p>
-                <p className="text-[11px] text-[#9c8f7d]">{item.d}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
 /* ─── Settings ─── */
 
 function SettingsSection() {
-  const [store, setStore] = useState({ free_ship_threshold: "", store_phone: "", store_email: "", low_stock_threshold: "" });
+  const [store, setStore] = useState({ free_ship_threshold: "", store_phone: "", store_email: "", low_stock_threshold: "", require_product_photo: "1" });
   const [storeStatus, setStoreStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [pwd, setPwd] = useState({ current: "", next: "", next2: "" });
   const [pwdStatus, setPwdStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -2166,7 +1996,7 @@ function SettingsSection() {
 
   useEffect(() => {
     fetch("/api/admin/settings").then((r) => r.json()).then((d) => {
-      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "", low_stock_threshold: d.low_stock_threshold ?? "" });
+      setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "", low_stock_threshold: d.low_stock_threshold ?? "", require_product_photo: d.require_product_photo ?? "1" });
       setTg({ telegram_enabled: d.telegram_enabled ?? "", telegram_bot_token: d.telegram_bot_token ?? "", telegram_chat_id: d.telegram_chat_id ?? "" });
     });
   }, []);
@@ -2227,6 +2057,24 @@ function SettingsSection() {
           <label className="block"><span className={lbl}>Email магазину</span>
             <input type="email" className={inp} value={store.store_email} onChange={(e) => setStore({ ...store, store_email: e.target.value })} placeholder="hello@maniagroup.com.ua" /></label>
         </div>
+
+        <div className="mt-5 rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] p-4">
+          <label className="flex items-start gap-2.5">
+            <button type="button" onClick={() => setStore({ ...store, require_product_photo: store.require_product_photo === "0" ? "1" : "0" })}
+              className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${store.require_product_photo !== "0" ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}
+              aria-label="Приховувати товари без фото">
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${store.require_product_photo !== "0" ? "left-[18px]" : "left-0.5"}`} />
+            </button>
+            <span>
+              <span className="block text-[13px] text-[#17130f]">Приховувати товари без фото на сайті</span>
+              <span className="mt-1 block text-[11px] leading-relaxed text-[#9c8f7d]">
+                Увімкнено (за замовчуванням) — вітрина показує лише сфотографовані товари.
+                Вимкніть, якщо треба одразу показати щойно завантажені товари (наприклад, після MG-імпорту), поки фото ще не додані.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <button onClick={saveStore} disabled={storeStatus === "saving"} className={`mt-5 ${btn}`}>
           {storeStatus === "saving" ? "Зберігаємо…" : storeStatus === "saved" ? "✓ Збережено" : "Зберегти"}
         </button>

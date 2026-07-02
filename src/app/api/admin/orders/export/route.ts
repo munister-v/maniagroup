@@ -1,5 +1,6 @@
 import { isAdmin } from "@/lib/adminAuth";
 import { listOrders } from "@/lib/orders";
+import { logActivity } from "@/lib/activity";
 
 function csvCell(v: unknown): string {
   const s = String(v ?? "");
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
     from: from || undefined,
     to: to || undefined,
   });
+  logActivity("export", `Замовлення → CSV (${orders.length})`, orders.length);
 
   const header = [
     "Номер", "Дата", "Статус", "Імʼя", "Прізвище", "Телефон", "Email",

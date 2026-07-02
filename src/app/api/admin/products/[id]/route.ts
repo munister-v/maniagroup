@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { getAdminProduct, updateAdminProduct, deleteAdminProduct, type AdminProductInput } from "@/lib/products";
+import { logActivity } from "@/lib/activity";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
@@ -16,6 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = (await req.json()) as Partial<AdminProductInput>;
   try {
     await updateAdminProduct(id, body);
+    logActivity("save", `Оновлено картку товару${body.name ? ` «${body.name}»` : ` #${id}`}`, 1);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 500 });
@@ -27,6 +29,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   try {
     await deleteAdminProduct(id);
+    logActivity("delete", `Видалено товар #${id}`, 1);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 500 });

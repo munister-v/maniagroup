@@ -1,6 +1,7 @@
 import { getStoreSettings, getSetting } from "./settings";
 import { q } from "./pg";
 import type { Order } from "./orders";
+import { sendTemplateEmail } from "./mailer";
 
 /**
  * Telegram notifications for the shop owner. Free, instant, no SMTP needed —
@@ -42,21 +43,34 @@ async function enabled(): Promise<boolean> {
   return Boolean(s.telegram_enabled && s.telegram_bot_token && s.telegram_chat_id);
 }
 
-/** Fire a "new order" message. Non-blocking — swallows errors. */
+/** Fire a "new order" message to admin + confirmation email to customer. */
 export async function notifyNewOrder(order: Order): Promise<void> {
-  if (!(await enabled())) return;
-  const items = order.items
-    .map((it) => `• ${esc(it.name)}${it.variation ? ` (${esc(it.variation)})` : ""} × ${it.quantity}`)
-    .join("\n");
-  const where = [order.shipping_city, order.shipping_branch].filter(Boolean).map(esc).join(", ");
-  const tag = order.source === "manual" ? " 🖐" : "";
-  const text =
-    `🛍 <b>Нове замовлення ${esc(order.number)}</b>${tag}\n` +
-    `${esc(order.first_name)} ${esc(order.last_name)} · ${esc(order.phone)}\n` +
-    (where ? `📦 ${where}\n` : "") +
-    `\n${items}\n\n` +
-    `💰 <b>${order.total.toLocaleString("uk-UA")} ₴</b> · ${order.payment_method === "prepay" ? "передоплата" : "накладений платіж"}`;
-  try { await sendTelegram(text); } catch { /* best-effort */ }
+  // 1. Admin Telegram
+  if (await enabled()) {
+    const items = order.items
+      .map((it) => `• ${esc(it.name)}${it.variation ? ` (${esc(it.variation)})` : ""} × ${it.quantity}`)
+      .join("\n");
+    const where = [order.shipping_city, order.shipping_branch].filter(Boolean).map(esc).join(", ");
+    const tag = order.source === "manual" ? " 🖐" : "";
+    const text =
+      `🛍 <b>Нове замовлення ${esc(order.number)}</b>${tag}\n` +
+      `${esc(order.first_name)} ${esc(order.last_name)} · ${esc(order.phone)}\n` +
+      (where ? `📦 ${where}\n` : "") +
+      `\n${items}\n\n` +
+      `💰 <b>${order.total.toLocaleString("uk-UA")} ₴</b> · ${order.payment_method === "prepay" ? "передоплата" : "накладений платіж"}`;
+    try { await sendTelegram(text); } catch { /* best-effort */ }
+  }
+
+  // 2. Customer email confirmation — best-effort, only if email present
+  if (order.email) {
+    try {
+      await sendTemplateEmail("order_confirm", order.email, {
+        order_number: order.number,
+        customer_name: `${order.first_name} ${order.last_name}`.trim(),
+        total: order.total.toLocaleString("uk-UA"),
+      });
+    } catch { /* no SMTP configured — skip silently */ }
+  }
 }
 
 /**
@@ -86,11 +100,28 @@ export async function notifyLowStockForOrder(orderId: number): Promise<void> {
   } catch { /* best-effort */ }
 }
 
-/** Fire a status-change message. Non-blocking. */
+/** Fire a status-change message to admin + email to customer when shipped. */
 export async function notifyStatusChange(order: Order, newStatus: string): Promise<void> {
-  if (!(await enabled())) return;
-  const text =
-    `🔄 <b>${esc(order.number)}</b> → ${esc(STATUS_LABELS[newStatus] ?? newStatus)}\n` +
-    `${esc(order.first_name)} ${esc(order.last_name)} · ${order.total.toLocaleString("uk-UA")} ₴`;
-  try { await sendTelegram(text); } catch { /* best-effort */ }
+  // Admin Telegram
+  if (await enabled()) {
+    const text =
+      `🔄 <b>${esc(order.number)}</b> → ${esc(STATUS_LABELS[newStatus] ?? newStatus)}\n` +
+      `${esc(order.first_name)} ${esc(order.last_name)} · ${order.total.toLocaleString("uk-UA")} ₴`;
+    try { await sendTelegram(text); } catch { /* best-effort */ }
+  }
+
+  // Customer email for shipped status
+  if (newStatus === "processing" || newStatus === "completed") {
+    const slug = newStatus === "completed" ? "order_shipped" : "order_confirm";
+    if (order.email) {
+      try {
+        await sendTemplateEmail(slug, order.email, {
+          order_number: order.number,
+          customer_name: `${order.first_name} ${order.last_name}`.trim(),
+          total: order.total.toLocaleString("uk-UA"),
+          ttn: order.ttn ?? "—",
+        });
+      } catch { /* no SMTP — skip */ }
+    }
+  }
 }

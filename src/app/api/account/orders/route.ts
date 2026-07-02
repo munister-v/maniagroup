@@ -9,7 +9,6 @@ export async function GET(req: Request) {
   const page = Number(new URL(req.url).searchParams.get("page") ?? "1");
   const orders = await getOrdersForCustomer(account.id, account.email, page);
 
-  // Shape kept compatible with the dashboard's order card renderer.
   return NextResponse.json(
     orders.map((o) => ({
       id: o.id,
@@ -18,6 +17,11 @@ export async function GET(req: Request) {
       date_created: o.created_at,
       total: String(o.total),
       currency_symbol: "₴",
+      ttn: o.ttn || null,
+      tracking_url: o.tracking_url || null,
+      shipping_city: o.shipping_city || null,
+      shipping_branch: o.shipping_branch || null,
+      payment_method: o.payment_method || null,
       line_items: o.items.map((it) => ({
         id: it.id,
         name: it.variation ? `${it.name} (${it.variation})` : it.name,

@@ -22,8 +22,10 @@ type Row = {
 };
 
 type FullProduct = Row & {
+  factory_article?: string;
   images: { src: string }[];
   attributes: { taxonomy: string; terms: { name: string; slug: string }[] }[];
+  variants?: { size: string; stock_qty: number }[];
   description: string;
   short_description: string;
   color: string;
@@ -33,10 +35,13 @@ type FullProduct = Row & {
   composition: string;
 };
 
+type SizeRow = { size: string; qty: string };
+
 type Draft = {
   name: string;
   brand: string;
   sku: string;
+  factory_article: string;
   category: string;
   gender: string;
   regular_price: string;
@@ -44,7 +49,7 @@ type Draft = {
   is_in_stock: boolean;
   status: string;
   images: string[];
-  sizes: string;
+  sizes: SizeRow[];
   color: string;
   composition: string;
   season: string;
@@ -54,9 +59,9 @@ type Draft = {
 };
 
 const EMPTY_DRAFT: Draft = {
-  name: "", brand: "", sku: "", category: "", gender: "",
+  name: "", brand: "", sku: "", factory_article: "", category: "", gender: "",
   regular_price: "", sale_price: "", is_in_stock: true, status: "publish",
-  images: [], sizes: "", color: "", composition: "", season: "", country: "",
+  images: [], sizes: [], color: "", composition: "", season: "", country: "",
   short_description: "", description: "",
 };
 
@@ -69,11 +74,15 @@ const STOCK_TABS = [
 ] as const;
 
 function draftFromProduct(p: FullProduct): Draft {
-  const sizes = (p.attributes?.find((a) => a.taxonomy === "pa_size")?.terms ?? []).map((t) => t.name).join(", ");
+  // Real per-size stock (product_variants) wins; fall back to the cosmetic
+  // attributes JSON with qty=0 for products that pre-date variant tracking.
+  const sizes: SizeRow[] = p.variants?.length
+    ? p.variants.map((v) => ({ size: v.size, qty: String(v.stock_qty) }))
+    : (p.attributes?.find((a) => a.taxonomy === "pa_size")?.terms ?? []).map((t) => ({ size: t.name, qty: "0" }));
   const images = (p.images ?? []).map((i) => i.src).filter(Boolean);
   if (images.length === 0 && p.image_src) images.push(p.image_src);
   return {
-    name: p.name, brand: p.brand, sku: p.sku, category: p.category, gender: p.gender,
+    name: p.name, brand: p.brand, sku: p.sku, factory_article: p.factory_article ?? "", category: p.category, gender: p.gender,
     regular_price: String(p.regular_price ?? ""), sale_price: p.sale_price ? String(p.sale_price) : "",
     is_in_stock: p.is_in_stock, status: p.status, images,
     sizes, color: p.color ?? "", composition: p.composition ?? "", season: p.season ?? "",
@@ -86,6 +95,7 @@ function draftToPayload(d: Draft) {
     name: d.name.trim(),
     brand: d.brand.trim() || "Mania Group",
     sku: d.sku.trim(),
+    factory_article: d.factory_article.trim(),
     category: d.category.trim() || "Одяг",
     gender: d.gender,
     regular_price: Number(d.regular_price) || 0,
@@ -94,7 +104,7 @@ function draftToPayload(d: Draft) {
     status: d.status,
     image_src: d.images[0] ?? "",
     images: d.images.map((src) => ({ src })),
-    sizes: d.sizes.split(",").map((s) => s.trim()).filter(Boolean),
+    sizes: d.sizes.filter((s) => s.size.trim()).map((s) => ({ size: s.size.trim(), qty: Number(s.qty) || 0 })),
     color: d.color.trim(),
     composition: d.composition.trim(),
     season: d.season.trim(),
@@ -375,8 +385,14 @@ export function AdminProducts({ onToast, initialOpen }: {
               <label className="block"><span className={lbl}>Назва *</span><input className={inp} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block"><span className={lbl}>Бренд</span><input className={inp} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>SKU / артикул</span><input className={inp} value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></label>
+                <label className="block"><span className={lbl}>SKU (внутрішній)</span><input className={inp} value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></label>
               </div>
+              <label className="block">
+                <span className={lbl}>Заводський артикул постачальника</span>
+                <input className={inp} value={draft.factory_article} onChange={(e) => setDraft({ ...draft, factory_article: e.target.value })}
+                  placeholder="код, яким постачальник позначає товар у файлі ОСТАТКИ" />
+                <span className="mt-1 block text-[10px] text-[#b9ae9b]">Саме за цим кодом залишки/ціни з файлу ОСТАТКИ автоматично підтягнуться до цього товару — без нього доведеться оновлювати вручну.</span>
+              </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block"><span className={lbl}>Категорія</span><input className={inp} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
                 <label className="block"><span className={lbl}>Стать</span>
@@ -391,7 +407,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                 <label className="block"><span className={lbl}>Ціна, ₴ *</span><input type="number" className={inp} value={draft.regular_price} onChange={(e) => setDraft({ ...draft, regular_price: e.target.value })} /></label>
                 <label className="block"><span className={lbl}>Акційна ціна, ₴</span><input type="number" className={inp} value={draft.sale_price} onChange={(e) => setDraft({ ...draft, sale_price: e.target.value })} /></label>
               </div>
-              <label className="block"><span className={lbl}>Розміри (через кому)</span><input className={inp} value={draft.sizes} onChange={(e) => setDraft({ ...draft, sizes: e.target.value })} placeholder="S, M, L, XL" /></label>
+              <SizeQtyEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
 
               <ImageManager images={draft.images} onChange={(images) => setDraft({ ...draft, images })} onToast={onToast} />
 
@@ -437,26 +453,75 @@ function BulkBtn({ onClick, children, danger }: { onClick: () => void; children:
   );
 }
 
-function ImageManager({ images, onChange, onToast }: { images: string[]; onChange: (i: string[]) => void; onToast?: (m: string) => void }) {
-  const [uploading, setUploading] = useState(false);
-  const [urlInput, setUrlInput] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+/**
+ * Real per-size stock, not just a cosmetic list of size names — each row
+ * becomes a product_variants row (lib/products.ts syncManualVariants), so
+ * the storefront size selector shows true availability and a future ОСТАТКИ
+ * file has something real to update via offer_code/barcode matching.
+ */
+function SizeQtyEditor({ sizes, onChange }: { sizes: SizeRow[]; onChange: (s: SizeRow[]) => void }) {
+  const inputCls = "h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] text-[#17130f] focus:border-[#17130f] focus:outline-none";
+  function addRow() { onChange([...sizes, { size: "", qty: "0" }]); }
+  function removeRow(i: number) { onChange(sizes.filter((_, idx) => idx !== i)); }
+  function update(i: number, field: "size" | "qty", val: string) {
+    onChange(sizes.map((s, idx) => (idx === i ? { ...s, [field]: val } : s)));
+  }
+  const total = sizes.reduce((sum, s) => sum + (Number(s.qty) || 0), 0);
 
-  async function upload(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setUploading(true);
-    const added: string[] = [];
-    for (const file of Array.from(files)) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Розміри та залишок</span>
+        {sizes.length > 0 && <span className="text-[10px] text-[#9c8f7d]">Разом: {total} шт.</span>}
+      </div>
+      <div className="space-y-1.5">
+        {sizes.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input className={inputCls} style={{ flex: 2 }} placeholder="S, 42, One size…" value={s.size} onChange={(e) => update(i, "size", e.target.value)} />
+            <input type="number" min={0} className={inputCls} style={{ flex: 1 }} placeholder="0" value={s.qty} onChange={(e) => update(i, "qty", e.target.value)} />
+            <button type="button" onClick={() => removeRow(i)} className="shrink-0 px-1.5 text-[13px] text-[#b3392c] hover:opacity-70">✕</button>
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={addRow} className="mt-2 flex h-8 items-center gap-1.5 border border-[#e5ded3] bg-white px-3 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+        <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+        Додати розмір
+      </button>
+    </div>
+  );
+}
+
+function ImageManager({ images, onChange, onToast }: { images: string[]; onChange: (i: string[]) => void; onToast?: (m: string) => void }) {
+  const [pending, setPending] = useState(0); // count of uploads in flight, for the "Завантаження… (n)" label
+  const [urlInput, setUrlInput] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null); // index being reordered
+  const [overIdx, setOverIdx] = useState<number | null>(null); // index currently hovered while reordering
+  const fileRef = useRef<HTMLInputElement>(null);
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+
+  async function upload(files: FileList | File[] | null) {
+    const list = files ? Array.from(files).filter((f) => f.type.startsWith("image/")) : [];
+    if (list.length === 0) return;
+    setPending((n) => n + list.length);
+    // Parallel upload — the old sequential loop made a 20-photo batch crawl.
+    const results = await Promise.all(list.map(async (file) => {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (res.ok && data.url) added.push(data.url);
-      else onToast?.(data.error ?? "Помилка завантаження");
-    }
-    setUploading(false);
-    if (added.length) onChange([...images, ...added]);
-    if (fileRef.current) fileRef.current.value = "";
+      try {
+        const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+        const data = await res.json();
+        if (res.ok && data.url) return data.url as string;
+        onToast?.(data.error ?? `Помилка: ${file.name}`);
+      } catch {
+        onToast?.(`Мережева помилка: ${file.name}`);
+      }
+      return null;
+    }));
+    setPending((n) => n - list.length);
+    const added = results.filter((u): u is string => !!u);
+    if (added.length) onChange([...imagesRef.current, ...added]);
   }
 
   function addUrl() {
@@ -472,13 +537,43 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
     onChange(next);
   }
 
+  // Drag-to-reorder thumbnails (native HTML5 DnD — no extra library needed).
+  function onThumbDragStart(i: number) { setDragIdx(i); }
+  function onThumbDragOver(e: React.DragEvent, i: number) { e.preventDefault(); setOverIdx(i); }
+  function onThumbDrop(i: number) {
+    if (dragIdx === null || dragIdx === i) { setDragIdx(null); setOverIdx(null); return; }
+    const next = [...images];
+    const [moved] = next.splice(dragIdx, 1);
+    next.splice(i, 0, moved);
+    onChange(next);
+    setDragIdx(null); setOverIdx(null);
+  }
+
+  // Paste an image straight from the clipboard (screenshot, copied photo).
+  function onPaste(e: React.ClipboardEvent) {
+    const files = Array.from(e.clipboardData.items)
+      .filter((it) => it.type.startsWith("image/"))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => !!f);
+    if (files.length) upload(files);
+  }
+
   return (
-    <div>
-      <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Фото (перше — головне)</span>
+    <div onPaste={onPaste}>
+      <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Фото (перше — головне · перетягніть, щоб змінити порядок)</span>
       {images.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {images.map((src, i) => (
-            <div key={src + i} className="group relative">
+            <div
+              key={src + i}
+              className={`group relative cursor-grab active:cursor-grabbing ${overIdx === i && dragIdx !== null && dragIdx !== i ? "ring-2 ring-[#107C41]" : ""}`}
+              draggable
+              onDragStart={() => onThumbDragStart(i)}
+              onDragOver={(e) => onThumbDragOver(e, i)}
+              onDragLeave={() => setOverIdx((v) => (v === i ? null : v))}
+              onDrop={() => onThumbDrop(i)}
+              onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+            >
               <img src={src} alt="" className={`h-24 w-[72px] object-cover ${i === 0 ? "ring-2 ring-[#17130f]" : "border border-[#eee7db]"}`} />
               {i === 0 && <span className="absolute left-0 top-0 bg-[#17130f] px-1 text-[8px] uppercase text-white">гол.</span>}
               <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
@@ -487,16 +582,29 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
               </div>
             </div>
           ))}
+          {pending > 0 && Array.from({ length: pending }).map((_, i) => (
+            <div key={`loading-${i}`} className="flex h-24 w-[72px] items-center justify-center border border-dashed border-[#d8d2c8] bg-[#f7f5f2]">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#c9bdab] border-t-[#17130f]" />
+            </div>
+          ))}
         </div>
       )}
-      <div className="mt-2 flex items-center gap-2">
+
+      {/* Drag-and-drop zone — click also opens the file picker */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
+        onClick={() => fileRef.current?.click()}
+        className={`mt-2 flex h-16 cursor-pointer items-center justify-center gap-2 border border-dashed text-[12px] transition-colors ${
+          dragOver ? "border-[#17130f] bg-[#f7f5f2] text-[#17130f]" : "border-[#e5ded3] bg-white text-[#9c8f7d] hover:border-[#c9bdab]"
+        }`}
+      >
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        {pending > 0 ? `Завантаження… (${pending})` : "Перетягніть фото сюди, натисніть, або вставте з буфера (Ctrl+V)"}
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
-        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="flex h-9 items-center gap-2 border border-[#e5ded3] bg-white px-3 text-[12px] text-[#17130f] hover:border-[#17130f] disabled:opacity-50">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          {uploading ? "Завантаження…" : "Завантажити фото"}
-        </button>
       </div>
+
       <div className="mt-2 flex gap-2">
         <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addUrl())}
           placeholder="або вставте URL фото" className="h-9 flex-1 border border-[#e5ded3] bg-white px-3 text-[12px] focus:border-[#17130f] focus:outline-none" />

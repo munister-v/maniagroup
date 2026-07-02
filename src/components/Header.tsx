@@ -93,10 +93,11 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
   const [searching, setSearching] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  // Only the homepage has a dark full-bleed hero behind the header, so the
-  // transparent/white-text treatment only makes sense there. Everywhere else
-  // the header is solid (light bg, dark text) — otherwise it's invisible.
-  const overHero = pathname === "/";
+  // The hero is now a light banner sitting below the header (no dark full-bleed
+  // backdrop), so the header is always solid: light bg, dark text. Kept as a
+  // flag in case a dark hero returns on some route later.
+  const overHero = false;
+  void pathname;
 
   useEffect(() => {
     const q = query.trim();
@@ -242,6 +243,13 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                 {item.label}
               </Link>
             ))}
+            <Link
+              href="/sale"
+              onMouseEnter={() => setActive(null)}
+              className="link-underline whitespace-nowrap text-[11px] font-semibold uppercase tracking-luxe text-[var(--color-sale)] hover:opacity-80"
+            >
+              Sale
+            </Link>
             <a
               href="/delivery"
               onMouseEnter={() => setActive(null)}
@@ -296,6 +304,22 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
           {/* expandable groups */}
           <ul className="wrap flex flex-col py-2">
             {MEGA_MENU.filter((m) => m.label !== "Жінкам" && m.label !== "Чоловікам").map((item) => {
+              // Бренди → пряме посилання на сторінку (без dropdown: вона вже є /brands)
+              if (item.label === "Бренди") {
+                return (
+                  <li key={item.label} className="border-b border-line">
+                    <Link
+                      href="/brands"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex w-full items-center justify-between py-3 text-[12px] uppercase tracking-luxe opacity-80"
+                    >
+                      {item.label}
+                      <span className="opacity-40">→</span>
+                    </Link>
+                  </li>
+                );
+              }
+
               const open = mobileExpanded === item.label;
               return (
                 <li key={item.label} className="border-b border-line">
@@ -311,42 +335,26 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                   </button>
                   {open && (
                     <div className="grid grid-cols-2 gap-x-4 pb-4">
-                      {item.label === "Бренди"
-                        ? orderBrands(brands, brandLogos).map((b) => (
-                            <Link
-                              key={b.slug}
-                              href={`/catalog?brand=${b.slug}`}
-                              onClick={() => setMobileOpen(false)}
-                              className="flex items-center py-1.5"
-                            >
-                              <BrandLogo
-                                name={b.name}
-                                src={b.logo}
-                                imgClass="h-5 w-auto max-w-[90px] object-contain object-left opacity-80"
-                                textClass="text-sm text-ink/80"
-                              />
-                            </Link>
-                          ))
-                        : item.columns.flatMap((col) => col.links).map((l) => (
-                            <Link
-                              key={l.slug}
-                              href={l.href ?? `/catalog?category=${l.slug}`}
-                              onClick={() => setMobileOpen(false)}
-                              className="flex items-center py-1.5"
-                            >
-                              {l.logo ? (
-                                <Image
-                                  src={l.logo}
-                                  alt={l.label}
-                                  width={90}
-                                  height={24}
-                                  className="h-5 w-auto max-w-[90px] object-contain object-left opacity-80"
-                                />
-                              ) : (
-                                <span className="text-sm text-ink/80">{l.label}</span>
-                              )}
-                            </Link>
-                          ))}
+                      {item.columns.flatMap((col) => col.links).map((l) => (
+                        <Link
+                          key={l.slug}
+                          href={l.href ?? `/catalog?category=${l.slug}`}
+                          onClick={() => setMobileOpen(false)}
+                          className="flex items-center py-1.5"
+                        >
+                          {l.logo ? (
+                            <Image
+                              src={l.logo}
+                              alt={l.label}
+                              width={90}
+                              height={24}
+                              className="h-5 w-auto max-w-[90px] object-contain object-left opacity-80"
+                            />
+                          ) : (
+                            <span className="text-sm text-ink/80">{l.label}</span>
+                          )}
+                        </Link>
+                      ))}
                       <Link
                         href={item.href}
                         onClick={() => setMobileOpen(false)}
@@ -359,6 +367,16 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                 </li>
               );
             })}
+            <li className="border-b border-line">
+              <Link
+                href="/sale"
+                onClick={() => setMobileOpen(false)}
+                className="flex w-full items-center justify-between py-3 text-[12px] font-semibold uppercase tracking-luxe text-[var(--color-sale)]"
+              >
+                Sale
+                <span className="bg-[var(--color-sale)] px-1.5 py-0.5 text-[9px] text-white">%</span>
+              </Link>
+            </li>
             <li>
               <a
                 href="/delivery"
@@ -556,8 +574,8 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
             <p className="text-[11px] uppercase tracking-luxe text-muted">Наші бренди</p>
             <h3 className="mt-1 font-display text-2xl text-ink">Усі бренди в одному місці</h3>
           </div>
-          <Link href="/catalog" className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink">
-            Весь каталог →
+          <Link href="/brands" className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink">
+            Усі бренди →
           </Link>
         </div>
 
@@ -616,28 +634,36 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
 }
 
 function MegaPanel({ item }: { item: MegaMenu }) {
+  const cols = item.columns.length;
+  // Layout: content columns + one photo card on the right
+  // 1–2 cols → 3-col grid (cols + featured spans 1)
+  // 3–4 cols → 5-col grid (cols + featured spans 1)
+  const gridClass = cols >= 3
+    ? "grid-cols-[repeat(4,1fr)_200px]"
+    : "grid-cols-[repeat(2,1fr)_220px]";
+
   return (
-    <div className="absolute inset-x-0 top-full hidden border-b border-line bg-paper text-ink shadow-[0_28px_44px_-28px_rgba(23,19,15,0.35)] md:block">
-      <div className="wrap grid grid-cols-4 gap-8 py-10">
+    <div className="absolute inset-x-0 top-full hidden border-b border-line bg-white text-ink shadow-[0_20px_40px_-20px_rgba(23,19,15,0.2)] md:block">
+      <div className={`wrap grid gap-8 py-9 ${gridClass}`}>
         {item.columns.map((col) => (
           <div key={col.title}>
-            <h4 className="text-[11px] uppercase tracking-luxe text-muted">
+            <h4 className="text-[10px] uppercase tracking-[0.22em] text-muted/60 border-b border-line pb-2">
               {col.title}
             </h4>
-            <ul className="mt-4 space-y-2.5">
+            <ul className="mt-3 space-y-2">
               {col.links.map((l) => (
                 <li key={l.slug}>
                   <Link
                     href={l.href ?? `/catalog?category=${l.slug}`}
-                    className="flex items-center text-sm text-ink/80 transition-colors hover:text-ink"
+                    className="flex items-center text-[13px] text-ink/70 transition-colors hover:text-ink"
                   >
                     {l.logo ? (
                       <Image
                         src={l.logo}
                         alt={l.label}
-                        width={110}
-                        height={28}
-                        className="h-7 w-auto max-w-[110px] object-contain object-left opacity-80 transition-opacity hover:opacity-100"
+                        width={100}
+                        height={26}
+                        className="h-6 w-auto max-w-[100px] object-contain object-left opacity-75 transition-opacity hover:opacity-100"
                       />
                     ) : (
                       l.label
@@ -651,7 +677,8 @@ function MegaPanel({ item }: { item: MegaMenu }) {
 
         <Link
           href={item.featured.href ?? `/catalog?category=${item.featured.slug}`}
-          className="group relative col-start-3 col-end-5 aspect-[16/9] overflow-hidden"
+          className="group relative overflow-hidden"
+          style={{ minHeight: 200 }}
         >
           <div
             className="absolute inset-0 transition-transform duration-[1200ms] ease-out group-hover:scale-105"
@@ -662,7 +689,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
                 src={item.featured.image}
                 alt={item.featured.title}
                 fill
-                sizes="50vw"
+                sizes="220px"
                 className="object-cover"
               />
             )}
@@ -675,9 +702,9 @@ function MegaPanel({ item }: { item: MegaMenu }) {
             }}
           />
           <Grain />
-          <div className="absolute inset-0 flex flex-col justify-end p-6 text-paper">
-            <p className="font-display text-2xl">{item.featured.title}</p>
-            <span className="mt-1 text-[11px] uppercase tracking-luxe">
+          <div className="absolute inset-0 flex flex-col justify-end p-4 text-paper">
+            <p className="font-display text-lg leading-tight">{item.featured.title}</p>
+            <span className="mt-1 text-[10px] uppercase tracking-luxe opacity-80">
               {item.featured.caption} →
             </span>
           </div>

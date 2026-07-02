@@ -1,27 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { parseImportSmart, previewImport, applyImport } from "@/lib/stockImport";
-import { q } from "@/lib/pg";
+import { parseImportSmart, previewImport, applyImport, type ApplyResult, type ImportKind } from "@/lib/stockImport";
+import { getMeta, setMeta } from "@/lib/db";
+import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-/** GET — last 8 import sessions from stock_movements */
+export type ImportHistoryEntry = {
+  filename: string; kind: ImportKind; at: string;
+  productsCreated: number; productsUpdated: number; variantsUpserted: number;
+  stockMovements: number; matchedRows: number; unmatchedRows: number;
+};
+
+const HISTORY_KEY = "erp_import_history";
+const HISTORY_MAX = 20;
+
+async function recordHistory(filename: string, result: ApplyResult): Promise<void> {
+  const entry: ImportHistoryEntry = {
+    filename, kind: result.kind, at: new Date().toISOString(),
+    productsCreated: result.productsCreated, productsUpdated: result.productsUpdated,
+    variantsUpserted: result.variantsUpserted, stockMovements: result.stockMovements,
+    matchedRows: result.matchedRows, unmatchedRows: result.unmatchedRows,
+  };
+  let prev: ImportHistoryEntry[] = [];
+  try { prev = JSON.parse((await getMeta(HISTORY_KEY)) || "[]"); } catch {}
+  await setMeta(HISTORY_KEY, JSON.stringify([entry, ...prev].slice(0, HISTORY_MAX)));
+}
+
+/** GET — last import sessions, with per-session created/updated/movements breakdown. */
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const rows = await q<{ filename: string; movements: string; started_at: string }>(
-    `SELECT
-       CASE WHEN note LIKE $1 THEN trim(substring(note from 9)) ELSE note END AS filename,
-       COUNT(*)::text AS movements,
-       MIN(created_at)::text AS started_at
-     FROM stock_movements
-     WHERE type = 'import'
-     GROUP BY 1, date_trunc('minute', created_at)
-     ORDER BY started_at DESC
-     LIMIT 8`,
-    ["Імпорт:%"],
-  );
-  return NextResponse.json({ history: rows });
+  let history: ImportHistoryEntry[] = [];
+  try { history = JSON.parse((await getMeta(HISTORY_KEY)) || "[]"); } catch {}
+  return NextResponse.json({ history });
 }
 
 /**
@@ -52,6 +64,14 @@ export async function POST(req: NextRequest) {
   try {
     if (mode === "apply") {
       const result = await applyImport(parsed);
+      await recordHistory(parsed.filename, result);
+      const parts = [
+        result.productsCreated ? `+${result.productsCreated} нових` : "",
+        result.productsUpdated ? `${result.productsUpdated} оновлено` : "",
+        result.stockMovements ? `${result.stockMovements} рухів` : "",
+        result.unmatchedRows ? `${result.unmatchedRows} не знайдено` : "",
+      ].filter(Boolean).join(" · ");
+      await logActivity("import", `${parsed.filename} — ${parts || "без змін"}`, result.matchedRows);
       return NextResponse.json({ ok: true, mode, result, aiUsed });
     }
     const preview = await previewImport(parsed);

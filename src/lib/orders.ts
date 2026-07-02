@@ -507,6 +507,9 @@ export type DashboardStats = {
   products_total: number;
   in_stock: number;
   out_of_stock: number;
+  /** In stock + published, but no photo — so the storefront hides them by
+   *  default (see lib/productSource.ts hasImg / "require_product_photo"). */
+  no_photo_live: number;
   orders_total: number;
   pending: number;
   processing: number;
@@ -584,6 +587,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
        (SELECT count(*) FROM products WHERE status='publish')::text AS products_total,
        (SELECT count(*) FROM products WHERE status='publish' AND is_in_stock)::text AS in_stock,
        (SELECT count(*) FROM products WHERE status='publish' AND NOT is_in_stock)::text AS out_of_stock,
+       (SELECT count(*) FROM products WHERE status='publish' AND is_in_stock
+          AND NOT (images IS NOT NULL AND images::text NOT IN ('[]','null','')))::text AS no_photo_live,
        (SELECT count(*) FROM orders)::text AS orders_total,
        (SELECT count(*) FROM orders WHERE status='pending')::text AS pending,
        (SELECT count(*) FROM orders WHERE status='processing')::text AS processing,
@@ -622,6 +627,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     products_total: num("products_total"),
     in_stock: num("in_stock"),
     out_of_stock: num("out_of_stock"),
+    no_photo_live: num("no_photo_live"),
     orders_total: num("orders_total"),
     pending: num("pending"),
     processing: num("processing"),

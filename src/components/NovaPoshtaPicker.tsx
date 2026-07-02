@@ -131,20 +131,41 @@ export function NovaPoshtaPicker({ onChange }: { onChange: (s: NpSelection) => v
                   className="mt-2 h-10 w-full border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
                 />
               )}
-              <select
-                value={warehouse?.ref ?? ""}
-                onChange={(e) => pickWarehouse(e.target.value)}
-                required
-                size={Math.min(6, Math.max(2, filteredWh.length))}
-                className="mt-2 w-full border border-line bg-white px-2 py-1 text-sm text-ink focus:border-ink focus:outline-none"
-              >
-                {filteredWh.length === 0 && <option value="">Нічого не знайдено</option>}
-                {filteredWh.map((w) => (
-                  <option key={w.ref} value={w.ref}>
-                    {w.description}
-                  </option>
-                ))}
-              </select>
+              {/* Custom clickable list — strong selected/hover feedback (a native
+                  multi-row <select> felt unresponsive: weak grey highlight). */}
+              <ul className="mt-2 max-h-64 w-full divide-y divide-line overflow-y-auto border border-line bg-white">
+                {filteredWh.length === 0 && (
+                  <li className="px-3 py-3 text-sm text-muted">Нічого не знайдено</li>
+                )}
+                {filteredWh.map((w) => {
+                  const active = warehouse?.ref === w.ref;
+                  return (
+                    <li key={w.ref}>
+                      <button
+                        type="button"
+                        onClick={() => pickWarehouse(w.ref)}
+                        aria-pressed={active}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors ${
+                          active ? "bg-ink text-paper" : "text-ink hover:bg-cloud active:bg-line"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-colors ${
+                            active ? "border-paper bg-paper" : "border-muted/50 bg-white"
+                          }`}
+                        >
+                          {active && (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-3 w-3 text-ink">
+                              <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="flex-1">{w.description}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </>
           )}
         </div>

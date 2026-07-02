@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { getStoreSettings, saveStoreSettings, type StoreSettings } from "@/lib/settings";
+import { logActivity } from "@/lib/activity";
 
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
@@ -11,5 +12,6 @@ export async function PUT(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
   const body = (await req.json()) as Partial<StoreSettings>;
   await saveStoreSettings(body);
+  logActivity("settings", "Оновлено налаштування магазину");
   return NextResponse.json({ ok: true });
 }

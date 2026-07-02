@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const router = useRouter();
 
   async function submit(e: React.FormEvent) {
@@ -18,8 +18,11 @@ export default function AdminLoginPage() {
     if (res.ok) {
       router.push("/admin");
       router.refresh();
+    } else if (res.status === 429) {
+      const d = await res.json().catch(() => ({}));
+      setError((d as { error?: string }).error ?? "Забагато спроб — спробуйте пізніше.");
     } else {
-      setError(true);
+      setError("Невірний пароль");
     }
   }
 
@@ -36,7 +39,7 @@ export default function AdminLoginPage() {
           className="mt-6 h-12 w-full border border-line bg-white px-4 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
           autoFocus
         />
-        {error && <p className="mt-2 text-sm text-[#b3392c]">Невірний пароль</p>}
+        {error && <p className="mt-2 text-sm text-[#b3392c]">{error}</p>}
         <button
           type="submit"
           className="mt-4 h-12 w-full bg-ink text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85"
