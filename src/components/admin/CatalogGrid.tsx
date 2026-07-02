@@ -141,6 +141,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [bulkPhotoOpen, setBulkPhotoOpen] = useState(false);
+  const [wipeOpen, setWipeOpen] = useState(false);
   const [cardsInitial, setCardsInitial] = useState<{ kind: "new" } | { kind: "edit"; id: string } | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -854,6 +855,22 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           </div>
         </div>
       </div>
+
+      {/* Danger zone — deliberately tucked away at the very bottom, separate
+          from every normal action, so it's never one accidental click away. */}
+      <div className="mt-6 rounded-[4px] border border-red-200 bg-red-50/40 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[12px] font-medium text-red-800">Небезпечна зона</p>
+            <p className="text-[11px] text-red-700">Повне видалення каталогу — усі товари з бази, без винятків.</p>
+          </div>
+          <button onClick={() => setWipeOpen(true)}
+            className="h-8 shrink-0 rounded-[3px] border border-red-300 bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-red-700 hover:bg-red-600 hover:text-white">
+            Видалити весь каталог
+          </button>
+        </div>
+      </div>
+      {wipeOpen && <WipeAllDialog onClose={() => setWipeOpen(false)} total={total} onDone={() => { setPage(1); load(); }} />}
     </div>
   );
 }
@@ -895,6 +912,64 @@ function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "g
         )}
       </div>
     </div>
+  );
+}
+
+// ── Danger zone: wipe the entire catalog ─────────────────────────────────────
+const WIPE_PHRASE = "ВИДАЛИТИ ВСЕ";
+
+function WipeAllDialog({ onClose, total, onDone }: { onClose: () => void; total: number; onDone: () => void }) {
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState<"idle" | "running" | "error">("idle");
+  const [error, setError] = useState("");
+
+  async function run() {
+    setStatus("running"); setError("");
+    try {
+      const r = await fetch("/api/admin/products/wipe", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: text }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setStatus("error"); setError(d.error ?? "Помилка"); return; }
+      onDone();
+      onClose();
+    } catch {
+      setStatus("error"); setError("Помилка мережі");
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[100] bg-black/40" onClick={onClose} />
+      <div className="fixed left-1/2 top-1/2 z-[110] w-[480px] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-[8px] bg-white shadow-2xl">
+        <div className="border-b border-red-200 bg-red-50 px-5 py-4">
+          <p className="text-[14px] font-medium text-red-800">Видалити весь каталог</p>
+          <p className="mt-0.5 text-[12px] text-red-700">Незворотна дія — видаляє всі {total.toLocaleString("uk-UA")} товарів із бази.</p>
+        </div>
+        <div className="space-y-4 px-5 py-4">
+          <p className="text-[12px] leading-relaxed text-[#616161]">
+            Перед видаленням система автоматично зробить свіжу резервну копію бази. Якщо бекап не вдасться —
+            видалення НЕ відбудеться. Замовлення, клієнти й аналітика не постраждають — очищується лише каталог товарів.
+          </p>
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+              Введіть <b className="text-red-700">{WIPE_PHRASE}</b> для підтвердження
+            </span>
+            <input value={text} onChange={(e) => setText(e.target.value)} autoFocus
+              className="mt-1.5 h-10 w-full rounded-[3px] border border-[#e8e4de] px-3 text-[13px] focus:border-red-500 focus:outline-none" />
+          </label>
+          {error && <p className="text-[12px] text-red-600">{error}</p>}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-[#f0ece6] px-5 py-3.5">
+          <button onClick={onClose} className="h-9 rounded-[3px] px-4 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">Скасувати</button>
+          <button onClick={run} disabled={text !== WIPE_PHRASE || status === "running"}
+            className="h-9 rounded-[3px] bg-red-600 px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40">
+            {status === "running" ? "Видаляємо…" : "Видалити все"}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 

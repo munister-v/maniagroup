@@ -356,6 +356,19 @@ export async function deleteAdminProduct(id: string): Promise<void> {
   await q("DELETE FROM products WHERE id = $1", [Number(id)]);
 }
 
+/**
+ * Wipes the ENTIRE catalog — every product, cascading to product_variants
+ * (ON DELETE CASCADE). order_items/wishlist/cart/stock_movements rows that
+ * reference a deleted product_id are intentionally left in place (no FK to
+ * products on those tables) so past orders stay intact; only the live
+ * catalog is cleared. Callers MUST take a fresh backup first — see
+ * /api/admin/products/wipe, which is the only caller and enforces this.
+ */
+export async function wipeAllProducts(): Promise<number> {
+  const rows = await q<{ id: string }>("DELETE FROM products RETURNING id");
+  return rows.length;
+}
+
 export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "show_without_photo" | "hide_without_photo" | "delete";
 
 export async function bulkProducts(ids: string[], action: BulkAction): Promise<{ count: number; skipped: number }> {
