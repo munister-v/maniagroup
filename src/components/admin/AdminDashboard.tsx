@@ -1993,13 +1993,37 @@ function SettingsSection() {
   const [tg, setTg] = useState({ telegram_enabled: "", telegram_bot_token: "", telegram_chat_id: "" });
   const [tgStatus, setTgStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [tgTest, setTgTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
+  const [ai, setAi] = useState({ openrouter_api_key: "" });
+  const [aiStatus, setAiStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [aiTest, setAiTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
 
   useEffect(() => {
     fetch("/api/admin/settings").then((r) => r.json()).then((d) => {
       setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "", low_stock_threshold: d.low_stock_threshold ?? "", require_product_photo: d.require_product_photo ?? "1" });
       setTg({ telegram_enabled: d.telegram_enabled ?? "", telegram_bot_token: d.telegram_bot_token ?? "", telegram_chat_id: d.telegram_chat_id ?? "" });
+      setAi({ openrouter_api_key: d.openrouter_api_key ?? "" });
     });
   }, []);
+
+  async function saveAi() {
+    setAiStatus("saving");
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ai) });
+    setAiStatus("saved");
+    setTimeout(() => setAiStatus("idle"), 2500);
+  }
+
+  async function testAi() {
+    setAiTest({ state: "testing", msg: "" });
+    // Save first — otherwise "Перевірити" would silently test whatever key
+    // was saved last, not what's currently typed in the field.
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ai) });
+    const res = await fetch("/api/admin/ai", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "product-desc", product: { name: "Тестовий товар", brand: "Mania Group", category: "Тест" } }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setAiTest({ state: "idle", msg: res.ok && data.text ? "✓ Працює — ШІ відповів" : `✕ ${data.error ?? "Помилка"}` });
+  }
 
   async function saveTg() {
     setTgStatus("saving");
@@ -2122,6 +2146,26 @@ function SettingsSection() {
             {tgTest.state === "testing" ? "Надсилаємо…" : "Тест"}
           </button>
           {tgTest.msg && <span className={`text-[12px] ${tgTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#b3392c]"}`}>{tgTest.msg}</span>}
+        </div>
+      </Card>
+
+      <Card title="AI-генератор контенту" subtitle="Ключ для генерації постів, описів товарів та автозаповнення карток">
+        <label className="block"><span className={lbl}>OpenRouter API Key</span>
+          <input type="password" autoComplete="new-password" className={inp} value={ai.openrouter_api_key}
+            onChange={(e) => setAi({ openrouter_api_key: e.target.value })} placeholder="sk-or-v1-…" /></label>
+        <p className="mt-2 text-[11px] leading-relaxed text-[#9c8f7d]">
+          Безкоштовний ключ — зареєструйтесь на <span className="text-[#17130f]">openrouter.ai</span>, створіть ключ у розділі Keys і вставте сюди.
+          Це замінює потребу заходити на сервер через термінал.
+        </p>
+        <div className="mt-5 flex items-center gap-3">
+          <button onClick={saveAi} disabled={aiStatus === "saving"} className={btn}>
+            {aiStatus === "saving" ? "Зберігаємо…" : aiStatus === "saved" ? "✓ Збережено" : "Зберегти"}
+          </button>
+          <button onClick={testAi} disabled={aiTest.state === "testing" || !ai.openrouter_api_key}
+            className="h-10 rounded-[3px] border border-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+            {aiTest.state === "testing" ? "Перевіряємо…" : "Перевірити"}
+          </button>
+          {aiTest.msg && <span className={`text-[12px] ${aiTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#b3392c]"}`}>{aiTest.msg}</span>}
         </div>
       </Card>
 

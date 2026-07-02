@@ -1,4 +1,13 @@
+import { getSetting } from "./settings";
+
 export type OMsg = { role: "system" | "user" | "assistant"; content: string };
+
+/** Env var wins if set (ops-level override); otherwise falls back to the
+ *  admin-configurable Налаштування field — see lib/settings.ts. This lets an
+ *  admin set the key from the browser instead of SSH + .env.local. */
+async function resolveKey(): Promise<string | null> {
+  return process.env.OPENROUTER_API_KEY || (await getSetting("openrouter_api_key")) || null;
+}
 
 // Ordered list of free models to try. First one is preferred.
 // Verified live on OpenRouter (older :free slugs like qwen-2.5/gemini-flash-exp
@@ -16,11 +25,9 @@ const FALLBACK_MODELS = [
 async function callModel(
   model: string,
   messages: OMsg[],
+  key: string,
   opts?: { maxTokens?: number; temperature?: number },
 ): Promise<string> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY not set");
-
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -51,12 +58,15 @@ export async function orChat(
   messages: OMsg[],
   opts?: { model?: string; maxTokens?: number; temperature?: number },
 ): Promise<string> {
+  const key = await resolveKey();
+  if (!key) throw new Error("OPENROUTER_API_KEY not set — додайте в Налаштування → AI-генератор або в .env.local");
+
   const models = opts?.model ? [opts.model, ...FALLBACK_MODELS] : FALLBACK_MODELS;
   let lastError: Error = new Error("No models tried");
 
   for (const model of models) {
     try {
-      return await callModel(model, messages, opts);
+      return await callModel(model, messages, key, opts);
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e));
       console.error(`[orChat] ${model} failed: ${lastError.message.slice(0, 120)}`);

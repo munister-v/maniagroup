@@ -32,6 +32,10 @@ export type StoreSettings = {
   /** "1" (default) = storefront hides products with no photo. "0" = show
    *  photoless products too (with a placeholder) — see productSource.ts. */
   require_product_photo: string;
+  /** OpenRouter key for the AI content generator (lib/openRouter.ts) — an
+   *  env var (OPENROUTER_API_KEY) also works and takes priority if set; this
+   *  lets an admin configure it from Налаштування instead of SSH+.env.local. */
+  openrouter_api_key: string;
 };
 
 const DEFAULTS: StoreSettings = {
@@ -49,6 +53,7 @@ const DEFAULTS: StoreSettings = {
   smtp_pass: "",
   smtp_from: "",
   require_product_photo: "1",
+  openrouter_api_key: "",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
@@ -70,6 +75,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     smtp_pass: get("smtp_pass"),
     smtp_from: get("smtp_from"),
     require_product_photo: get("require_product_photo"),
+    openrouter_api_key: get("openrouter_api_key"),
   };
 }
 
