@@ -473,6 +473,12 @@ CREATE TABLE IF NOT EXISTS brand_logos (
 ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_title       TEXT NOT NULL DEFAULT '';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_description TEXT NOT NULL DEFAULT '';
 
+-- Per-product override of the storefront's "hide products with no photo"
+-- default (see lib/productSource.ts hasImg / store_settings.require_product_photo)
+-- — lets an admin publish one specific product before its photo is ready,
+-- without flipping the site-wide setting.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS show_without_photo BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- ── ERP: Returns / RMA ──
 CREATE TABLE IF NOT EXISTS returns (
   id           BIGSERIAL PRIMARY KEY,

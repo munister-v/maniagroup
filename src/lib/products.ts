@@ -31,6 +31,9 @@ export type AdminProductInput = {
   sale_price?: number | null;
   is_in_stock?: boolean;
   status?: string;
+  /** Publish this product even without a photo (per-product override of the
+   *  site-wide "require_product_photo" setting) — see lib/productSource.ts. */
+  show_without_photo?: boolean;
   image_src?: string;
   images?: { src: string }[];
   sizes?: SizeQty[];
@@ -166,8 +169,10 @@ function buildProductFilters(opts: ProductFilterOpts) {
   // Same "has a real photo" check the storefront uses (lib/productSource.ts
   // hasImg) — keeps this filter honest about what's actually visible.
   const hasImg = `(images IS NOT NULL AND images::text NOT IN ('[]','null',''))`;
-  if (opts.siteStatus === "live")         conds.push(`status = 'publish' AND is_in_stock = TRUE AND ${hasImg}`);
-  if (opts.siteStatus === "no_photo")     conds.push(`status = 'publish' AND is_in_stock = TRUE AND NOT ${hasImg}`);
+  // A per-product "show_without_photo" override (Каталог → «Показати без
+  // фото») counts as LIVE here regardless of the site-wide photo setting.
+  if (opts.siteStatus === "live")         conds.push(`status = 'publish' AND is_in_stock = TRUE AND (${hasImg} OR show_without_photo)`);
+  if (opts.siteStatus === "no_photo")     conds.push(`status = 'publish' AND is_in_stock = TRUE AND NOT ${hasImg} AND NOT show_without_photo`);
   if (opts.siteStatus === "out_of_stock") conds.push(`status = 'publish' AND is_in_stock = FALSE`);
   if (opts.siteStatus === "hidden")       conds.push(`status <> 'publish'`);
   return { where: conds.length ? `WHERE ${conds.join(" AND ")}` : "", bind };
@@ -195,7 +200,7 @@ export async function listAdminProducts(opts: ProductFilterOpts & {
   const rows = await q(
     `SELECT id::text AS id, name, slug, sku, brand, category, category_slug, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
-            price::float AS price, is_in_stock, status, image_src, featured,
+            price::float AS price, is_in_stock, status, image_src, featured, show_without_photo,
             color, season, composition, country, attributes,
             EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id AND v.active) AS has_variants
      FROM products ${where} ORDER BY ${col} ${dir} NULLS LAST, id DESC LIMIT ${perPage} OFFSET ${offset}`,
@@ -311,6 +316,7 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   if (input.sale_price !== undefined) add("sale_price", input.sale_price);
   if (input.is_in_stock !== undefined) add("is_in_stock", input.is_in_stock);
   if (input.status !== undefined) add("status", input.status);
+  if (input.show_without_photo !== undefined) add("show_without_photo", input.show_without_photo);
   if (input.image_src !== undefined) add("image_src", input.image_src);
   if (input.images !== undefined) add("images", JSON.stringify(input.images));
   if (input.sizes !== undefined) add("attributes", sizeAttributes(input.sizes));
@@ -350,7 +356,7 @@ export async function deleteAdminProduct(id: string): Promise<void> {
   await q("DELETE FROM products WHERE id = $1", [Number(id)]);
 }
 
-export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "delete";
+export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "show_without_photo" | "hide_without_photo" | "delete";
 
 export async function bulkProducts(ids: string[], action: BulkAction): Promise<{ count: number; skipped: number }> {
   const nums = ids.map(Number).filter(Number.isFinite);
@@ -378,6 +384,10 @@ export async function bulkProducts(ids: string[], action: BulkAction): Promise<{
       await q("UPDATE products SET featured = TRUE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
     case "unfeature":
       await q("UPDATE products SET featured = FALSE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
+    case "show_without_photo":
+      await q("UPDATE products SET show_without_photo = TRUE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
+    case "hide_without_photo":
+      await q("UPDATE products SET show_without_photo = FALSE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
     case "delete":
       await q("DELETE FROM products WHERE id = ANY($1)", [nums]); break;
     default:

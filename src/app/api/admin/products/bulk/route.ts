@@ -5,7 +5,8 @@ import { logActivity } from "@/lib/activity";
 
 const ACTION_LABEL: Record<string, string> = {
   publish: "опубліковано", unpublish: "сховано", in_stock: "в наявності",
-  out_of_stock: "немає в наявності", feature: "в обране", unfeature: "з обраного", delete: "видалено",
+  out_of_stock: "немає в наявності", feature: "в обране", unfeature: "з обраного",
+  show_without_photo: "показано на сайті без фото", hide_without_photo: "знято показ без фото", delete: "видалено",
 };
 
 export async function POST(req: Request) {

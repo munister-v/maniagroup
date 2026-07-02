@@ -192,7 +192,10 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   const requireImage = params.requireImage !== undefined
     ? params.requireImage
     : (await getSetting("require_product_photo")) !== "0";
-  if (requireImage) conds.push(hasImg);
+  // A per-product override (Каталог → «Показати без фото») lets one item
+  // through the gate even with the site-wide setting still on — it only
+  // affects visibility, not ranking (still sorts behind real-photo rows below).
+  if (requireImage) conds.push(`(${hasImg} OR show_without_photo)`);
 
   const where = conds.join(" AND ");
   const order =

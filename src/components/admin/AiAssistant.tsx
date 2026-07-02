@@ -324,7 +324,11 @@ export function SocialPostButton({ product, onToast }: { product: ProductInfo; o
         body: JSON.stringify({ action, product }),
       });
       const d = await r.json();
-      setText(d.text ?? "Помилка генерації");
+      // Show the SERVER's actual error (e.g. "OPENROUTER_API_KEY not set")
+      // instead of a generic dead-end message that gives no clue what broke.
+      setText(d.text ?? d.error ?? "Помилка генерації — сервер не повернув текст");
+    } catch (e) {
+      setText(`Помилка мережі: ${e instanceof Error ? e.message : String(e)}`);
     } finally { setLoading(false); }
   }
 

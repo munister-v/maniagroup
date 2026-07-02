@@ -25,6 +25,9 @@ type Row = {
   /** Has real per-size stock rows — when true, is_in_stock is a MIRROR
    *  recomputed from those rows (see lib/erp.ts), not a free-standing flag. */
   has_variants: boolean;
+  /** Per-product override of the site-wide "hide products with no photo"
+   *  setting — see lib/productSource.ts hasImg. */
+  show_without_photo: boolean;
 };
 
 type Field = keyof Row;
@@ -63,20 +66,33 @@ function colLetter(i: number): string {
 }
 
 /**
- * Whether the product is actually visible on the storefront right now, and
- * why not if it isn't — mirrors the exact gating in lib/productSource.ts
- * (status='publish' + is_in_stock + has a photo, unless "Приховувати товари
- * без фото" is turned off in Налаштування). Surfaced directly in the grid so
- * "I imported it but it's not on the site" has an immediate, visible answer
- * instead of requiring a trip through the code.
+ * Whether the product is actually visible on the storefront right now, why
+ * not if it isn't, and — when there's a one-click fix — exactly what that
+ * fix would do. Mirrors the exact gating in lib/productSource.ts (status=
+ * 'publish' + is_in_stock + (has a photo OR show_without_photo override)).
+ * Surfaced directly in the grid so "I imported it but it's not on the site"
+ * has an immediate, actionable answer instead of a trip through Налаштування.
  */
-function siteStatus(row: Row): { label: string; dot: string; title: string } {
+function siteStatus(row: Row): {
+  label: string; dot: string; title: string;
+  fix?: { patch: Partial<Pick<Row, "status" | "show_without_photo">>; label: string };
+} {
   if (row.status !== "publish")
-    return { label: "Приховано", dot: "bg-[#9c8f7d]", title: "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується" };
+    return {
+      label: "Приховано", dot: "bg-[#9c8f7d]",
+      title: "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується",
+      fix: { patch: { status: "publish" }, label: "Опублікувати" },
+    };
   if (!row.is_in_stock)
     return { label: "Без залишку", dot: "bg-[#c9bdab]", title: "Немає в наявності (0 на складі) — на сайті не показується" };
-  if (!row.image_src)
-    return { label: "Без фото", dot: "bg-[#d97706]", title: "Немає фото — вітрина за замовчуванням ховає товари без фото (Налаштування → Магазин)" };
+  if (!row.image_src && !row.show_without_photo)
+    return {
+      label: "Без фото", dot: "bg-[#d97706]",
+      title: "Немає фото — вітрина за замовчуванням ховає товари без фото",
+      fix: { patch: { show_without_photo: true }, label: "Показати без фото" },
+    };
+  if (!row.image_src && row.show_without_photo)
+    return { label: "LIVE · без фото", dot: "bg-[#2e7d32]", title: "Показано на сайті попри відсутність фото (ручний дозвіл)" };
   return { label: "LIVE", dot: "bg-[#2e7d32]", title: "Товар видно на сайті" };
 }
 
@@ -281,6 +297,22 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   }
 
   function discardEdits() { setEdits({}); }
+
+  // One-click fix from the "На сайті" badge — publish, or show without a
+  // photo — instead of making the admin hunt for the right column/toggle.
+  const [fixingId, setFixingId] = useState<string | null>(null);
+  async function quickFix(id: string, patch: Partial<Pick<Row, "status" | "show_without_photo">>) {
+    setFixingId(id);
+    try {
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (res.ok) { onToast?.("Готово — товар на сайті"); await load(); }
+      else onToast?.("Помилка");
+    } finally { setFixingId(null); }
+  }
 
   // ── Bulk row actions ─────────────────────────────────────────────────────
   async function bulk(action: string) {
@@ -612,6 +644,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
             { a: "publish", l: "Опублікувати" }, { a: "unpublish", l: "Сховати" },
             { a: "in_stock", l: "В наявн." }, { a: "out_of_stock", l: "Немає" },
             { a: "feature", l: "В обране" }, { a: "unfeature", l: "З обраного" },
+            { a: "show_without_photo", l: "Показати без фото" }, { a: "hide_without_photo", l: "Сховати без фото" },
           ].map((b) => (
             <button key={b.a} onClick={() => bulk(b.a)} className="text-[#17130f] underline-offset-2 hover:underline">{b.l}</button>
           ))}
@@ -652,7 +685,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                 <div className="pb-1 text-[10px] text-[#8a8a8a]">Фото</div>
               </th>
               {/* site status (computed, not editable) */}
-              <th className="top-0 z-20 w-[92px] min-w-[92px] border-b border-r border-[#b7b7b7] bg-[#f0f0f0] text-center align-bottom">
+              <th className="top-0 z-20 w-[132px] min-w-[132px] border-b border-r border-[#b7b7b7] bg-[#f0f0f0] text-center align-bottom">
                 <div className="pb-1 text-[10px] text-[#8a8a8a]">На сайті</div>
               </th>
               {COLS.map((c, ci) => {
@@ -705,15 +738,23 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                         : <div className="h-6 w-6 rounded-[1px] bg-[#eee]" />}
                     </div>
                   </td>
-                  {/* site status (computed, not editable) */}
+                  {/* site status — a badge, or a one-click fix when one exists */}
                   {(() => {
                     const st = siteStatus(row);
                     return (
                       <td title={st.title} className={`border-b border-r border-[#d4d4d4] px-1.5 ${isSel ? "bg-[#eaf6ef]" : ""}`}>
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
-                          <span className="truncate text-[10.5px] text-[#5a5347]">{st.label}</span>
-                        </div>
+                        {st.fix ? (
+                          <button onClick={() => quickFix(row.id, st.fix!.patch)} disabled={fixingId === row.id}
+                            className="flex w-full items-center justify-center gap-1 rounded-[2px] border border-[#e0e0e0] bg-white px-1 py-0.5 text-[10px] text-[#107C41] hover:border-[#107C41] disabled:opacity-50">
+                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
+                            {fixingId === row.id ? "…" : st.fix.label}
+                          </button>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
+                            <span className="truncate text-[10.5px] text-[#5a5347]">{st.label}</span>
+                          </div>
+                        )}
                       </td>
                     );
                   })()}

@@ -587,7 +587,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
        (SELECT count(*) FROM products WHERE status='publish')::text AS products_total,
        (SELECT count(*) FROM products WHERE status='publish' AND is_in_stock)::text AS in_stock,
        (SELECT count(*) FROM products WHERE status='publish' AND NOT is_in_stock)::text AS out_of_stock,
-       (SELECT count(*) FROM products WHERE status='publish' AND is_in_stock
+       (SELECT count(*) FROM products WHERE status='publish' AND is_in_stock AND NOT show_without_photo
           AND NOT (images IS NOT NULL AND images::text NOT IN ('[]','null','')))::text AS no_photo_live,
        (SELECT count(*) FROM orders)::text AS orders_total,
        (SELECT count(*) FROM orders WHERE status='pending')::text AS pending,
