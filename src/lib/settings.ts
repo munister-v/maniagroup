@@ -36,6 +36,11 @@ export type StoreSettings = {
    *  env var (OPENROUTER_API_KEY) also works and takes priority if set; this
    *  lets an admin configure it from Налаштування instead of SSH+.env.local. */
   openrouter_api_key: string;
+  /** Base URL of a WordPress site whose public media library (wp/v2/media)
+   *  gets searched by SKU/factory_article to pull in real product photos —
+   *  see lib/wpPhotos.ts. Defaults to the old WooCommerce site these products
+   *  originally migrated from. */
+  wp_photo_source_url: string;
 };
 
 const DEFAULTS: StoreSettings = {
@@ -54,6 +59,7 @@ const DEFAULTS: StoreSettings = {
   smtp_from: "",
   require_product_photo: "1",
   openrouter_api_key: "",
+  wp_photo_source_url: "https://maniagroup.com.ua",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
@@ -76,6 +82,7 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     smtp_from: get("smtp_from"),
     require_product_photo: get("require_product_photo"),
     openrouter_api_key: get("openrouter_api_key"),
+    wp_photo_source_url: get("wp_photo_source_url"),
   };
 }
 

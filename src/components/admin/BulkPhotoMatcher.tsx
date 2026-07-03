@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
+const MAX_FILE_MB = 20;
 
 /**
  * "Auto" answer to products with no photos (e.g. freshly created by an MG.xls
@@ -17,15 +19,135 @@ type MatchResult = {
   failed: string[];
 };
 
+type WpPreview = {
+  checked: number;
+  found: { id: number; name: string; code: string; count: number; preview: string; source: string }[];
+  notFound: { id: number; name: string; code: string }[];
+};
+type WpApplyResult = { productsUpdated: number; photosSaved: number; failed: { id: number; name: string }[]; notFound: WpPreview["notFound"] };
+
 export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; onToast?: (m: string) => void }) {
+  const [source, setSource] = useState<"files" | "wp">("files");
   const [files, setFiles] = useState<File[]>([]);
+  const [rejectedFiles, setRejectedFiles] = useState<{ name: string; reason: string }[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState<"idle" | "running" | "done">("idle");
   const [result, setResult] = useState<MatchResult | null>(null);
 
+  // ── WP source state ────────────────────────────────────────────────────
+  const [wpStatus, setWpStatus] = useState<"idle" | "searching" | "previewed" | "applying" | "done">("idle");
+  const [wpPreview, setWpPreview] = useState<WpPreview | null>(null);
+  const [wpApplied, setWpApplied] = useState<WpApplyResult | null>(null);
+  const [wpError, setWpError] = useState("");
+  const [wpProgress, setWpProgress] = useState<{ label: string; done: number; total: number } | null>(null);
+  const [sourcesCount, setSourcesCount] = useState<number | null>(null);
+  const wpAbort = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (source !== "wp" || sourcesCount !== null) return;
+    fetch("/api/admin/photo-sources").then((r) => r.json()).then((d) => {
+      setSourcesCount((d.sources ?? []).filter((s: { enabled: boolean }) => s.enabled).length);
+    }).catch(() => setSourcesCount(0));
+  }, [source, sourcesCount]);
+
+  /** Reads an NDJSON stream (one JSON object per line), dispatching each to onEvent. */
+  async function readNdjson(res: Response, onEvent: (obj: Record<string, unknown>) => void) {
+    const reader = res.body?.getReader();
+    if (!reader) return;
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try { onEvent(JSON.parse(line)); } catch { /* ignore malformed line */ }
+      }
+    }
+    if (buf.trim()) { try { onEvent(JSON.parse(buf)); } catch { /* ignore */ } }
+  }
+
+  async function wpSearch() {
+    setWpStatus("searching"); setWpError(""); setWpPreview(null); setWpProgress(null);
+    const controller = new AbortController();
+    wpAbort.current = controller;
+    try {
+      const r = await fetch("/api/admin/products/photos/wp-fetch", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "preview" }), signal: controller.signal,
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setWpError(d.error ?? "Помилка"); setWpStatus("idle"); return; }
+      let finalErr = "";
+      await readNdjson(r, (ev) => {
+        if (ev.type === "search-progress") setWpProgress({ label: "Шукаємо", done: ev.checked as number, total: ev.total as number });
+        else if (ev.type === "done") {
+          if (ev.error) { finalErr = ev.error as string; return; }
+          setWpPreview(ev as unknown as WpPreview);
+        }
+      });
+      setWpProgress(null);
+      if (finalErr) { setWpError(finalErr); setWpStatus("idle"); return; }
+      setWpStatus("previewed");
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") { setWpStatus("idle"); setWpProgress(null); return; }
+      setWpError("Помилка мережі"); setWpStatus("idle"); setWpProgress(null);
+    }
+  }
+
+  async function wpApply() {
+    setWpStatus("applying"); setWpError(""); setWpProgress(null);
+    const controller = new AbortController();
+    wpAbort.current = controller;
+    try {
+      const r = await fetch("/api/admin/products/photos/wp-fetch", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "apply" }), signal: controller.signal,
+      });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); setWpError(d.error ?? "Помилка"); setWpStatus("previewed"); return; }
+      let finalErr = "";
+      let finalResult: WpApplyResult | null = null;
+      await readNdjson(r, (ev) => {
+        if (ev.type === "search-progress") setWpProgress({ label: "Шукаємо", done: ev.checked as number, total: ev.total as number });
+        else if (ev.type === "apply-progress") setWpProgress({ label: "Завантажуємо фото", done: ev.done as number, total: ev.total as number });
+        else if (ev.type === "done") {
+          if (ev.error) { finalErr = ev.error as string; return; }
+          finalResult = ev as unknown as WpApplyResult;
+        }
+      });
+      setWpProgress(null);
+      if (finalErr) { setWpError(finalErr); setWpStatus("previewed"); return; }
+      if (!finalResult) { setWpError("Порожня відповідь сервера"); setWpStatus("previewed"); return; }
+      setWpApplied(finalResult);
+      setWpStatus("done");
+      onToast?.(`Підтягнуто фото для ${(finalResult as WpApplyResult).productsUpdated} товарів`);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") { setWpStatus("previewed"); setWpProgress(null); return; }
+      setWpError("Помилка мережі"); setWpStatus("previewed"); setWpProgress(null);
+    }
+  }
+
+  function wpCancel() {
+    wpAbort.current?.abort();
+  }
+
+  function wpSearchAgain() {
+    setWpStatus("idle"); setWpPreview(null); setWpApplied(null); setWpError(""); setWpProgress(null);
+  }
+
   function addFiles(list: FileList | File[]) {
-    const imgs = Array.from(list).filter((f) => f.type.startsWith("image/"));
-    setFiles((prev) => [...prev, ...imgs]);
+    const existingNames = new Set(files.map((f) => f.name));
+    const accepted: File[] = [];
+    const rejected: { name: string; reason: string }[] = [];
+    for (const f of Array.from(list)) {
+      if (!f.type.startsWith("image/")) { rejected.push({ name: f.name, reason: "не зображення" }); continue; }
+      if (f.size > MAX_FILE_MB * 1024 * 1024) { rejected.push({ name: f.name, reason: `>${MAX_FILE_MB}МБ` }); continue; }
+      if (existingNames.has(f.name)) { rejected.push({ name: f.name, reason: "вже додано" }); continue; }
+      existingNames.add(f.name);
+      accepted.push(f);
+    }
+    setFiles((prev) => [...prev, ...accepted]);
+    setRejectedFiles(rejected);
   }
 
   async function run() {
@@ -72,7 +194,111 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
           <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]" aria-label="Закрити">✕</button>
         </div>
 
-        {status !== "done" && (
+        <div className="mb-4 flex items-center gap-0.5 rounded-[3px] border border-[#e8e4de] p-0.5">
+          <button onClick={() => setSource("files")}
+            className={`h-8 flex-1 rounded-[2px] text-[11px] uppercase tracking-[0.08em] transition-colors ${source === "files" ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>
+            З файлів
+          </button>
+          <button onClick={() => setSource("wp")}
+            className={`h-8 flex-1 rounded-[2px] text-[11px] uppercase tracking-[0.08em] transition-colors ${source === "wp" ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>
+            З WP
+          </button>
+        </div>
+
+        {source === "wp" && (
+          <div className="space-y-4">
+            {wpStatus !== "done" && (
+              <>
+                <div className="rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2.5 text-[12px] leading-relaxed text-[#6b6253]">
+                  Шукає фото в медіатеках підключених WordPress-сайтів за артикулом/SKU товару (по черзі, поки не знайдеться) — для всіх товарів без фото одразу.
+                  Джерела керуються в <b className="text-[#17130f]">Налаштування → Фото з WP</b>.
+                </div>
+
+                {wpStatus === "idle" && sourcesCount === 0 && (
+                  <div className="rounded-[4px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12px] text-amber-800">
+                    Немає підключених джерел. Додайте хоча б одне в <b>Налаштування → Фото з WP</b>.
+                  </div>
+                )}
+                {wpStatus === "idle" && (
+                  <button onClick={wpSearch} disabled={sourcesCount === 0 || sourcesCount === null}
+                    className="h-10 w-full rounded-[4px] bg-[#17130f] text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+                    Знайти фото для товарів без фото
+                  </button>
+                )}
+                {wpStatus === "searching" && (
+                  <>
+                    <ProgressBar progress={wpProgress} fallback="Шукаємо на джерелі…" />
+                    <button onClick={wpCancel} className="w-full rounded-[4px] border border-[#e8e4de] py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+                  </>
+                )}
+                {wpError && <p className="text-[12px] text-red-600">{wpError}</p>}
+
+                {wpStatus === "previewed" && wpPreview && (
+                  <>
+                    <div className="rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
+                      Перевірено <b>{wpPreview.checked}</b> товарів без фото — знайдено фото для <b>{wpPreview.found.length}</b>,
+                      не знайдено для <b>{wpPreview.notFound.length}</b>.
+                    </div>
+                    {wpPreview.found.length > 0 && (
+                      <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-[4px] border border-[#e8e4de] bg-white p-2">
+                        {wpPreview.found.slice(0, 30).map((f) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <div key={f.id} className="flex items-center gap-2.5 text-[12px]">
+                            <img src={f.preview} alt="" className="h-8 w-8 shrink-0 rounded-[2px] object-cover" />
+                            <span className="min-w-0 flex-1 truncate text-[#17130f]">{f.name}</span>
+                            <span className="shrink-0 text-[#9c8f7d]">{f.count} фото · {f.source}</span>
+                          </div>
+                        ))}
+                        {wpPreview.found.length > 30 && <p className="text-[11px] text-[#9c8f7d]">…і ще {wpPreview.found.length - 30}</p>}
+                      </div>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => { setWpStatus("idle"); setWpPreview(null); }} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+                      <button onClick={wpApply} disabled={wpPreview.found.length === 0}
+                        className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+                        Завантажити й прив&apos;язати ({wpPreview.found.length})
+                      </button>
+                    </div>
+                  </>
+                )}
+                {wpStatus === "applying" && (
+                  <>
+                    <ProgressBar progress={wpProgress} fallback="Завантажуємо фото…" />
+                    <button onClick={wpCancel} className="w-full rounded-[4px] border border-[#e8e4de] py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+                  </>
+                )}
+              </>
+            )}
+
+            {wpStatus === "done" && wpApplied && (
+              <div className="space-y-4">
+                <div className="rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
+                  ✓ Підтягнуто <b>{wpApplied.photosSaved}</b> фото для <b>{wpApplied.productsUpdated}</b> товарів
+                </div>
+                {wpApplied.notFound.length > 0 && (
+                  <div className="rounded-[4px] border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="mb-1.5 text-[12px] text-amber-800">⚠ Не знайдено на джерелі для {wpApplied.notFound.length} товарів:</p>
+                    <ul className="max-h-32 space-y-0.5 overflow-y-auto text-[11px] text-amber-700">
+                      {wpApplied.notFound.slice(0, 15).map((f) => <li key={f.id} className="truncate">{f.name} <span className="font-mono">({f.code})</span></li>)}
+                      {wpApplied.notFound.length > 15 && <li className="text-amber-400">…і ще {wpApplied.notFound.length - 15}</li>}
+                    </ul>
+                  </div>
+                )}
+                {wpApplied.failed.length > 0 && (
+                  <div className="rounded-[4px] border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700">
+                    ✗ Не вдалося завантажити для: {wpApplied.failed.map((f) => f.name).join(", ")}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <button onClick={wpSearchAgain} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Шукати ще</button>
+                  <button onClick={onClose} className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85">Готово</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {source === "files" && status !== "done" && (
           <>
             <div className="mb-3 rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2.5 text-[12px] leading-relaxed text-[#6b6253]">
               <b className="text-[#17130f]">Як назвати файли:</b> артикул або SKU товару на початку назви —
@@ -100,8 +326,22 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
               <div className="mt-3">
                 <p className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Обрано файлів: {files.length}</p>
                 <div className="max-h-32 space-y-0.5 overflow-y-auto rounded-[4px] border border-[#e8e4de] bg-white p-2 text-[11px] text-[#6b6253]">
-                  {files.map((f, i) => <div key={i} className="truncate">{f.name}</div>)}
+                  {files.map((f, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">{f.name}</span>
+                      <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="shrink-0 text-[#9c8f7d] hover:text-red-600">✕</button>
+                    </div>
+                  ))}
                 </div>
+              </div>
+            )}
+
+            {rejectedFiles.length > 0 && (
+              <div className="mt-2 rounded-[4px] border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                <p className="mb-1">⚠ Пропущено:</p>
+                <ul className="space-y-0.5">
+                  {rejectedFiles.map((f, i) => <li key={i} className="truncate">{f.name} — {f.reason}</li>)}
+                </ul>
               </div>
             )}
 
@@ -115,7 +355,7 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
           </>
         )}
 
-        {status === "done" && result && (
+        {source === "files" && status === "done" && result && (
           <div className="space-y-4">
             <div className="rounded-[4px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
               ✓ Прив'язано <b>{result.matched.length}</b> фото до <b>{byProduct.size}</b> товарів
@@ -158,6 +398,28 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ProgressBar({ progress, fallback }: { progress: { label: string; done: number; total: number } | null; fallback: string }) {
+  if (!progress || progress.total === 0) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-4 text-[13px] text-[#9c8f7d]">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-[#9c8f7d]" /> {fallback}
+      </div>
+    );
+  }
+  const pct = Math.round((progress.done / progress.total) * 100);
+  return (
+    <div className="space-y-2 py-2">
+      <div className="flex items-center justify-between text-[12px] text-[#6b6253]">
+        <span>{progress.label}…</span>
+        <span>{progress.done} / {progress.total}</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e8e4de]">
+        <div className="h-full rounded-full bg-[#17130f] transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

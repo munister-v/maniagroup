@@ -1996,6 +1996,45 @@ function SettingsSection() {
   const [ai, setAi] = useState({ openrouter_api_key: "" });
   const [aiStatus, setAiStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [aiTest, setAiTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
+  type PhotoSource = { id: number; name: string; base_url: string; enabled: boolean; sort_order: number };
+  const [photoSources, setPhotoSources] = useState<PhotoSource[]>([]);
+  const [newSource, setNewSource] = useState({ name: "", base_url: "" });
+  const [sourceStatus, setSourceStatus] = useState<"idle" | "saving">("idle");
+  const [sourceError, setSourceError] = useState("");
+  const [sourceWarning, setSourceWarning] = useState("");
+  const [pingState, setPingState] = useState<Record<number, "idle" | "testing" | "ok" | "fail">>({});
+
+  function loadPhotoSources() {
+    fetch("/api/admin/photo-sources").then((r) => r.json()).then((d) => setPhotoSources(d.sources ?? []));
+  }
+
+  function normalizeUrl(u: string) {
+    return u.trim().replace(/\/+$/, "").toLowerCase();
+  }
+
+  function isValidUrl(u: string): boolean {
+    try {
+      const parsed = new URL(u.trim());
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  async function testPhotoSource(id: number, base_url: string): Promise<boolean> {
+    setPingState((prev) => ({ ...prev, [id]: "testing" }));
+    try {
+      const r = await fetch("/api/admin/photo-sources/test", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ base_url }),
+      });
+      const d = await r.json();
+      setPingState((prev) => ({ ...prev, [id]: d.reachable ? "ok" : "fail" }));
+      return !!d.reachable;
+    } catch {
+      setPingState((prev) => ({ ...prev, [id]: "fail" }));
+      return false;
+    }
+  }
 
   useEffect(() => {
     fetch("/api/admin/settings").then((r) => r.json()).then((d) => {
@@ -2003,7 +2042,57 @@ function SettingsSection() {
       setTg({ telegram_enabled: d.telegram_enabled ?? "", telegram_bot_token: d.telegram_bot_token ?? "", telegram_chat_id: d.telegram_chat_id ?? "" });
       setAi({ openrouter_api_key: d.openrouter_api_key ?? "" });
     });
+    loadPhotoSources();
   }, []);
+
+  async function addPhotoSource() {
+    setSourceError(""); setSourceWarning("");
+    const url = newSource.base_url.trim();
+    if (!url) { setSourceError("Вкажіть адресу сайту"); return; }
+    if (!isValidUrl(url)) { setSourceError("Некоректна адреса — вкажіть повний URL (https://...)"); return; }
+    if (photoSources.some((s) => normalizeUrl(s.base_url) === normalizeUrl(url))) {
+      setSourceError("Це джерело вже додано"); return;
+    }
+
+    setSourceStatus("saving");
+    const r = await fetch("/api/admin/photo-sources", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newSource),
+    });
+    const d = await r.json();
+    setSourceStatus("idle");
+    if (!r.ok) { setSourceError(d.error ?? "Помилка"); return; }
+    setNewSource({ name: "", base_url: "" });
+    loadPhotoSources();
+
+    if (d.source) {
+      const reachable = await testPhotoSource(d.source.id, url);
+      if (!reachable) setSourceWarning(`⚠ «${d.source.name}» додано, але сайт не відповів на медіа-запит — перевірте адресу.`);
+    }
+  }
+
+  async function togglePhotoSource(id: number, enabled: boolean) {
+    setPhotoSources((prev) => prev.map((s) => (s.id === id ? { ...s, enabled } : s)));
+    await fetch(`/api/admin/photo-sources/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled }),
+    });
+  }
+
+  async function deletePhotoSource(id: number) {
+    setPhotoSources((prev) => prev.filter((s) => s.id !== id));
+    await fetch(`/api/admin/photo-sources/${id}`, { method: "DELETE" });
+  }
+
+  async function movePhotoSource(id: number, dir: -1 | 1) {
+    const idx = photoSources.findIndex((s) => s.id === id);
+    const swapWith = idx + dir;
+    if (idx < 0 || swapWith < 0 || swapWith >= photoSources.length) return;
+    const next = [...photoSources];
+    [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+    setPhotoSources(next);
+    await fetch("/api/admin/photo-sources", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderedIds: next.map((s) => s.id) }),
+    });
+  }
 
   async function saveAi() {
     setAiStatus("saving");
@@ -2167,6 +2256,50 @@ function SettingsSection() {
           </button>
           {aiTest.msg && <span className={`text-[12px] ${aiTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#b3392c]"}`}>{aiTest.msg}</span>}
         </div>
+      </Card>
+
+      <Card title="Фото з WP" subtitle="Джерела для «Каталог → Фото масово → З WP» — перевіряються по черзі, поки не знайдеться фото">
+        {photoSources.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {photoSources.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-2 rounded-[4px] border border-[#e8e4de] px-3 py-2">
+                <div className="flex flex-col gap-0.5">
+                  <button onClick={() => movePhotoSource(s.id, -1)} disabled={i === 0} className="text-[10px] text-[#9c8f7d] hover:text-[#17130f] disabled:opacity-30">▲</button>
+                  <button onClick={() => movePhotoSource(s.id, 1)} disabled={i === photoSources.length - 1} className="text-[10px] text-[#9c8f7d] hover:text-[#17130f] disabled:opacity-30">▼</button>
+                </div>
+                <label className="flex items-center gap-2 shrink-0">
+                  <input type="checkbox" checked={s.enabled} onChange={(e) => togglePhotoSource(s.id, e.target.checked)} className="h-4 w-4 accent-[#17130f]" />
+                </label>
+                <div className="min-w-0 flex-1">
+                  <div className={`truncate text-[13px] ${s.enabled ? "text-[#17130f]" : "text-[#9c8f7d] line-through"}`}>{s.name || s.base_url}</div>
+                  <div className="truncate text-[11px] text-[#9c8f7d]">{s.base_url}</div>
+                </div>
+                {pingState[s.id] === "ok" && <span className="shrink-0 text-[11px] text-emerald-600">✓ доступний</span>}
+                {pingState[s.id] === "fail" && <span className="shrink-0 text-[11px] text-[#b3392c]">✗ не відповідає</span>}
+                <button onClick={() => testPhotoSource(s.id, s.base_url)} disabled={pingState[s.id] === "testing"}
+                  className="shrink-0 text-[11px] uppercase tracking-[0.08em] text-[#6b6253] hover:text-[#17130f] disabled:opacity-40">
+                  {pingState[s.id] === "testing" ? "Перевіряємо…" : "Перевірити"}
+                </button>
+                <button onClick={() => deletePhotoSource(s.id)} className="shrink-0 text-[11px] uppercase tracking-[0.08em] text-[#b3392c] hover:opacity-70">Видалити</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          <label className="block flex-1"><span className={lbl}>Назва</span>
+            <input className={inp} value={newSource.name} onChange={(e) => setNewSource((s) => ({ ...s, name: e.target.value }))} placeholder="Старий сайт" /></label>
+          <label className="block flex-[2]"><span className={lbl}>Адреса сайту (WordPress)</span>
+            <input className={inp} value={newSource.base_url} onChange={(e) => setNewSource((s) => ({ ...s, base_url: e.target.value }))} placeholder="https://example.com" /></label>
+          <button onClick={addPhotoSource} disabled={sourceStatus === "saving" || !newSource.base_url.trim()} className={btn}>
+            {sourceStatus === "saving" ? "Додаємо…" : "Додати"}
+          </button>
+        </div>
+        {sourceError && <p className="mt-2 text-[12px] text-[#b3392c]">{sourceError}</p>}
+        {sourceWarning && <p className="mt-2 text-[12px] text-amber-700">{sourceWarning}</p>}
+        <p className="mt-3 text-[11px] leading-relaxed text-[#9c8f7d]">
+          Будь-який сайт на WordPress — фото шукаються через його публічну медіатеку за назвою файлу, що починається з артикулу/SKU товару.
+          Можна додати кілька — вимкнені (без галочки) пропускаються, порядок задає чергу пошуку.
+        </p>
       </Card>
 
       <Card title="Інфраструктура">

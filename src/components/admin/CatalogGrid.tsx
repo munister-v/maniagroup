@@ -433,7 +433,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
 
   return (
     <div className="flex flex-col">
-      <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} />
+      <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} onBulkPhotos={() => setBulkPhotoOpen(true)} />
 
       {/* Intro / how-to — one compact line, expands on demand */}
       <div className="mb-3 flex items-center gap-2 rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2 text-[12px] text-[#6b6253]">

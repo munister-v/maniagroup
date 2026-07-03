@@ -557,6 +557,19 @@ CREATE TABLE IF NOT EXISTS grid_snapshot_items (
   qty_after   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_grid_snap_items ON grid_snapshot_items(snapshot_id);
+
+-- ── External photo sources (Каталог → Фото масово → З WP): any number of
+-- WordPress (or future other) sites, tried in order, each independently
+-- toggleable — replaces the single wp_photo_source_url setting.
+CREATE TABLE IF NOT EXISTS photo_sources (
+  id         BIGSERIAL PRIMARY KEY,
+  name       TEXT NOT NULL DEFAULT '',
+  base_url   TEXT NOT NULL,
+  type       TEXT NOT NULL DEFAULT 'wp',
+  enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `;
 
 /**
