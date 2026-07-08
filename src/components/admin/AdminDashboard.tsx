@@ -454,7 +454,7 @@ function OverviewSection({
             const live = requirePhoto ? withPhoto : withStock;
             const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
             const rows: { label: string; value: number; color: string; focus: { stock?: string; siteStatus?: string } }[] = [
-              { label: "Всього", value: total, color: "bg-[#d0c8be]", focus: {} },
+              { label: "Всього", value: total, color: "bg-[#d5dbe0]", focus: {} },
               { label: "Зі залишком", value: withStock, color: "bg-[#aab4bf]", focus: { stock: "in" } },
               { label: "З фото", value: withPhoto, color: "bg-amber-400", focus: { siteStatus: "live" } },
               { label: "LIVE на сайті", value: live, color: "bg-emerald-500", focus: requirePhoto ? { siteStatus: "live" } : { stock: "in" } },
@@ -772,7 +772,7 @@ function SyncCard({ sync, onNavigate, onImport }: { sync: SyncState | null; onNa
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-[3px] border border-[#e6eaec] bg-white px-6 py-4">
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${sync?.total_products ? "bg-emerald-500" : "bg-[#d0c8be]"}`} />
+          <span className={`h-2 w-2 rounded-full ${sync?.total_products ? "bg-emerald-500" : "bg-[#c3ccd4]"}`} />
           <span className="text-[11px] uppercase tracking-[0.12em] text-[#2b2d42]">
             {sync?.total_products
               ? `PostgreSQL · ${sync.total_products.toLocaleString("uk-UA")} товарів`
@@ -865,7 +865,7 @@ function AiField({
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">
           {label}
-          {hint && <span className="ml-1.5 font-normal lowercase tracking-normal text-[#c8c0b4]">· {hint}</span>}
+          {hint && <span className="ml-1.5 font-normal lowercase tracking-normal text-[#aab4bf]">· {hint}</span>}
         </span>
         <div className="flex items-center gap-2">
           {max !== undefined && <CharCounter value={value} max={max} />}
@@ -956,8 +956,8 @@ function HomeSectionsEditor({
             <button onClick={() => move(i, 1)} disabled={i === items.length - 1}
               className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#8a94a0] hover:bg-[#f7f9fa] disabled:opacity-25">▼</button>
           </div>
-          <span className="w-6 text-center text-[11px] tabular-nums text-[#bdb3a4]">{i + 1}</span>
-          <span className={`flex-1 text-[13px] ${s.enabled ? "text-[#2b2d42]" : "text-[#bdb3a4] line-through"}`}>
+          <span className="w-6 text-center text-[11px] tabular-nums text-[#aab4bf]">{i + 1}</span>
+          <span className={`flex-1 text-[13px] ${s.enabled ? "text-[#2b2d42]" : "text-[#aab4bf] line-through"}`}>
             {labelOf(s.id)}
           </span>
           <button onClick={() => toggle(i)}
@@ -1170,7 +1170,7 @@ function ContentSection({
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">
                       Заголовок головної (title)
-                      <span className="ml-1.5 font-normal lowercase tracking-normal text-[#c8c0b4]">· до 60 символів</span>
+                      <span className="ml-1.5 font-normal lowercase tracking-normal text-[#aab4bf]">· до 60 символів</span>
                     </span>
                     <CharCounter value={content.seo.defaultTitle} max={60} />
                   </div>
