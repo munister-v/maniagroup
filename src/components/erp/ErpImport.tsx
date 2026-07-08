@@ -111,7 +111,7 @@ function StatChip({ label, value, accent }: { label: string; value: number | str
   return (
     <div className="rounded-[4px] border border-[#E0E0E0] bg-white px-3 py-2">
       <p className="text-[9px] uppercase tracking-wider text-[#9E9E9E]">{label}</p>
-      <p className={`mt-0.5 text-[16px] tabular-nums font-medium ${accent ?? "text-[#212121]"}`}>
+      <p className={`mt-0.5 text-[16px] tabular-nums font-medium ${accent ?? "text-[#1f2733]"}`}>
         {typeof value === "number" ? value.toLocaleString("uk-UA") : value}
       </p>
     </div>
@@ -119,7 +119,7 @@ function StatChip({ label, value, accent }: { label: string; value: number | str
 }
 
 /* ── QuickCreateRow ───────────────────────────────────────────────────────── */
-const fieldCls = "h-8 w-full rounded-[3px] border border-[#E0E0E0] bg-white px-2 text-[12px] text-[#212121] outline-none focus:border-[#007B6E]";
+const fieldCls = "h-8 w-full rounded-[3px] border border-[#E0E0E0] bg-white px-2 text-[12px] text-[#1f2733] outline-none focus:border-[#2f9488]";
 
 /**
  * Turns one unmatched OFFERS row into a real product on the spot — the whole
@@ -191,10 +191,10 @@ function QuickCreateRow({ item, onCreated }: { item: UnmatchedItem; onCreated: (
           <input className={fieldCls} placeholder="Ціна*" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
           <input className={fieldCls} placeholder="Акційна" type="number" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
           <input className={fieldCls} placeholder="Кількість" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
-          {item.size && <span className="flex items-center text-[11px] text-[#9E9E9E]">Розмір: <b className="ml-1 text-[#616161]">{item.size}</b></span>}
+          {item.size && <span className="flex items-center text-[11px] text-[#9E9E9E]">Розмір: <b className="ml-1 text-[#5a6472]">{item.size}</b></span>}
           {error && <p className="text-[11px] text-red-600 sm:col-span-4">{error}</p>}
           <button onClick={submit} disabled={saving || !name.trim() || !price}
-            className="h-8 rounded-[3px] bg-[#007B6E] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-white hover:opacity-85 disabled:opacity-40 sm:col-span-4">
+            className="h-8 rounded-[3px] border border-[#2f9488] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40 sm:col-span-4">
             {saving ? "Створення…" : "Створити й перевірити знову"}
           </button>
         </div>
@@ -242,8 +242,8 @@ function DiffTable({ preview, onProductCreated }: { preview: ImportPreview; onPr
           <button key={f.v} onClick={() => setFilter(f.v)}
             className={`rounded-[3px] px-3 py-1.5 text-[11px] transition-colors ${
               filter === f.v
-                ? "bg-[#007B6E] text-white"
-                : "border border-[#E0E0E0] bg-white text-[#424242] hover:border-[#007B6E]"
+                ? "bg-[#2f9488] text-white"
+                : "border border-[#E0E0E0] bg-white text-[#3a4250] hover:border-[#2f9488]"
             }`}>
             {f.l} <span className={`${filter === f.v ? "opacity-70" : "text-[#BDBDBD]"}`}>{f.n}</span>
           </button>
@@ -273,10 +273,10 @@ function DiffTable({ preview, onProductCreated }: { preview: ImportPreview; onPr
               return (
                 <tr key={i} className={`${it.isNew ? "bg-green-50/50" : (qtyChanged || priceChanged) ? "bg-amber-50/30" : ""} hover:bg-[#FAFAFA]`}>
                   <td className="px-3 py-2">
-                    <span className="font-medium text-[#212121]">{it.name}</span>
+                    <span className="font-medium text-[#1f2733]">{it.name}</span>
                     {it.sku && <span className="ml-2 text-[10px] text-[#BDBDBD]">#{it.sku}</span>}
                   </td>
-                  {isOffers && <td className="px-3 py-2 text-center font-medium text-[#424242]">{it.size || "—"}</td>}
+                  {isOffers && <td className="px-3 py-2 text-center font-medium text-[#3a4250]">{it.size || "—"}</td>}
 
                   {/* qty */}
                   <td className="px-3 py-2 text-center tabular-nums">
@@ -287,11 +287,11 @@ function DiffTable({ preview, onProductCreated }: { preview: ImportPreview; onPr
                     ) : qtyChanged ? (
                       <span className="inline-flex items-center gap-1">
                         <span className="text-[#BDBDBD] line-through">{it.oldQty ?? 0}</span>
-                        <span className="text-[#007B6E]">→</span>
+                        <span className="text-[#2f9488]">→</span>
                         <span className={`font-medium ${(it.newQty ?? 0) > (it.oldQty ?? 0) ? "text-green-700" : "text-red-600"}`}>{it.newQty}</span>
                       </span>
                     ) : (
-                      <span className="text-[#424242]">{it.newQty}</span>
+                      <span className="text-[#3a4250]">{it.newQty}</span>
                     )}
                   </td>
 
@@ -302,11 +302,11 @@ function DiffTable({ preview, onProductCreated }: { preview: ImportPreview; onPr
                     ) : priceChanged ? (
                       <span className="inline-flex items-center gap-1">
                         <span className="text-[10px] text-[#BDBDBD] line-through">{it.oldPrice ? uah(it.oldPrice) : "—"}</span>
-                        <span className="text-[#007B6E]">→</span>
-                        <span className="font-medium text-[#212121]">{uah(it.newPrice)}</span>
+                        <span className="text-[#2f9488]">→</span>
+                        <span className="font-medium text-[#1f2733]">{uah(it.newPrice)}</span>
                       </span>
                     ) : (
-                      <span className="text-[#424242]">{uah(it.newPrice)}</span>
+                      <span className="text-[#3a4250]">{uah(it.newPrice)}</span>
                     )}
                   </td>
 
@@ -394,7 +394,7 @@ function FileCard({
     <div className={`rounded-[5px] border-2 bg-white transition-colors ${
       item.status === "error" ? "border-red-300" :
       item.status === "done" ? "border-green-300" :
-      canApply ? "border-[#007B6E]" :
+      canApply ? "border-[#2f9488]" :
       waitingOnMaster ? "border-[#E0E0E0] opacity-70" :
       "border-[#E0E0E0]"
     }`}>
@@ -403,13 +403,13 @@ function FileCard({
         <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${
           item.status === "done"       ? "bg-green-500" :
           item.status === "error"      ? "bg-red-500" :
-          canApply                     ? "bg-[#007B6E]" :
+          canApply                     ? "bg-[#2f9488]" :
           item.status === "previewing" || item.status === "applying" ? "bg-blue-400 animate-pulse" :
           "bg-[#ddd]"
         }`} />
 
         <button onClick={onExpand} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <span className="min-w-0 truncate text-[13px] font-medium text-[#212121]">{item.file.name}</span>
+          <span className="min-w-0 truncate text-[13px] font-medium text-[#1f2733]">{item.file.name}</span>
           {item.preview && (
             <span className={`shrink-0 rounded-[3px] border px-2 py-0.5 text-[10px] uppercase tracking-[0.06em] ${KIND_COLOR[kind]}`}>
               {KIND_LABEL[kind]}
@@ -429,7 +429,7 @@ function FileCard({
         )}
         {waitingOnMaster && <span className="shrink-0 text-[12px] text-[#9E9E9E]">⏳ Очікує застосування MG</span>}
         {item.status === "ready" && !waitingOnMaster && item.preview && (
-          <span className="shrink-0 text-[12px] text-[#616161]">
+          <span className="shrink-0 text-[12px] text-[#5a6472]">
             {item.preview.newProducts > 0 ? `${item.preview.newProducts} нових товарів` : `${item.preview.matchedRows.toLocaleString("uk-UA")} знайдено`}
           </span>
         )}
@@ -437,7 +437,7 @@ function FileCard({
         {/* THE button — always right here, never hidden behind expand */}
         {canApply && (
           <button onClick={(e) => { e.stopPropagation(); onApply(); }}
-            className="h-9 shrink-0 rounded-[4px] bg-[#007B6E] px-5 text-[11px] font-medium uppercase tracking-[0.1em] text-white hover:opacity-85">
+            className="h-9 shrink-0 rounded-[4px] border border-[#2f9488] px-5 text-[11px] font-medium uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
             Застосувати
           </button>
         )}
@@ -449,7 +449,7 @@ function FileCard({
         )}
 
         <button onClick={(e) => { e.stopPropagation(); onExpand(); }} title={expanded ? "Згорнути деталі" : "Показати деталі"}
-          className="shrink-0 text-[#9E9E9E] hover:text-[#007B6E]">
+          className="shrink-0 text-[#9E9E9E] hover:text-[#2f9488]">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"
             className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}>
             <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -530,7 +530,7 @@ function ExampleTable({ header, row, accent }: { header: string[]; row: string[]
         <tbody>
           <tr>
             {row.map((c, i) => (
-              <td key={i} className="whitespace-nowrap border-r border-[#F0F0F0] px-2 py-1.5 text-[#616161]">{c}</td>
+              <td key={i} className="whitespace-nowrap border-r border-[#F0F0F0] px-2 py-1.5 text-[#5a6472]">{c}</td>
             ))}
           </tr>
         </tbody>
@@ -545,8 +545,8 @@ function GuideStep({ n, color, title, last, children }: { n: number; color: stri
     <div className="relative pl-10 pb-4 last:pb-0">
       {!last && <span className="absolute left-[13px] top-7 bottom-0 w-px bg-[#E0E0E0]" />}
       <span className={`absolute left-0 top-0 flex h-[26px] w-[26px] items-center justify-center rounded-full text-[12px] font-semibold text-white ${color}`}>{n}</span>
-      <p className="pt-0.5 text-[13px] font-semibold text-[#212121]">{title}</p>
-      <div className="mt-1 space-y-1.5 text-[12px] leading-relaxed text-[#616161]">{children}</div>
+      <p className="pt-0.5 text-[13px] font-semibold text-[#1f2733]">{title}</p>
+      <div className="mt-1 space-y-1.5 text-[12px] leading-relaxed text-[#5a6472]">{children}</div>
     </div>
   );
 }
@@ -557,9 +557,9 @@ function GuideInfoCard({ icon, iconBg, title, children }: { icon: ReactNode; ico
     <div className="rounded-[5px] border border-[#E0E0E0] bg-white p-3.5">
       <div className="flex items-center gap-2.5">
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${iconBg}`}>{icon}</span>
-        <p className="text-[13px] font-semibold text-[#212121]">{title}</p>
+        <p className="text-[13px] font-semibold text-[#1f2733]">{title}</p>
       </div>
-      <div className="mt-2 space-y-1.5 text-[12px] leading-relaxed text-[#616161]">{children}</div>
+      <div className="mt-2 space-y-1.5 text-[12px] leading-relaxed text-[#5a6472]">{children}</div>
     </div>
   );
 }
@@ -567,7 +567,7 @@ function GuideInfoCard({ icon, iconBg, title, children }: { icon: ReactNode; ico
 function DownloadExample({ kind, label }: { kind: "master" | "offers"; label: string }) {
   return (
     <a href={`/api/erp/import/template?kind=${kind}`} download
-      className="mt-3 inline-flex items-center gap-1.5 rounded-[3px] border border-[#BDBDBD] bg-white px-3 py-1.5 text-[11px] font-medium text-[#424242] transition-colors hover:border-[#007B6E] hover:text-[#007B6E]">
+      className="mt-3 inline-flex items-center gap-1.5 rounded-[3px] border border-[#BDBDBD] bg-white px-3 py-1.5 text-[11px] font-medium text-[#3a4250] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]">
       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeLinecap="round" strokeLinejoin="round" /></svg>
       {label}
     </a>
@@ -598,27 +598,27 @@ const MODE_CARDS: { mode: ImportMode; iconBg: string; icon: ReactNode; title: st
 function ModePicker({ onPick, onGoToCatalog }: { onPick: (m: ImportMode) => void; onGoToCatalog?: () => void }) {
   return (
     <div className="mb-4">
-      <p className="mb-3 text-[13px] text-[#616161]">Що завантажуємо?</p>
+      <p className="mb-3 text-[13px] text-[#5a6472]">Що завантажуємо?</p>
       <div className="grid gap-3 sm:grid-cols-3">
         {MODE_CARDS.map((c) => (
           <button key={c.mode} onClick={() => onPick(c.mode)}
-            className="rounded-[6px] border-2 border-[#E0E0E0] bg-white p-4 text-left transition-colors hover:border-[#007B6E] hover:bg-[#FAFAFA]">
+            className="rounded-[6px] border-2 border-[#E0E0E0] bg-white p-4 text-left transition-colors hover:border-[#2f9488] hover:bg-[#FAFAFA]">
             <span className={`flex h-9 w-9 items-center justify-center rounded-full ${c.iconBg}`}>{c.icon}</span>
-            <p className="mt-2.5 text-[14px] font-medium text-[#212121]">{c.title}</p>
+            <p className="mt-2.5 text-[14px] font-medium text-[#1f2733]">{c.title}</p>
             <p className="mt-0.5 text-[11px] text-[#9E9E9E]">{c.sub}</p>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-[#616161]">{c.desc}</p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-[#5a6472]">{c.desc}</p>
           </button>
         ))}
       </div>
 
       {/* File upload is for batches from the supplier — a one-off addition
           shouldn't require building a whole MG/ОСТАТКИ file at all. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#E0E0E0] bg-[#FAFAFA] px-3.5 py-2.5 text-[12px] text-[#616161]">
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#E0E0E0] bg-[#FAFAFA] px-3.5 py-2.5 text-[12px] text-[#5a6472]">
         <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-[#9E9E9E]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
         <span className="flex-1">Файл потрібен лише для <b>пакетного</b> завантаження від постачальника. Додати всього 1–2 товари? Вручну — швидше.</span>
         {onGoToCatalog && (
           <button onClick={() => onGoToCatalog()}
-            className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#007B6E] hover:underline">
+            className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] hover:underline">
             Каталог → Новий товар →
           </button>
         )}
@@ -639,16 +639,16 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
           </span>
           <div>
             <p className="text-[11px] uppercase tracking-[0.14em] text-[#9E9E9E]">Режим</p>
-            <h2 className="mt-0.5 text-[15px] font-medium text-[#212121]">{card.title} <span className="text-[#9E9E9E] font-normal">— {card.sub}</span></h2>
+            <h2 className="mt-0.5 text-[15px] font-medium text-[#1f2733]">{card.title} <span className="text-[#9E9E9E] font-normal">— {card.sub}</span></h2>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button onClick={onChangeMode}
-            className="rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#616161] hover:border-[#007B6E] hover:text-[#007B6E]">
+            className="rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
             Змінити
           </button>
           <button onClick={() => setDetailsOpen((v) => !v)}
-            className="rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#616161] hover:border-[#007B6E] hover:text-[#007B6E]">
+            className="rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
             {detailsOpen ? "Згорнути деталі" : "Як саме працює перевірка? →"}
           </button>
         </div>
@@ -667,8 +667,8 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
       <div className={`mt-4 grid gap-3 ${mode === "both" ? "md:grid-cols-2" : ""}`}>
         {(mode === "master" || mode === "both") && (
           <div className="relative rounded-[5px] border border-amber-200 bg-amber-50/40 p-4">
-            <h3 className="text-[14px] font-medium text-[#212121]">Таблиця MG <span className="text-[#9E9E9E]">(.xls / .xlsx)</span></h3>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#616161]">
+            <h3 className="text-[14px] font-medium text-[#1f2733]">Таблиця MG <span className="text-[#9E9E9E]">(.xls / .xlsx)</span></h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#5a6472]">
               Повна база товарів <b>за весь час</b>. <b>Створює картки товарів</b>: назви, бренди, ціни, розміри, склад.
               Ключова колонка — <b>АРТИКУЛ</b>: по ньому потім чіпляються залишки.
             </p>
@@ -683,8 +683,8 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
 
         {(mode === "offers" || mode === "both") && (
           <div className="relative rounded-[5px] border border-blue-200 bg-blue-50/40 p-4">
-            <h3 className="text-[14px] font-medium text-[#212121]">Таблиця ОСТАТКИ <span className="text-[#9E9E9E]">(.csv)</span></h3>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#616161]">
+            <h3 className="text-[14px] font-medium text-[#1f2733]">Таблиця ОСТАТКИ <span className="text-[#9E9E9E]">(.csv)</span></h3>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#5a6472]">
               Що <b>реально є зараз</b> + актуальні ціни. <b>Оновлює наявність і ціни</b> в уже створених товарах,
               зіставляючи по <b>factory_article + розмір</b>. Роздільник — <b>крапка з комою</b>.
             </p>
@@ -698,11 +698,11 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
         )}
       </div>
 
-      <div className="mt-4 grid gap-2 rounded-[5px] bg-[#FAFAFA] p-3 text-[11px] text-[#616161] sm:grid-cols-2">
-        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#007B6E]">✓</span> Спершу <b>превʼю</b> — нічого не змінюється, поки не натиснете «Застосувати»</span>
-        {mode === "both" && <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#007B6E]">✓</span> Можна кинути <b>обидві таблиці одразу</b> — MG застосується першою</span>}
-        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#007B6E]">✓</span> Рядок ОСТАТКИ без свого товару потрапить у <b>«не знайдено»</b> — створіть товар прямо звідти, одним кліком</span>
-        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#007B6E]">✓</span> Незнайомий формат колонок <b>розпізнає ШІ</b> автоматично</span>
+      <div className="mt-4 grid gap-2 rounded-[5px] bg-[#FAFAFA] p-3 text-[11px] text-[#5a6472] sm:grid-cols-2">
+        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Спершу <b>превʼю</b> — нічого не змінюється, поки не натиснете «Застосувати»</span>
+        {mode === "both" && <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Можна кинути <b>обидві таблиці одразу</b> — MG застосується першою</span>}
+        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Рядок ОСТАТКИ без свого товару потрапить у <b>«не знайдено»</b> — створіть товар прямо звідти, одним кліком</span>
+        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Незнайомий формат колонок <b>розпізнає ШІ</b> автоматично</span>
       </div>
 
       {detailsOpen && (
@@ -742,7 +742,7 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
               </p>
             </GuideStep>
 
-            <GuideStep n={3} color="bg-[#007B6E]" title="«Застосувати» — що саме записується в базу" last>
+            <GuideStep n={3} color="bg-[#2f9488]" title="«Застосувати» — що саме записується в базу" last>
               <p>
                 <b>Для MG-файлу:</b> для кожного рядка створюється або оновлюється товар (назва, бренд, ціни, категорія), а розмірна сітка з колонки «Размеры»
                 перетворюється на реальні записи в <span className="font-mono text-[11px]">product_variants</span> (по одному на розмір). Товару автоматично
@@ -777,7 +777,7 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
             </GuideInfoCard>
 
             <GuideInfoCard
-              iconBg="bg-[#f3efe8] text-[#6b6253]"
+              iconBg="bg-[#f7f9fa] text-[#5a6472]"
               title="Історія імпортів"
               icon={<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" strokeLinecap="round" strokeLinejoin="round" /></svg>}
             >
@@ -977,7 +977,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
         <div>
           {onBack && (
             <button onClick={onBack}
-              className="mb-1.5 text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-[#007B6E]">
+              className="mb-1.5 text-[12px] uppercase tracking-[0.1em] text-[#9E9E9E] hover:text-[#2f9488]">
               ‹ До товарів
             </button>
           )}
@@ -998,13 +998,13 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
           )}
           {readyCount > 1 && (
             <button onClick={applyAll} disabled={applyingAll}
-              className="h-9 rounded-[3px] bg-[#007B6E] px-5 text-[11px] uppercase tracking-[0.12em] text-white shadow-sm hover:opacity-85 disabled:opacity-50">
+              className="h-9 rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] shadow-sm hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
               {applyingAll ? "Застосування…" : `Застосувати всі (${readyCount})`}
             </button>
           )}
           {hasFiles && (
             <button onClick={() => startNewBatch(null)}
-              className="h-9 rounded-[3px] border border-[#E0E0E0] px-3 text-[11px] text-[#424242] hover:border-[#007B6E]">
+              className="h-9 rounded-[3px] border border-[#E0E0E0] px-3 text-[11px] text-[#3a4250] hover:border-[#2f9488]">
               {allDone ? "Нові файли" : "Очистити"}
             </button>
           )}
@@ -1016,10 +1016,10 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       {catalog && (
         <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[5px] border border-[#E0E0E0] bg-[#FAFAFA] px-5 py-3">
           <span className="text-[11px] uppercase tracking-[0.12em] text-[#9E9E9E]">Каталог зараз</span>
-          <span className="flex items-baseline gap-1.5 text-[13px] text-[#212121]">
+          <span className="flex items-baseline gap-1.5 text-[13px] text-[#1f2733]">
             <b className="text-[18px] font-medium tabular-nums">{catalog.total.toLocaleString("uk-UA")}</b> товарів
           </span>
-          <span className="flex items-baseline gap-1.5 text-[13px] text-[#212121]">
+          <span className="flex items-baseline gap-1.5 text-[13px] text-[#1f2733]">
             <b className="text-[18px] font-medium tabular-nums text-green-600">{catalog.inStock.toLocaleString("uk-UA")}</b> в наявності
           </span>
           <span className="flex items-baseline gap-1.5 text-[13px] text-[#9E9E9E]">
@@ -1031,7 +1031,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
             </span>
           )}
           {onGoToCatalog && (
-            <button onClick={onGoToCatalog} className="ml-auto text-[11px] uppercase tracking-[0.1em] text-[#007B6E] hover:underline">
+            <button onClick={onGoToCatalog} className="ml-auto text-[11px] uppercase tracking-[0.1em] text-[#2f9488] hover:underline">
               Відкрити каталог →
             </button>
           )}
@@ -1056,7 +1056,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
             </div>
             {onGoToCatalog && (
               <button onClick={onGoToCatalog}
-                className="h-9 shrink-0 rounded-[3px] bg-[#107C41] px-5 text-[11px] uppercase tracking-[0.12em] text-white shadow-sm hover:opacity-90">
+                className="h-9 shrink-0 rounded-[3px] bg-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-white shadow-sm hover:opacity-90">
                 Перейти до каталогу →
               </button>
             )}
@@ -1106,7 +1106,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
           onClick={() => fileRef.current?.click()}
           className={`cursor-pointer rounded-[4px] border-2 border-dashed text-center transition-colors ${
             drag
-              ? "border-[#007B6E] bg-[#FAFAFA]"
+              ? "border-[#2f9488] bg-[#FAFAFA]"
               : hasFiles
                 ? "border-[#E0E0E0] px-4 py-3 hover:border-[#BDBDBD]"
                 : "border-[#E0E0E0] px-4 py-12 hover:border-[#BDBDBD]"
@@ -1116,7 +1116,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
               <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-[#BDBDBD]" fill="none" stroke="currentColor" strokeWidth="1.3">
                 <path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="mt-3 text-[14px] text-[#424242]">Перетягніть файл або натисніть для вибору</p>
+              <p className="mt-3 text-[14px] text-[#3a4250]">Перетягніть файл або натисніть для вибору</p>
               <p className="mt-1 text-[12px] text-[#9E9E9E]">
                 {mode === "master" ? ".xls · .xlsx" : mode === "offers" ? ".csv" : ".csv · .xls · .xlsx — можна кинути кілька файлів одразу"}
               </p>
@@ -1178,7 +1178,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
               ] as const).map((f) => (
                 <button key={f.v} onClick={() => { setHistoryFilter(f.v); setHistoryOpenIdx(null); }}
                   className={`rounded-[3px] px-2.5 py-1 text-[11px] transition-colors ${
-                    historyFilter === f.v ? "bg-[#007B6E] text-white" : "border border-[#E0E0E0] bg-white text-[#616161] hover:border-[#007B6E]"
+                    historyFilter === f.v ? "bg-[#2f9488] text-white" : "border border-[#E0E0E0] bg-white text-[#5a6472] hover:border-[#2f9488]"
                   }`}>{f.l}</button>
               ))}
             </div>
@@ -1215,7 +1215,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
                         className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left text-[12px] hover:bg-[#FAFAFA]">
                         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${h.unmatchedRows > 0 && h.matchedRows === 0 ? "bg-red-400" : "bg-green-400"}`} />
                         <span className={`shrink-0 rounded-[3px] border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] ${KIND_COLOR[h.kind]}`}>{KIND_LABEL[h.kind]}</span>
-                        <span className="min-w-0 flex-1 truncate font-medium text-[#212121]">{h.filename}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium text-[#1f2733]">{h.filename}</span>
                         <span className="shrink-0 tabular-nums text-[#9E9E9E]">
                           {h.productsCreated > 0 && <>+{h.productsCreated} нових · </>}
                           {h.productsUpdated > 0 && <>{h.productsUpdated} оновлено · </>}

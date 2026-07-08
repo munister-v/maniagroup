@@ -66,7 +66,7 @@ function ExportMenu({ href, label }: { href: (fmt: string) => string; label?: st
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] hover:border-[#17130f]"
+        className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] hover:border-[#2b2d42]"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -76,14 +76,14 @@ function ExportMenu({ href, label }: { href: (fmt: string) => string; label?: st
       {open && (
         <>
           <div className="fixed inset-0 z-[80]" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-[90] mt-1 w-36 rounded-[3px] border border-[#e8e4de] bg-white shadow-lg">
+          <div className="absolute right-0 top-full z-[90] mt-1 w-36 rounded-[3px] border border-[#e6eaec] bg-white shadow-lg">
             {(["xlsx","csv","pdf"] as const).map((fmt) => (
               <a
                 key={fmt}
                 href={href(fmt)}
                 download
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2 px-4 py-2.5 text-[12px] text-[#17130f] hover:bg-[#f5f1ea] first:rounded-t-[3px] last:rounded-b-[3px]"
+                className="flex items-center gap-2 px-4 py-2.5 text-[12px] text-[#2b2d42] hover:bg-[#f7f9fa] first:rounded-t-[3px] last:rounded-b-[3px]"
               >
                 {fmt === "xlsx" ? "📊" : fmt === "csv" ? "📋" : "🖨"} {fmt.toUpperCase()}
               </a>
@@ -136,29 +136,29 @@ function RegisterTab() {
   }
 
   const totalPages = Math.ceil(total / perPage);
-  const inp = "h-9 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+  const inp = "h-9 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none";
 
   return (
     <div className="space-y-5">
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">З</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">З</span>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inp} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">По</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">По</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inp} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Статус</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Статус</span>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className={inp + " pr-7"}>
             <option value="">Всі</option>
             {Object.entries(STATUS_UK).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Пошук</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Пошук</span>
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="№, ім'я, тел, ТТН…" className={inp + " w-52"} />
         </label>
         <div className="ml-auto flex items-end gap-2">
@@ -177,7 +177,7 @@ function RegisterTab() {
         ].map((pr) => (
           <button key={pr.label}
             onClick={() => { setFrom(pr.from); setTo(pr.to); }}
-            className={`rounded-[3px] border px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors ${from === pr.from && to === pr.to ? "border-[#17130f] bg-[#17130f] text-white" : "border-[#e8e4de] text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]"}`}
+            className={`rounded-[3px] border px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors ${from === pr.from && to === pr.to ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]"}`}
           >
             {pr.label}
           </button>
@@ -193,19 +193,19 @@ function RegisterTab() {
             { label: "Середній чек", val: uah(summary.avg) },
             { label: "Знижки", val: uah(summary.discounts) },
           ].map((k) => (
-            <div key={k.label} className={`rounded-[4px] border p-4 ${k.accent ? "border-[#17130f] bg-white" : "border-[#e8e4de] bg-white"}`}>
-              <p className="text-[22px] font-light tabular-nums text-[#17130f]">{k.val}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#9c8f7d]">{k.label}</p>
+            <div key={k.label} className={`rounded-[4px] border p-4 ${k.accent ? "border-[#2b2d42] bg-white" : "border-[#e6eaec] bg-white"}`}>
+              <p className="text-[22px] font-light tabular-nums text-[#2b2d42]">{k.val}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#8a94a0]">{k.label}</p>
             </div>
           ))}
         </div>
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-[4px] border border-[#e8e4de] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#e6eaec] bg-white">
         <table className="w-full min-w-[900px] text-[13px]">
           <thead>
-            <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+            <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
               <th className="px-4 py-3 text-left">№</th>
               <th className="px-4 py-3 text-left">Дата</th>
               <th className="px-4 py-3 text-left">Покупець</th>
@@ -217,36 +217,36 @@ function RegisterTab() {
               <th className="px-4 py-3 text-right">Разом</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f7f4f0]">
+          <tbody className="divide-y divide-[#f7f9fa]">
             {loading && !orders.length && (
-              <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</td></tr>
+              <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#8a94a0]">Завантаження…</td></tr>
             )}
             {!loading && orders.length === 0 && (
-              <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#9c8f7d]">Замовлень не знайдено</td></tr>
+              <tr><td colSpan={9} className="py-12 text-center text-[12px] text-[#8a94a0]">Замовлень не знайдено</td></tr>
             )}
             {orders.map((o) => (
-              <tr key={o.id} className="hover:bg-[#fafaf8]">
-                <td className="px-4 py-3 font-mono text-[12px] text-[#9c8f7d]">{o.number}</td>
+              <tr key={o.id} className="hover:bg-[#fafbfc]">
+                <td className="px-4 py-3 font-mono text-[12px] text-[#8a94a0]">{o.number}</td>
                 <td className="px-4 py-3 whitespace-nowrap text-[12px]">
                   {new Date(o.created_at).toLocaleDateString("uk-UA", { day:"2-digit", month:"2-digit", year:"2-digit" })}
-                  <span className="ml-1 text-[#b9ae9b]">{new Date(o.created_at).toLocaleTimeString("uk-UA", { hour:"2-digit", minute:"2-digit" })}</span>
+                  <span className="ml-1 text-[#aab4bf]">{new Date(o.created_at).toLocaleTimeString("uk-UA", { hour:"2-digit", minute:"2-digit" })}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="font-medium text-[#17130f]">{o.first_name} {o.last_name}</p>
-                  <p className="text-[11px] text-[#9c8f7d]">{o.phone}</p>
+                  <p className="font-medium text-[#2b2d42]">{o.first_name} {o.last_name}</p>
+                  <p className="text-[11px] text-[#8a94a0]">{o.phone}</p>
                 </td>
-                <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{o.shipping_city || "—"}</td>
-                <td className="px-4 py-3 font-mono text-[11px] text-[#9c8f7d]">{o.ttn || "—"}</td>
+                <td className="px-4 py-3 text-[12px] text-[#8a94a0]">{o.shipping_city || "—"}</td>
+                <td className="px-4 py-3 font-mono text-[11px] text-[#8a94a0]">{o.ttn || "—"}</td>
                 <td className="px-4 py-3 text-center">
                   <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-wider ${STATUS_COLOR[o.status] ?? "bg-[#f5f5f5] text-[#555]"}`}>
                     {STATUS_UK[o.status] ?? o.status}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">{uah(o.subtotal)}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-[#9c8f7d]">
+                <td className="px-4 py-3 text-right tabular-nums text-[#8a94a0]">
                   {Number(o.discount) > 0 ? <span className="text-green-700">-{uah(o.discount)}</span> : "—"}
                 </td>
-                <td className="px-4 py-3 text-right font-medium tabular-nums text-[#17130f]">{uah(o.total)}</td>
+                <td className="px-4 py-3 text-right font-medium tabular-nums text-[#2b2d42]">{uah(o.total)}</td>
               </tr>
             ))}
           </tbody>
@@ -256,12 +256,12 @@ function RegisterTab() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-[12px]">
-          <span className="text-[#9c8f7d]">{total} замовлень · стор. {page} з {totalPages}</span>
+          <span className="text-[#8a94a0]">{total} замовлень · стор. {page} з {totalPages}</span>
           <div className="flex gap-1">
             <button disabled={page <= 1} onClick={() => load(page - 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] hover:border-[#17130f] disabled:opacity-30">‹</button>
+              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] text-[#2b2d42] hover:border-[#2b2d42] disabled:opacity-30">‹</button>
             <button disabled={page >= totalPages} onClick={() => load(page + 1)}
-              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] hover:border-[#17130f] disabled:opacity-30">›</button>
+              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] text-[#2b2d42] hover:border-[#2b2d42] disabled:opacity-30">›</button>
           </div>
         </div>
       )}
@@ -300,7 +300,7 @@ function MonthlyTab() {
           {years.map((y) => (
             <button key={y} onClick={() => setYear(y)}
               className={`rounded-[3px] border px-4 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                year === y ? "border-[#17130f] bg-[#17130f] text-white" : "border-[#e8e4de] text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]"
+                year === y ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]"
               }`}>
               {y}
             </button>
@@ -318,9 +318,9 @@ function MonthlyTab() {
             { label: "Середній чек", val: uah(totals.avg) },
             { label: "Знижки", val: uah(totals.discounts) },
           ].map((k) => (
-            <div key={k.label} className={`rounded-[4px] border p-4 ${k.accent ? "border-[#17130f]" : "border-[#e8e4de]"} bg-white`}>
-              <p className="text-[22px] font-light tabular-nums text-[#17130f]">{k.val}</p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#9c8f7d]">{k.label}</p>
+            <div key={k.label} className={`rounded-[4px] border p-4 ${k.accent ? "border-[#2b2d42]" : "border-[#e6eaec]"} bg-white`}>
+              <p className="text-[22px] font-light tabular-nums text-[#2b2d42]">{k.val}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#8a94a0]">{k.label}</p>
             </div>
           ))}
         </div>
@@ -328,23 +328,23 @@ function MonthlyTab() {
 
       {/* Bar chart */}
       {months.length > 0 && (
-        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
-          <h3 className="mb-4 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Виручка по місяцях</h3>
+        <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
+          <h3 className="mb-4 text-[10px] uppercase tracking-wider text-[#8a94a0]">Виручка по місяцях</h3>
           <div className="flex h-36 items-end gap-2">
             {months.map((m) => {
               const [, mm] = m.month.split("-");
               const h = Math.round((Number(m.revenue) / maxRev) * 100);
               return (
                 <div key={m.month} className="group flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[10px] tabular-nums text-[#b9ae9b] opacity-0 group-hover:opacity-100">
+                  <span className="text-[10px] tabular-nums text-[#aab4bf] opacity-0 group-hover:opacity-100">
                     {Number(m.revenue) > 0 ? Math.round(Number(m.revenue)/1000) + "k" : ""}
                   </span>
                   <div className="flex w-full flex-1 items-end">
-                    <div className="w-full rounded-t-[2px] bg-[#17130f] transition-all hover:opacity-80"
+                    <div className="w-full rounded-t-[2px] bg-[#2b2d42] transition-all hover:opacity-80"
                       style={{ height: `${Math.max(2, h)}%` }}
                       title={`${UA_MONTHS[parseInt(mm,10)-1]}: ${uah(m.revenue)}`} />
                   </div>
-                  <span className="text-[10px] uppercase text-[#b9ae9b]">{UA_MONTHS[parseInt(mm,10)-1].slice(0,3)}</span>
+                  <span className="text-[10px] uppercase text-[#aab4bf]">{UA_MONTHS[parseInt(mm,10)-1].slice(0,3)}</span>
                 </div>
               );
             })}
@@ -353,15 +353,15 @@ function MonthlyTab() {
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-[4px] border border-[#e8e4de] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#e6eaec] bg-white">
         {loading ? (
-          <div className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</div>
+          <div className="py-12 text-center text-[12px] text-[#8a94a0]">Завантаження…</div>
         ) : months.length === 0 ? (
-          <div className="py-12 text-center text-[12px] text-[#9c8f7d]">За {year} рік замовлень немає</div>
+          <div className="py-12 text-center text-[12px] text-[#8a94a0]">За {year} рік замовлень немає</div>
         ) : (
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+              <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
                 <th className="px-5 py-3 text-left">Місяць</th>
                 <th className="px-5 py-3 text-right">Замовлень</th>
                 <th className="px-5 py-3 text-right">Виручка</th>
@@ -370,16 +370,16 @@ function MonthlyTab() {
                 <th className="px-5 py-3 text-right">Знижки</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f7f4f0]">
+            <tbody className="divide-y divide-[#f7f9fa]">
               {months.map((m) => {
                 const [, mm] = m.month.split("-");
                 return (
-                  <tr key={m.month} className="hover:bg-[#fafaf8]">
-                    <td className="px-5 py-3 font-medium text-[#17130f]">{UA_MONTHS[parseInt(mm,10)-1]} {year}</td>
+                  <tr key={m.month} className="hover:bg-[#fafbfc]">
+                    <td className="px-5 py-3 font-medium text-[#2b2d42]">{UA_MONTHS[parseInt(mm,10)-1]} {year}</td>
                     <td className="px-5 py-3 text-right tabular-nums">{m.orders}</td>
-                    <td className="px-5 py-3 text-right font-medium tabular-nums text-[#17130f]">{uah(m.revenue)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-[#9c8f7d]">{uah(m.avg_check)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-[#9c8f7d]">{m.cancelled}</td>
+                    <td className="px-5 py-3 text-right font-medium tabular-nums text-[#2b2d42]">{uah(m.revenue)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-[#8a94a0]">{uah(m.avg_check)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-[#8a94a0]">{m.cancelled}</td>
                     <td className="px-5 py-3 text-right tabular-nums text-green-700">{Number(m.discounts) > 0 ? uah(m.discounts) : "—"}</td>
                   </tr>
                 );
@@ -387,11 +387,11 @@ function MonthlyTab() {
             </tbody>
             {totals && (
               <tfoot>
-                <tr className="border-t-2 border-[#e8e4de] font-medium">
-                  <td className="px-5 py-3 text-[#17130f]">Разом {year}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-[#17130f]">{totals.orders}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-[#17130f]">{uah(totals.revenue)}</td>
-                  <td className="px-5 py-3 text-right tabular-nums text-[#9c8f7d]">{uah(totals.avg)}</td>
+                <tr className="border-t-2 border-[#e6eaec] font-medium">
+                  <td className="px-5 py-3 text-[#2b2d42]">Разом {year}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-[#2b2d42]">{totals.orders}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-[#2b2d42]">{uah(totals.revenue)}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-[#8a94a0]">{uah(totals.avg)}</td>
                   <td className="px-5 py-3" />
                   <td className="px-5 py-3 text-right tabular-nums text-green-700">{Number(totals.discounts) > 0 ? uah(totals.discounts) : "—"}</td>
                 </tr>
@@ -424,7 +424,7 @@ function ProductsTab() {
   useEffect(() => { load(); }, [load]);
 
   const maxRev = Math.max(1, ...rows.map((r) => Number(r.revenue)));
-  const inp = "h-9 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+  const inp = "h-9 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none";
 
   function exportHref(fmt: string) {
     return `/api/admin/accounting/export?report=products&from=${from}&to=${to}&format=${fmt}`;
@@ -434,11 +434,11 @@ function ProductsTab() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">З</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">З</span>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inp} />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">По</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">По</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inp} />
         </label>
         <div className="ml-auto flex items-end gap-2">
@@ -446,15 +446,15 @@ function ProductsTab() {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-[4px] border border-[#e8e4de] bg-white">
+      <div className="overflow-x-auto rounded-[4px] border border-[#e6eaec] bg-white">
         {loading ? (
-          <div className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</div>
+          <div className="py-12 text-center text-[12px] text-[#8a94a0]">Завантаження…</div>
         ) : rows.length === 0 ? (
-          <div className="py-12 text-center text-[12px] text-[#9c8f7d]">Продажів за вказаний період немає</div>
+          <div className="py-12 text-center text-[12px] text-[#8a94a0]">Продажів за вказаний період немає</div>
         ) : (
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+              <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
                 <th className="px-4 py-3 text-center w-8">#</th>
                 <th className="px-4 py-3 text-left">Товар</th>
                 <th className="px-4 py-3 text-left">Бренд</th>
@@ -464,18 +464,18 @@ function ProductsTab() {
                 <th className="px-4 py-3 w-32">Частка</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f7f4f0]">
+            <tbody className="divide-y divide-[#f7f9fa]">
               {rows.map((r, i) => (
-                <tr key={r.product_id} className="hover:bg-[#fafaf8]">
-                  <td className="px-4 py-2.5 text-center text-[11px] tabular-nums text-[#b9ae9b]">{i + 1}</td>
-                  <td className="px-4 py-2.5 text-[#17130f]">{r.name}</td>
-                  <td className="px-4 py-2.5 text-[11px] text-[#9c8f7d]">{r.brand}</td>
+                <tr key={r.product_id} className="hover:bg-[#fafbfc]">
+                  <td className="px-4 py-2.5 text-center text-[11px] tabular-nums text-[#aab4bf]">{i + 1}</td>
+                  <td className="px-4 py-2.5 text-[#2b2d42]">{r.name}</td>
+                  <td className="px-4 py-2.5 text-[11px] text-[#8a94a0]">{r.brand}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{r.qty}</td>
-                  <td className="px-4 py-2.5 text-right font-medium tabular-nums text-[#17130f]">{uah(r.revenue)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-[#9c8f7d]">{uah(r.avg_price)}</td>
+                  <td className="px-4 py-2.5 text-right font-medium tabular-nums text-[#2b2d42]">{uah(r.revenue)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[#8a94a0]">{uah(r.avg_price)}</td>
                   <td className="px-4 py-2.5">
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f0ece6]">
-                      <div className="h-full rounded-full bg-[#17130f]"
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#eef2f3]">
+                      <div className="h-full rounded-full bg-[#2b2d42]"
                         style={{ width: `${Math.max(2, Math.round((Number(r.revenue) / maxRev) * 100))}%` }} />
                     </div>
                   </td>
@@ -505,7 +505,7 @@ function InventoryTab() {
 
   const maxVal = Math.max(1, ...byBrand.map((b) => Number(b.stock_value)));
 
-  if (loading) return <div className="py-12 text-center text-[12px] text-[#9c8f7d]">Завантаження…</div>;
+  if (loading) return <div className="py-12 text-center text-[12px] text-[#8a94a0]">Завантаження…</div>;
 
   return (
     <div className="space-y-6">
@@ -519,41 +519,41 @@ function InventoryTab() {
             { label: "Ср. ціна", val: uah(summary.avg_price) },
             { label: "Вартість залишку", val: uah(summary.stock_value), accent: true },
           ].map((k) => (
-            <div key={k.label} className={`rounded-[4px] border p-4 bg-white ${k.accent ? "border-[#17130f]" : "border-[#e8e4de]"}`}>
-              <p className={`text-[22px] font-light tabular-nums ${k.ok ? "text-green-700" : k.bad ? "text-red-600" : k.warn ? "text-amber-600" : "text-[#17130f]"}`}>
+            <div key={k.label} className={`rounded-[4px] border p-4 bg-white ${k.accent ? "border-[#2b2d42]" : "border-[#e6eaec]"}`}>
+              <p className={`text-[22px] font-light tabular-nums ${k.ok ? "text-green-700" : k.bad ? "text-red-600" : k.warn ? "text-amber-600" : "text-[#2b2d42]"}`}>
                 {k.val}
               </p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#9c8f7d]">{k.label}</p>
+              <p className="mt-0.5 text-[10px] uppercase tracking-[0.1em] text-[#8a94a0]">{k.label}</p>
             </div>
           ))}
         </div>
       )}
 
-      <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
-        <h3 className="mb-4 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Залишки за брендами (Топ-20)</h3>
+      <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
+        <h3 className="mb-4 text-[10px] uppercase tracking-wider text-[#8a94a0]">Залишки за брендами (Топ-20)</h3>
         <div className="space-y-2.5">
           {byBrand.map((b) => (
             <div key={b.brand}>
               <div className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 flex-1 truncate text-[13px] text-[#17130f]">{b.brand}</span>
-                <span className="text-[12px] tabular-nums text-[#9c8f7d]">
+                <span className="min-w-0 flex-1 truncate text-[13px] text-[#2b2d42]">{b.brand}</span>
+                <span className="text-[12px] tabular-nums text-[#8a94a0]">
                   {Number(b.in_stock).toLocaleString("uk-UA")} шт
                   {Number(b.out_stock) > 0 && (
                     <span className="ml-1.5 text-[11px] text-red-500">({Number(b.out_stock)} немає)</span>
                   )}
                 </span>
-                <span className="w-24 text-right text-[12px] font-medium tabular-nums text-[#17130f]">
+                <span className="w-24 text-right text-[12px] font-medium tabular-nums text-[#2b2d42]">
                   {uah(b.stock_value)}
                 </span>
               </div>
-              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#f0ece6]">
-                <div className="h-full rounded-full bg-[#17130f]"
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#eef2f3]">
+                <div className="h-full rounded-full bg-[#2b2d42]"
                   style={{ width: `${Math.max(2, Math.round((Number(b.stock_value) / maxVal) * 100))}%` }} />
               </div>
             </div>
           ))}
           {byBrand.length === 0 && (
-            <p className="py-4 text-center text-[12px] text-[#9c8f7d]">Немає даних</p>
+            <p className="py-4 text-center text-[12px] text-[#8a94a0]">Немає даних</p>
           )}
         </div>
       </div>
@@ -597,17 +597,17 @@ export function AdminAccounting({ onToast }: { onToast?: (m: string) => void }) 
   return (
     <div className="space-y-6">
       {/* Tab bar — grouped */}
-      <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-[#e8e4de] bg-white p-2">
+      <div className="flex flex-wrap items-center gap-3 rounded-[4px] border border-[#e6eaec] bg-white p-2">
         {TAB_GROUPS.map((g, gi) => (
           <div key={g.title} className="flex flex-wrap items-center gap-1">
-            {gi > 0 && <span className="mx-1 hidden h-5 w-px bg-[#e8e4de] sm:block" />}
-            <span className="mr-1 text-[9px] uppercase tracking-[0.14em] text-[#b9ae9b]">{g.title}</span>
+            {gi > 0 && <span className="mx-1 hidden h-5 w-px bg-[#e6eaec] sm:block" />}
+            <span className="mr-1 text-[9px] uppercase tracking-[0.14em] text-[#aab4bf]">{g.title}</span>
             {g.tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`rounded-[3px] px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                  tab === t.id ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+                  tab === t.id ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"
                 }`}
               >
                 {t.label}

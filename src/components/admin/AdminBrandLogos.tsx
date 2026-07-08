@@ -117,7 +117,7 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
           <button
             onClick={downloadAll}
             disabled={busyDownload || busy}
-            className="rounded border border-[#17130f] px-4 py-2 text-[12px] uppercase tracking-luxe text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-50"
+            className="rounded border border-[#2f9488] px-4 py-2 text-[12px] uppercase tracking-luxe text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50"
             title="Завантажує лого з Logo.dev (потрібен LOGO_DEV_TOKEN у .env.local) або з сайтів брендів. Зберігає на диск — більше не залежить від зовнішніх CDN."
           >
             {busyDownload ? "Завантаження…" : "↓ Завантажити на диск"}
@@ -170,7 +170,7 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
             const isBroken = r.logo?.includes("clearbit.com") || r.logo?.includes("logo.clearbit");
             return (
               <div key={r.brand} className={`flex items-center gap-3 rounded border bg-white p-3 ${isBroken ? "border-amber-300" : "border-line"}`}>
-                <div className="flex h-12 w-24 flex-none items-center justify-center rounded bg-[#faf8f5]">
+                <div className="flex h-12 w-24 flex-none items-center justify-center rounded bg-[#f7f9fa]">
                   {r.logo && !isBroken ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={r.logo} alt={r.brand} className="max-h-9 max-w-[88px] object-contain" />

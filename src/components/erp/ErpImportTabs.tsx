@@ -33,23 +33,23 @@ export function ErpImportTabs({
       {/* Modal header — shown only when used as overlay */}
       {isModal && (
         <div className="flex items-center justify-between border-b border-[#E0E0E0] px-6 py-4">
-          <h2 className="text-[18px] font-normal text-[#212121]">Завантажити товари</h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center text-[#9E9E9E] hover:text-[#212121] text-[20px] leading-none">✕</button>
+          <h2 className="text-[18px] font-normal text-[#1f2733]">Завантажити товари</h2>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center text-[#9E9E9E] hover:text-[#1f2733] text-[20px] leading-none">✕</button>
         </div>
       )}
 
       <div className={isModal ? "max-h-[70vh] overflow-y-auto p-6" : undefined}>
-        <p className="mb-4 text-[13px] text-[#9c8f7d]">
-          <b className="text-[#17130f]">Оберіть файл</b> — таблиця MG (.xls) створює й оновлює товари, таблиця ОСТАТКИ (.csv) оновлює лише наявність і ціни.
+        <p className="mb-4 text-[13px] text-[#8a94a0]">
+          <b className="text-[#2b2d42]">Оберіть файл</b> — таблиця MG (.xls) створює й оновлює товари, таблиця ОСТАТКИ (.csv) оновлює лише наявність і ціни.
           Система сама розпізнає тип файлу.
         </p>
         <ErpImport onBack={onClose} onImported={onImported} onGoToCatalog={onGoToCatalog} />
 
-        <div className="mt-6 flex items-center gap-3 border-t border-[#e8e4de] pt-4 text-[12px] text-[#9c8f7d]">
+        <div className="mt-6 flex items-center gap-3 border-t border-[#e6eaec] pt-4 text-[12px] text-[#8a94a0]">
           <span>Вивантажити поточний каталог:</span>
-          <button onClick={() => downloadCatalog("csv")} className="text-[#17130f] hover:underline">CSV</button>
+          <button onClick={() => downloadCatalog("csv")} className="text-[#2b2d42] hover:underline">CSV</button>
           <span>·</span>
-          <button onClick={() => downloadCatalog("xlsx")} className="text-[#17130f] hover:underline">Excel</button>
+          <button onClick={() => downloadCatalog("xlsx")} className="text-[#2b2d42] hover:underline">Excel</button>
         </div>
       </div>
     </div>

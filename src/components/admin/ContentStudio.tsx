@@ -288,11 +288,11 @@ export function ContentStudio({
       {/* ── Editor column ── */}
       <div className="min-w-0 lg:w-[clamp(360px,40%,520px)] lg:shrink-0">
         {/* Action bar */}
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e8e4de] bg-white p-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-white p-2">
           <button
             onClick={publish}
             disabled={publishing}
-            className="flex h-9 items-center gap-2 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
+            className="flex h-9 items-center gap-2 rounded-[3px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] transition-opacity hover:bg-[#2f9488] hover:text-white disabled:opacity-40"
           >
             <Icon d="M5 13l4 4L19 7" className="h-3.5 w-3.5" />
             {publishing ? "Публікуємо…" : "Опублікувати"}
@@ -300,7 +300,7 @@ export function ContentStudio({
 
           <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider">
             {save === "saving" ? (
-              <span className="text-[#9c8f7d]">Збереження…</span>
+              <span className="text-[#8a94a0]">Збереження…</span>
             ) : dirty ? (
               <span className="flex items-center gap-1.5 text-amber-600">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -322,7 +322,7 @@ export function ContentStudio({
               onClick={undo}
               disabled={!canUndo}
               title="Скасувати (Ctrl+Z)"
-              className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f] disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e6eaec] text-[#2b2d42] transition-colors hover:border-[#2b2d42] disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-1" />
             </button>
@@ -330,14 +330,14 @@ export function ContentStudio({
               onClick={redo}
               disabled={!canRedo}
               title="Повторити (Ctrl+Shift+Z)"
-              className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f] disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e6eaec] text-[#2b2d42] transition-colors hover:border-[#2b2d42] disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Icon d="M15 14l5-5-5-5M19 9H8a5 5 0 0 0 0 10h1" />
             </button>
 
             <button
               onClick={snapshot}
-              className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]"
+              className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] transition-colors hover:border-[#2b2d42]"
             >
               <Icon d="M5 3h11l3 3v15H5zM9 3v5h6" className="h-3.5 w-3.5" />
               Копія
@@ -345,7 +345,7 @@ export function ContentStudio({
             <button
               onClick={() => setVersionsOpen((v) => !v)}
               className={`flex h-9 items-center gap-1.5 rounded-[3px] border px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                versionsOpen ? "border-[#17130f] bg-[#17130f] text-white" : "border-[#e8e4de] text-[#17130f] hover:border-[#17130f]"
+                versionsOpen ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] text-[#2b2d42] hover:border-[#2b2d42]"
               }`}
             >
               <Icon d="M3 3v6h6M3 13a9 9 0 1 0 3-7L3 9" className="h-3.5 w-3.5" />
@@ -356,9 +356,9 @@ export function ContentStudio({
 
         {/* Versions drawer */}
         {versionsOpen && (
-          <div className="mb-4 rounded-[4px] border border-[#e8e4de] bg-white">
-            <div className="flex items-center justify-between border-b border-[#e8e4de] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Копії та історія</p>
+          <div className="mb-4 rounded-[4px] border border-[#e6eaec] bg-white">
+            <div className="flex items-center justify-between border-b border-[#e6eaec] px-3 py-2">
+              <p className="text-[11px] uppercase tracking-[0.12em] text-[#8a94a0]">Копії та історія</p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={resetDraft}
@@ -368,22 +368,22 @@ export function ContentStudio({
                   <Icon d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M9 9l6 6M15 9l-6 6" className="h-3 w-3" />
                   Скинути до опублікованого
                 </button>
-                <span className="text-[10px] text-[#9c8f7d]">{versions.length}</span>
+                <span className="text-[10px] text-[#8a94a0]">{versions.length}</span>
               </div>
             </div>
-            <ul className="max-h-72 divide-y divide-[#f0ece6] overflow-y-auto">
+            <ul className="max-h-72 divide-y divide-[#eef2f3] overflow-y-auto">
               {versions.length === 0 && (
-                <li className="px-3 py-4 text-center text-[12px] text-[#9c8f7d]">Поки що копій немає</li>
+                <li className="px-3 py-4 text-center text-[12px] text-[#8a94a0]">Поки що копій немає</li>
               )}
               {versions.map((v) => (
                 <li key={v.id} className="flex items-center gap-3 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] text-[#17130f]">{v.label}</p>
-                    <p className="text-[10px] text-[#9c8f7d]">{new Date(v.createdAt).toLocaleString("uk-UA")}</p>
+                    <p className="truncate text-[12px] text-[#2b2d42]">{v.label}</p>
+                    <p className="text-[10px] text-[#8a94a0]">{new Date(v.createdAt).toLocaleString("uk-UA")}</p>
                   </div>
                   <button
                     onClick={() => restore(v.id)}
-                    className="shrink-0 rounded-[3px] border border-[#e8e4de] px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]"
+                    className="shrink-0 rounded-[3px] border border-[#e6eaec] px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-[#2b2d42] transition-colors hover:border-[#2b2d42]"
                   >
                     Відновити
                   </button>
@@ -400,12 +400,12 @@ export function ContentStudio({
       {/* ── Preview column ── */}
       <div className="min-w-0 flex-1">
         <div className="sticky top-2">
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e8e4de] bg-white p-2">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-white p-2">
             {/* Preview on/off */}
             <button
               onClick={() => togglePreview(!previewOn)}
               className={`flex h-9 items-center gap-1.5 rounded-[3px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                previewOn ? "bg-[#17130f] text-white" : "border border-[#e8e4de] text-[#17130f] hover:border-[#17130f]"
+                previewOn ? "bg-[#2f9488] text-white" : "border border-[#e6eaec] text-[#2b2d42] hover:border-[#2b2d42]"
               }`}
             >
               <Icon d={previewOn ? "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M12 12h.01" : "M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"} className="h-4 w-4" />
@@ -413,7 +413,7 @@ export function ContentStudio({
             </button>
 
             {/* Device switch */}
-            <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e8e4de] p-0.5">
+            <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e6eaec] p-0.5">
               {DEVICES.map((d) => (
                 <button
                   key={d.id}
@@ -421,7 +421,7 @@ export function ContentStudio({
                   title={d.label}
                   aria-label={d.label}
                   className={`flex h-8 items-center gap-1.5 rounded-[2px] px-2.5 text-[10px] uppercase tracking-[0.1em] transition-colors ${
-                    device === d.id ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+                    device === d.id ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"
                   }`}
                 >
                   <Icon d={d.icon} className="h-3.5 w-3.5" />
@@ -434,7 +434,7 @@ export function ContentStudio({
             <select
               value={page}
               onChange={(e) => setPage(e.target.value)}
-              className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none"
+              className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none"
             >
               {PAGES.map((p) => (
                 <option key={p.path} value={p.path}>{p.label}</option>
@@ -446,7 +446,7 @@ export function ContentStudio({
                 onClick={reloadPreview}
                 title="Оновити"
                 aria-label="Оновити перегляд"
-                className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f]"
+                className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e6eaec] text-[#2b2d42] transition-colors hover:border-[#2b2d42]"
               >
                 <Icon d="M3 3v6h6M3 13a9 9 0 1 0 3-7L3 9" />
               </button>
@@ -455,7 +455,7 @@ export function ContentStudio({
                 target="_blank"
                 rel="noreferrer"
                 title="Відкрити в новій вкладці"
-                className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e8e4de] text-[#17130f] transition-colors hover:border-[#17130f]"
+                className="flex h-9 w-9 items-center justify-center rounded-[3px] border border-[#e6eaec] text-[#2b2d42] transition-colors hover:border-[#2b2d42]"
               >
                 <Icon d="M14 4h6m0 0v6m0-6L10 14M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
               </a>
@@ -463,7 +463,7 @@ export function ContentStudio({
           </div>
 
           {/* Device frame */}
-          <div className="flex justify-center overflow-hidden rounded-[4px] border border-[#e8e4de] bg-[#e8e4de] p-3">
+          <div className="flex justify-center overflow-hidden rounded-[4px] border border-[#e6eaec] bg-[#e6eaec] p-3">
             <div
               className="relative overflow-hidden rounded-[3px] bg-white shadow-sm transition-all duration-300"
               style={{ width: device === "desktop" ? "100%" : deviceW, maxWidth: "100%" }}
@@ -485,11 +485,11 @@ export function ContentStudio({
               />
               {/* live-update shimmer — subtle, no white flash */}
               <div
-                className={`pointer-events-none absolute left-0 top-0 h-0.5 bg-[#17130f] transition-all duration-300 ${refreshing ? "w-full opacity-100" : "w-0 opacity-0"}`}
+                className={`pointer-events-none absolute left-0 top-0 h-0.5 bg-[#2b2d42] transition-all duration-300 ${refreshing ? "w-full opacity-100" : "w-0 opacity-0"}`}
               />
             </div>
           </div>
-          <p className="mt-2 text-center text-[10px] uppercase tracking-[0.12em] text-[#9c8f7d]">
+          <p className="mt-2 text-center text-[10px] uppercase tracking-[0.12em] text-[#8a94a0]">
             {previewOn ? "Показано чернетку — видно лише вам" : "Показано опубліковану версію"} · {device === "desktop" ? "адаптив ПК" : `${deviceW}px`}
           </p>
         </div>

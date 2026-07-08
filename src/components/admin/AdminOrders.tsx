@@ -124,31 +124,31 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Номер, телефон, імʼя, email…"
-            className="h-9 w-72 rounded-[3px] border border-[#e8e4de] bg-white pl-9 pr-3 text-[13px] focus:border-[#17130f] focus:outline-none"
+            className="h-9 w-72 rounded-[3px] border border-[#e6eaec] bg-white pl-9 pr-3 text-[13px] focus:border-[#2b2d42] focus:outline-none"
           />
-          <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#b9ae9b]" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" /></svg>
+          <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#aab4bf]" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" /></svg>
         </div>
-        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-[#8a94a0]">
           Від
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[13px] focus:border-[#17130f] focus:outline-none" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
         </label>
-        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+        <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wider text-[#8a94a0]">
           До
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[13px] focus:border-[#17130f] focus:outline-none" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
         </label>
         {(from || to || search) && (
           <button onClick={() => { setFrom(""); setTo(""); setSearch(""); load(1); }}
-            className="h-9 rounded-[3px] px-3 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">
+            className="h-9 rounded-[3px] px-3 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:text-[#2b2d42]">
             Скинути
           </button>
         )}
         <button onClick={() => setCreating(true)}
-          className="ml-auto flex h-9 items-center gap-2 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-wider text-white hover:opacity-85">
+          className="ml-auto flex h-9 items-center gap-2 rounded-[3px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
           Створити
         </button>
         <a href={`/api/admin/orders/export?${buildParams(1)}`}
-          className="flex h-9 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+          className="flex h-9 items-center gap-2 rounded-[3px] border border-[#e6eaec] bg-white px-4 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" strokeLinecap="round" strokeLinejoin="round" /></svg>
           Експорт CSV
         </a>
@@ -159,7 +159,7 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
         {STATUS_TABS.map((s) => (
           <button key={s.value} onClick={() => setStatus(s.value)}
             className={`h-8 rounded-[3px] px-4 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-              status === s.value ? "bg-[#17130f] text-white" : "border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]"
+              status === s.value ? "bg-[#2f9488] text-white" : "border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]"
             }`}>
             {s.label}
           </button>
@@ -167,14 +167,14 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
       </div>
 
       {loading ? (
-        <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-[3px] bg-[#ede9e3]" />)}</div>
+        <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-[3px] bg-[#eef2f3]" />)}</div>
       ) : orders.length === 0 ? (
-        <div className="rounded-[3px] border border-[#e8e4de] bg-white px-4 py-14 text-center text-sm text-[#9c8f7d]">Замовлень не знайдено</div>
+        <div className="rounded-[3px] border border-[#e6eaec] bg-white px-4 py-14 text-center text-sm text-[#8a94a0]">Замовлень не знайдено</div>
       ) : (
-        <div className="overflow-x-auto rounded-[3px] border border-[#e8e4de] bg-white">
+        <div className="overflow-x-auto rounded-[3px] border border-[#e6eaec] bg-white">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+              <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
                 <th className="px-4 py-3 text-left">№</th>
                 <th className="px-4 py-3 text-left">Дата</th>
                 <th className="px-4 py-3 text-left">Покупець</th>
@@ -183,20 +183,20 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
                 <th className="px-4 py-3 text-left">Статус</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f7f4f0]">
+            <tbody className="divide-y divide-[#f7f9fa]">
               {orders.map((o) => {
                 const date = new Date(o.date_created).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit" });
                 return (
-                  <tr key={o.id} onClick={() => setActive(o)} className="cursor-pointer hover:bg-[#fdfcfb]">
-                    <td className="px-4 py-3 font-mono text-[12px] font-medium text-[#17130f]">{o.number}</td>
-                    <td className="px-4 py-3 text-[12px] tabular-nums text-[#9c8f7d]">{date}</td>
+                  <tr key={o.id} onClick={() => setActive(o)} className="cursor-pointer hover:bg-[#fafbfc]">
+                    <td className="px-4 py-3 font-mono text-[12px] font-medium text-[#2b2d42]">{o.number}</td>
+                    <td className="px-4 py-3 text-[12px] tabular-nums text-[#8a94a0]">{date}</td>
                     <td className="px-4 py-3">
                       <p className="text-[13px] font-medium">{o.billing.first_name} {o.billing.last_name}</p>
-                      {o.billing.phone && <p className="text-[11px] text-[#9c8f7d]">{o.billing.phone}</p>}
+                      {o.billing.phone && <p className="text-[11px] text-[#8a94a0]">{o.billing.phone}</p>}
                     </td>
-                    <td className="hidden px-4 py-3 text-[12px] text-[#9c8f7d] lg:table-cell">
+                    <td className="hidden px-4 py-3 text-[12px] text-[#8a94a0] lg:table-cell">
                       {o.shipping_city ? `${o.shipping_city}` : "—"}
-                      {o.shipping_branch && <span className="block max-w-[160px] truncate text-[11px] text-[#b9ae9b]">{o.shipping_branch}</span>}
+                      {o.shipping_branch && <span className="block max-w-[160px] truncate text-[11px] text-[#aab4bf]">{o.shipping_branch}</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-medium tabular-nums">{uah(o.total)}</td>
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
@@ -213,13 +213,13 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
       {/* Pagination */}
       {!loading && total > PER_PAGE && (
         <div className="flex items-center justify-between">
-          <p className="text-[12px] text-[#9c8f7d]">{total.toLocaleString("uk-UA")} замовлень</p>
+          <p className="text-[12px] text-[#8a94a0]">{total.toLocaleString("uk-UA")} замовлень</p>
           <div className="flex items-center gap-2">
             <button onClick={() => load(page - 1)} disabled={page <= 1}
-              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f] disabled:opacity-30">‹</button>
-            <span className="min-w-16 text-center text-[12px] text-[#9c8f7d]">{page} / {totalPages}</span>
+              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42] disabled:opacity-30">‹</button>
+            <span className="min-w-16 text-center text-[12px] text-[#8a94a0]">{page} / {totalPages}</span>
             <button onClick={() => load(page + 1)} disabled={page >= totalPages}
-              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f] disabled:opacity-30">›</button>
+              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42] disabled:opacity-30">›</button>
           </div>
         </div>
       )}
@@ -238,10 +238,10 @@ function StatusSelect({ value, onChange }: { value: string; onChange: (s: string
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={{ background: meta.bg, color: meta.color }}
-      className="cursor-pointer rounded-full border-0 py-1 pl-2.5 pr-7 text-[11px] uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-[#17130f]/30"
+      className="cursor-pointer rounded-full border-0 py-1 pl-2.5 pr-7 text-[11px] uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-[#2b2d42]/30"
     >
       {ALL_STATUSES.map((s) => (
-        <option key={s} value={s} style={{ background: "#fff", color: "#17130f" }}>{STATUS_META[s]?.label ?? s}</option>
+        <option key={s} value={s} style={{ background: "#fff", color: "#2b2d42" }}>{STATUS_META[s]?.label ?? s}</option>
       ))}
     </select>
   );
@@ -314,29 +314,29 @@ function ManualOrderModal({ onClose, onCreated, onToast }: {
     } finally { setSaving(false); }
   }
 
-  const inp = "h-9 w-full rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+  const inp = "h-9 w-full rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none";
 
   return (
     <div className="fixed inset-0 z-[90] flex justify-end">
       <div onClick={onClose} className="absolute inset-0 bg-black/40" />
       <div className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee7db] bg-white px-6 py-4">
-          <p className="text-[15px] font-medium text-[#17130f]">Нове замовлення вручну</p>
-          <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]">✕</button>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eef2f3] bg-white px-6 py-4">
+          <p className="text-[15px] font-medium text-[#2b2d42]">Нове замовлення вручну</p>
+          <button onClick={onClose} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
         </div>
 
         <div className="space-y-6 px-6 py-5">
           <section>
-            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Товари</p>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">Товари</p>
             <div className="relative">
               <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Пошук товару за назвою / брендом / SKU…" className={inp} />
               {(results.length > 0 || searching) && (
-                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-[3px] border border-[#e8e4de] bg-white shadow-lg">
-                  {searching && <p className="px-3 py-2 text-[12px] text-[#9c8f7d]">Пошук…</p>}
+                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-[3px] border border-[#e6eaec] bg-white shadow-lg">
+                  {searching && <p className="px-3 py-2 text-[12px] text-[#8a94a0]">Пошук…</p>}
                   {results.map((p) => (
-                    <button key={p.id} onClick={() => addProduct(p)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#faf8f5]">
-                      <div className="h-9 w-7 shrink-0 overflow-hidden bg-[#f3efe8]">{p.image_src && <img src={p.image_src} alt="" className="h-full w-full object-cover" />}</div>
-                      <div className="min-w-0 flex-1"><p className="truncate text-[12px] text-[#17130f]">{p.name}</p><p className="text-[10px] text-[#9c8f7d]">{p.brand} · {uah(p.price)}</p></div>
+                    <button key={p.id} onClick={() => addProduct(p)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#f7f9fa]">
+                      <div className="h-9 w-7 shrink-0 overflow-hidden bg-[#f7f9fa]">{p.image_src && <img src={p.image_src} alt="" className="h-full w-full object-cover" />}</div>
+                      <div className="min-w-0 flex-1"><p className="truncate text-[12px] text-[#2b2d42]">{p.name}</p><p className="text-[10px] text-[#8a94a0]">{p.brand} · {uah(p.price)}</p></div>
                     </button>
                   ))}
                 </div>
@@ -344,19 +344,19 @@ function ManualOrderModal({ onClose, onCreated, onToast }: {
             </div>
 
             {lines.length > 0 && (
-              <div className="mt-3 divide-y divide-[#f0ece6] rounded-[3px] border border-[#eee7db]">
+              <div className="mt-3 divide-y divide-[#eef2f3] rounded-[3px] border border-[#eef2f3]">
                 {lines.map((l, i) => (
                   <div key={i} className="flex items-center gap-2 px-3 py-2">
-                    <div className="h-10 w-8 shrink-0 overflow-hidden bg-[#f3efe8]">{l.image_src && <img src={l.image_src} alt="" className="h-full w-full object-cover" />}</div>
+                    <div className="h-10 w-8 shrink-0 overflow-hidden bg-[#f7f9fa]">{l.image_src && <img src={l.image_src} alt="" className="h-full w-full object-cover" />}</div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] text-[#17130f]">{l.name}</p>
+                      <p className="truncate text-[12px] text-[#2b2d42]">{l.name}</p>
                       <input value={l.variation} onChange={(e) => setLine(i, { variation: e.target.value })} placeholder="розмір"
-                        className="mt-0.5 h-6 w-20 rounded-[2px] border border-[#e8e4de] px-1.5 text-[11px] focus:border-[#17130f] focus:outline-none" />
+                        className="mt-0.5 h-6 w-20 rounded-[2px] border border-[#e6eaec] px-1.5 text-[11px] focus:border-[#2b2d42] focus:outline-none" />
                     </div>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setLine(i, { quantity: Math.max(1, l.quantity - 1) })} className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#e8e4de] text-[#9c8f7d] hover:border-[#17130f]">−</button>
+                      <button onClick={() => setLine(i, { quantity: Math.max(1, l.quantity - 1) })} className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#e6eaec] text-[#8a94a0] hover:border-[#2b2d42]">−</button>
                       <span className="w-6 text-center text-[12px] tabular-nums">{l.quantity}</span>
-                      <button onClick={() => setLine(i, { quantity: l.quantity + 1 })} className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#e8e4de] text-[#9c8f7d] hover:border-[#17130f]">+</button>
+                      <button onClick={() => setLine(i, { quantity: l.quantity + 1 })} className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#e6eaec] text-[#8a94a0] hover:border-[#2b2d42]">+</button>
                     </div>
                     <span className="w-20 text-right text-[12px] font-medium tabular-nums">{uah(l.price * l.quantity)}</span>
                     <button onClick={() => setLines((ls) => ls.filter((_, k) => k !== i))} className="text-[#c62828] hover:opacity-70">✕</button>
@@ -382,7 +382,7 @@ function ManualOrderModal({ onClose, onCreated, onToast }: {
           </section>
 
           <button onClick={submit} disabled={saving}
-            className="h-11 w-full rounded-[3px] bg-[#17130f] text-[12px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+            className="h-11 w-full rounded-[3px] border border-[#2f9488] text-[12px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
             {saving ? "Створення…" : `Створити замовлення · ${uah(subtotal)}`}
           </button>
         </div>
@@ -394,8 +394,8 @@ function ManualOrderModal({ onClose, onCreated, onToast }: {
 function DrawerRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3 py-1.5 text-[13px]">
-      <span className="w-28 shrink-0 text-[#9c8f7d]">{label}</span>
-      <span className="text-[#17130f]">{children}</span>
+      <span className="w-28 shrink-0 text-[#8a94a0]">{label}</span>
+      <span className="text-[#2b2d42]">{children}</span>
     </div>
   );
 }
@@ -457,32 +457,32 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
     <div className="fixed inset-0 z-[80] flex justify-end">
       <div onClick={onClose} className="absolute inset-0 bg-black/40" />
       <div className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee7db] bg-white px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eef2f3] bg-white px-6 py-4">
           <div>
             <div className="flex items-center gap-2">
-              <p className="font-mono text-[15px] font-medium text-[#17130f]">{order.number}</p>
+              <p className="font-mono text-[15px] font-medium text-[#2b2d42]">{order.number}</p>
               {order.source === "manual" && <span className="rounded-full bg-[#ede7f6] px-2 py-0.5 text-[9px] uppercase tracking-wider text-[#6a1b9a]">Вручну</span>}
             </div>
-            <p className="text-[11px] text-[#9c8f7d]">{date}</p>
+            <p className="text-[11px] text-[#8a94a0]">{date}</p>
           </div>
-          <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]">✕</button>
+          <button onClick={onClose} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
         </div>
 
         <div className="space-y-6 px-6 py-5">
           <div>
-            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Статус</p>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">Статус</p>
             <StatusSelect value={order.status} onChange={onStatus} />
           </div>
 
           <section>
-            <p className="mb-1 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Покупець</p>
+            <p className="mb-1 text-[10px] uppercase tracking-wider text-[#8a94a0]">Покупець</p>
             <DrawerRow label="Імʼя">{order.billing.first_name} {order.billing.last_name}</DrawerRow>
             <DrawerRow label="Телефон"><a href={`tel:${order.billing.phone}`} className="underline underline-offset-2">{order.billing.phone || "—"}</a></DrawerRow>
             <DrawerRow label="Email">{order.billing.email || "—"}</DrawerRow>
           </section>
 
           <section>
-            <p className="mb-1 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Доставка · Нова Пошта</p>
+            <p className="mb-1 text-[10px] uppercase tracking-wider text-[#8a94a0]">Доставка · Нова Пошта</p>
             <DrawerRow label="Місто">{order.shipping_city || "—"}</DrawerRow>
             <DrawerRow label="Відділення">{order.shipping_branch || "—"}</DrawerRow>
             <DrawerRow label="Оплата">{payLabel}</DrawerRow>
@@ -490,12 +490,12 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
           </section>
 
           <section>
-            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">ТТН Нової Пошти</p>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">ТТН Нової Пошти</p>
             <div className="flex items-center gap-2">
               <input value={ttn} onChange={(e) => setTtn(e.target.value)} placeholder="20 4500 0000 0000"
-                className="h-9 flex-1 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] tracking-wide focus:border-[#17130f] focus:outline-none" />
+                className="h-9 flex-1 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] tracking-wide focus:border-[#2b2d42] focus:outline-none" />
               <button onClick={saveTtn} disabled={savingTtn || ttn.trim() === (order.ttn ?? "")}
-                className="h-9 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-40">
+                className="h-9 rounded-[3px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
                 {savingTtn ? "…" : "Зберегти"}
               </button>
             </div>
@@ -509,16 +509,16 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
           </section>
 
           <section>
-            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Товари ({order.line_items.length})</p>
-            <div className="divide-y divide-[#f0ece6] rounded-[3px] border border-[#eee7db]">
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">Товари ({order.line_items.length})</p>
+            <div className="divide-y divide-[#eef2f3] rounded-[3px] border border-[#eef2f3]">
               {order.line_items.map((it) => (
                 <div key={it.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <div className="h-12 w-9 shrink-0 overflow-hidden bg-[#f3efe8]">
+                  <div className="h-12 w-9 shrink-0 overflow-hidden bg-[#f7f9fa]">
                     {it.image_src && <img src={it.image_src} alt="" className="h-full w-full object-cover" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-[#17130f]">{it.name}</p>
-                    <p className="text-[11px] text-[#9c8f7d]">{it.brand} · {uah(it.price)} × {it.quantity}</p>
+                    <p className="truncate text-[13px] text-[#2b2d42]">{it.name}</p>
+                    <p className="text-[11px] text-[#8a94a0]">{it.brand} · {uah(it.price)} × {it.quantity}</p>
                   </div>
                   <span className="text-[13px] font-medium tabular-nums">{uah(it.total)}</span>
                 </div>
@@ -526,35 +526,35 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
             </div>
           </section>
 
-          <section className="rounded-[3px] bg-[#faf8f5] px-4 py-3 text-[13px]">
-            <div className="flex justify-between py-0.5 text-[#9c8f7d]"><span>Сума товарів</span><span className="tabular-nums">{uah(order.subtotal)}</span></div>
+          <section className="rounded-[3px] bg-[#f7f9fa] px-4 py-3 text-[13px]">
+            <div className="flex justify-between py-0.5 text-[#8a94a0]"><span>Сума товарів</span><span className="tabular-nums">{uah(order.subtotal)}</span></div>
             {Number(order.discount) > 0 && (
               <div className="flex justify-between py-0.5 text-[#2e7d32]"><span>Знижка{order.coupon_code ? ` · ${order.coupon_code}` : ""}</span><span className="tabular-nums">−{uah(order.discount as string)}</span></div>
             )}
-            <div className="flex justify-between py-0.5 text-[#9c8f7d]"><span>Доставка</span><span className="tabular-nums">{Number(order.shipping_cost) > 0 ? uah(order.shipping_cost) : "за тарифами НП"}</span></div>
-            <div className="mt-1 flex justify-between border-t border-[#eee7db] pt-2 text-[15px] font-medium text-[#17130f]"><span>Разом</span><span className="tabular-nums">{uah(order.total)}</span></div>
+            <div className="flex justify-between py-0.5 text-[#8a94a0]"><span>Доставка</span><span className="tabular-nums">{Number(order.shipping_cost) > 0 ? uah(order.shipping_cost) : "за тарифами НП"}</span></div>
+            <div className="mt-1 flex justify-between border-t border-[#eef2f3] pt-2 text-[15px] font-medium text-[#2b2d42]"><span>Разом</span><span className="tabular-nums">{uah(order.total)}</span></div>
           </section>
 
           <section>
-            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">Історія та нотатки</p>
+            <p className="mb-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">Історія та нотатки</p>
             <div className="flex gap-2">
               <input value={note} onChange={(e) => setNote(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") addNote(); }}
                 placeholder="Додати внутрішню нотатку…"
-                className="h-9 flex-1 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                className="h-9 flex-1 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
               <button onClick={addNote} disabled={savingNote || !note.trim()}
-                className="h-9 rounded-[3px] border border-[#17130f] px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+                className="h-9 rounded-[3px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
                 {savingNote ? "…" : "Додати"}
               </button>
             </div>
             <ul className="mt-3 space-y-2.5">
-              {events.length === 0 && <li className="text-[12px] text-[#b9ae9b]">Подій ще немає</li>}
+              {events.length === 0 && <li className="text-[12px] text-[#aab4bf]">Подій ще немає</li>}
               {events.map((ev) => (
                 <li key={ev.id} className="flex gap-2.5">
-                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ev.type === "note" ? "bg-[#17130f]" : ev.type === "status" ? "bg-[#1565c0]" : ev.type === "ttn" ? "bg-[#2e7d32]" : "bg-[#b9ae9b]"}`} />
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${ev.type === "note" ? "bg-[#2b2d42]" : ev.type === "status" ? "bg-[#1565c0]" : ev.type === "ttn" ? "bg-[#2e7d32]" : "bg-[#aab4bf]"}`} />
                   <div className="min-w-0">
-                    <p className="text-[13px] leading-snug text-[#17130f]">{ev.message}</p>
-                    <p className="text-[10px] text-[#9c8f7d]">
+                    <p className="text-[13px] leading-snug text-[#2b2d42]">{ev.message}</p>
+                    <p className="text-[10px] text-[#8a94a0]">
                       {new Date(ev.created_at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                       {ev.author && ev.author !== "system" ? ` · ${ev.author}` : ""}
                     </p>

@@ -45,22 +45,22 @@ const ACTION_META: Record<string, { label: string; color: string }> = {
   delete:     { label: "Видалення",   color: "bg-red-50 text-red-700 border-red-200" },
   backup:     { label: "Бекап",       color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   photos:     { label: "Фото",        color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-  settings:   { label: "Налаштування",color: "bg-[#f3efe8] text-[#6b6253] border-[#e5ded3]" },
-  login:      { label: "Вхід",        color: "bg-[#f3efe8] text-[#6b6253] border-[#e5ded3]" },
+  settings:   { label: "Налаштування",color: "bg-[#f7f9fa] text-[#5a6472] border-[#e6eaec]" },
+  login:      { label: "Вхід",        color: "bg-[#f7f9fa] text-[#5a6472] border-[#e6eaec]" },
   login_fail: { label: "Невдалий вхід", color: "bg-red-50 text-red-700 border-red-200" },
 };
 
 /* ── card ── */
 function HealthCard({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "ok" | "warn" | "bad" }) {
-  const dot = tone === "bad" ? "bg-red-500" : tone === "warn" ? "bg-amber-500" : tone === "ok" ? "bg-emerald-500" : "bg-[#c9bdab]";
+  const dot = tone === "bad" ? "bg-red-500" : tone === "warn" ? "bg-amber-500" : tone === "ok" ? "bg-emerald-500" : "bg-[#b6c0ca]";
   return (
-    <div className="rounded-[5px] border border-[#e8e4de] bg-white px-4 py-3">
+    <div className="rounded-[5px] border border-[#e6eaec] bg-white px-4 py-3">
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 rounded-full ${dot}`} />
-        <p className="text-[10px] uppercase tracking-[0.1em] text-[#9c8f7d]">{label}</p>
+        <p className="text-[10px] uppercase tracking-[0.1em] text-[#8a94a0]">{label}</p>
       </div>
-      <p className="mt-1.5 text-[20px] font-medium tabular-nums text-[#17130f]">{value}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-[#9c8f7d]">{sub}</p>}
+      <p className="mt-1.5 text-[20px] font-medium tabular-nums text-[#2b2d42]">{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-[#8a94a0]">{sub}</p>}
     </div>
   );
 }
@@ -94,7 +94,7 @@ export function MonitoringSection() {
     return () => clearInterval(t);
   }, [load]);
 
-  if (loading && !data) return <p className="text-[13px] text-[#9c8f7d]">Завантаження стану системи…</p>;
+  if (loading && !data) return <p className="text-[13px] text-[#8a94a0]">Завантаження стану системи…</p>;
   if (!data) return <p className="text-[13px] text-red-600">Не вдалося отримати стан системи.</p>;
 
   const backupAgeH = data.backups.latestAt ? (Date.now() - new Date(data.backups.latestAt).getTime()) / 3600000 : Infinity;
@@ -114,8 +114,8 @@ export function MonitoringSection() {
       {/* health grid */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Стан системи</h2>
-          <button onClick={load} className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">↻ Оновити</button>
+          <h2 className="text-[11px] uppercase tracking-[0.12em] text-[#8a94a0]">Стан системи</h2>
+          <button onClick={load} className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0] hover:text-[#2b2d42]">↻ Оновити</button>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <HealthCard label="База даних" value={data.db.ok ? "OK" : "Помилка"} sub={data.db.ok ? "PostgreSQL" : undefined} tone={data.db.ok ? "ok" : "bad"} />
@@ -145,12 +145,12 @@ export function MonitoringSection() {
 
       {/* activity feed */}
       <div>
-        <h2 className="mb-2 text-[11px] uppercase tracking-[0.12em] text-[#9c8f7d]">Журнал активності</h2>
+        <h2 className="mb-2 text-[11px] uppercase tracking-[0.12em] text-[#8a94a0]">Журнал активності</h2>
         <div className="mb-2 flex flex-wrap gap-1.5">
           {FILTERS.map((f) => (
             <button key={f.v} onClick={() => setFilter(f.v)}
               className={`rounded-[3px] px-2.5 py-1 text-[11px] transition-colors ${
-                filter === f.v ? "bg-[#17130f] text-white" : "border border-[#e8e4de] bg-white text-[#6b6253] hover:border-[#17130f]"
+                filter === f.v ? "bg-[#2f9488] text-white" : "border border-[#e6eaec] bg-white text-[#5a6472] hover:border-[#2b2d42]"
               }`}>{f.l}</button>
           ))}
         </div>
@@ -158,23 +158,23 @@ export function MonitoringSection() {
           const allowed = filter ? new Set(filter.split(",")) : null;
           const rows = allowed ? data.activity.filter((a) => allowed.has(a.action)) : data.activity;
           return rows.length === 0 ? (
-            <p className="rounded-[5px] border border-[#e8e4de] bg-white px-4 py-6 text-center text-[12px] text-[#b9ae9b]">Немає записів для цього фільтра.</p>
+            <p className="rounded-[5px] border border-[#e6eaec] bg-white px-4 py-6 text-center text-[12px] text-[#aab4bf]">Немає записів для цього фільтра.</p>
           ) : (
-          <div className="divide-y divide-[#f0ece6] rounded-[5px] border border-[#e8e4de] bg-white">
+          <div className="divide-y divide-[#eef2f3] rounded-[5px] border border-[#e6eaec] bg-white">
             {rows.map((a) => {
-              const meta = ACTION_META[a.action] ?? { label: a.action, color: "bg-[#f3efe8] text-[#6b6253] border-[#e5ded3]" };
+              const meta = ACTION_META[a.action] ?? { label: a.action, color: "bg-[#f7f9fa] text-[#5a6472] border-[#e6eaec]" };
               return (
                 <div key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[12px]">
                   <span className={`shrink-0 rounded-[3px] border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] ${meta.color}`}>{meta.label}</span>
-                  <span className="min-w-0 flex-1 text-[#3a3a3a]">{a.summary}</span>
-                  <span className="shrink-0 text-[11px] text-[#b9ae9b]" title={dt(a.created_at)}>{ago(a.created_at)}</span>
+                  <span className="min-w-0 flex-1 text-[#3a4250]">{a.summary}</span>
+                  <span className="shrink-0 text-[11px] text-[#aab4bf]" title={dt(a.created_at)}>{ago(a.created_at)}</span>
                 </div>
               );
             })}
           </div>
           );
         })()}
-        <p className="mt-2 text-[11px] text-[#b9ae9b]">Оновлюється автоматично кожні 30 секунд. Зберігаються останні 500 подій.</p>
+        <p className="mt-2 text-[11px] text-[#aab4bf]">Оновлюється автоматично кожні 30 секунд. Зберігаються останні 500 подій.</p>
       </div>
     </div>
   );

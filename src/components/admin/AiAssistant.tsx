@@ -25,7 +25,7 @@ function TypingDots() {
   return (
     <span className="inline-flex items-center gap-1 px-1">
       {[0, 1, 2].map((i) => (
-        <span key={i} className="h-1.5 w-1.5 rounded-full bg-[#9c8f7d] animate-bounce"
+        <span key={i} className="h-1.5 w-1.5 rounded-full bg-[#8a94a0] animate-bounce"
           style={{ animationDelay: `${i * 0.15}s` }} />
       ))}
     </span>
@@ -39,7 +39,7 @@ function Formatted({ text }: { text: string }) {
     <span>
       {parts.map((p, i) => {
         if (p.startsWith("**") && p.endsWith("**")) {
-          return <strong key={i} className="font-semibold text-[#17130f]">{p.slice(2, -2)}</strong>;
+          return <strong key={i} className="font-semibold text-[#2b2d42]">{p.slice(2, -2)}</strong>;
         }
         if (p === "\n") return <br key={i} />;
         return <span key={i}>{p}</span>;
@@ -110,7 +110,7 @@ export function AiAssistant() {
         onClick={() => setOpen((v) => !v)}
         title="AI-асистент"
         className={`fixed bottom-8 right-6 z-[80] flex h-12 w-12 items-center justify-center rounded-full shadow-lg transition-all duration-300 ${
-          open ? "bg-[#9c8f7d] text-white" : "bg-[#17130f] text-white hover:opacity-85"
+          open ? "bg-[#8a94a0] text-white" : "bg-[#2b2d42] text-white hover:opacity-85"
         }`}
       >
         {open ? (
@@ -125,11 +125,11 @@ export function AiAssistant() {
       </button>
 
       {/* Panel */}
-      <div className={`fixed bottom-24 right-6 z-[80] flex flex-col overflow-hidden rounded-[8px] border border-[#e8e4de] bg-white shadow-2xl transition-all duration-300 ${
+      <div className={`fixed bottom-24 right-6 z-[80] flex flex-col overflow-hidden rounded-[8px] border border-[#e6eaec] bg-white shadow-2xl transition-all duration-300 ${
         open ? "h-[520px] w-[360px] opacity-100" : "pointer-events-none h-0 w-[360px] opacity-0"
       }`}>
         {/* Header */}
-        <div className="flex shrink-0 items-center gap-2.5 border-b border-[#f0ece6] bg-[#17130f] px-4 py-3">
+        <div className="flex shrink-0 items-center gap-2.5 border-b border-[#eef2f3] bg-[#2b2d42] px-4 py-3">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-white">
             <Sparkle />
           </div>
@@ -147,11 +147,11 @@ export function AiAssistant() {
         <div className="flex-1 space-y-3 overflow-y-auto p-4">
           {empty && (
             <div className="space-y-3">
-              <p className="text-[12px] text-[#9c8f7d]">Привіт! Я знаю все про ваш магазин. Запитайте що завгодно:</p>
+              <p className="text-[12px] text-[#8a94a0]">Привіт! Я знаю все про ваш магазин. Запитайте що завгодно:</p>
               <div className="flex flex-wrap gap-1.5">
                 {SUGGESTIONS.map((s) => (
                   <button key={s} onClick={() => send(s)}
-                    className="rounded-full border border-[#e8e4de] px-3 py-1.5 text-[11px] text-[#17130f] hover:border-[#17130f] hover:bg-[#f7f5f2] transition-colors">
+                    className="rounded-full border border-[#e6eaec] px-3 py-1.5 text-[11px] text-[#2b2d42] hover:border-[#2b2d42] hover:bg-[#f4f6f7] transition-colors">
                     {s}
                   </button>
                 ))}
@@ -162,14 +162,14 @@ export function AiAssistant() {
           {msgs.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               {m.role === "assistant" && (
-                <div className="mr-2 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#17130f] text-white">
+                <div className="mr-2 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#2b2d42] text-white">
                   <Sparkle />
                 </div>
               )}
               <div className={`max-w-[82%] rounded-[10px] px-3.5 py-2.5 text-[13px] leading-relaxed ${
                 m.role === "user"
-                  ? "rounded-tr-[3px] bg-[#17130f] text-white"
-                  : "rounded-tl-[3px] bg-[#f7f5f2] text-[#17130f]"
+                  ? "rounded-tr-[3px] bg-[#2b2d42] text-white"
+                  : "rounded-tl-[3px] bg-[#f4f6f7] text-[#2b2d42]"
               }`}>
                 {m.role === "assistant" ? <Formatted text={m.content} /> : m.content}
               </div>
@@ -178,10 +178,10 @@ export function AiAssistant() {
 
           {loading && (
             <div className="flex justify-start">
-              <div className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#17130f] text-white">
+              <div className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#2b2d42] text-white">
                 <Sparkle />
               </div>
-              <div className="rounded-[10px] rounded-tl-[3px] bg-[#f7f5f2] px-3.5 py-2.5">
+              <div className="rounded-[10px] rounded-tl-[3px] bg-[#f4f6f7] px-3.5 py-2.5">
                 <TypingDots />
               </div>
             </div>
@@ -190,7 +190,7 @@ export function AiAssistant() {
         </div>
 
         {/* Input */}
-        <div className="shrink-0 border-t border-[#f0ece6] p-3">
+        <div className="shrink-0 border-t border-[#eef2f3] p-3">
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -199,20 +199,20 @@ export function AiAssistant() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
               placeholder="Запитайте про магазин…"
-              className="flex-1 resize-none rounded-[6px] border border-[#e8e4de] bg-[#fafaf8] px-3 py-2 text-[13px] text-[#17130f] placeholder:text-[#b9ae9b] focus:border-[#17130f] focus:outline-none"
+              className="flex-1 resize-none rounded-[6px] border border-[#e6eaec] bg-[#fafbfc] px-3 py-2 text-[13px] text-[#2b2d42] placeholder:text-[#aab4bf] focus:border-[#2b2d42] focus:outline-none"
               style={{ maxHeight: 80, overflowY: "auto" }}
             />
             <button
               onClick={() => send(input)}
               disabled={loading || !input.trim()}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-[#17130f] text-white transition-opacity hover:opacity-80 disabled:opacity-30"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px] bg-[#2b2d42] text-white transition-opacity hover:opacity-80 disabled:opacity-30"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                 <path d="M22 2 11 13M22 2 15 22l-4-9-9-4 20-7Z" />
               </svg>
             </button>
           </div>
-          <p className="mt-1.5 text-[10px] text-[#b9ae9b]">Enter — надіслати · Shift+Enter — новий рядок</p>
+          <p className="mt-1.5 text-[10px] text-[#aab4bf]">Enter — надіслати · Shift+Enter — новий рядок</p>
         </div>
       </div>
     </>
@@ -246,7 +246,7 @@ export function AiInsights() {
   }
 
   return (
-    <div className="rounded-[4px] border border-[#17130f]/20 bg-[#17130f] text-white p-5">
+    <div className="rounded-[4px] border border-[#2b2d42]/20 bg-[#2b2d42] text-white p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">
@@ -342,7 +342,7 @@ export function SocialPostButton({ product, onToast }: { product: ProductInfo; o
       <button
         onClick={() => { setOpen(true); setMode("post"); setText(""); }}
         title="AI: пост для соцмереж"
-        className="flex items-center gap-1 rounded-[3px] border border-[#e8e4de] px-2.5 py-1.5 text-[11px] text-[#17130f] hover:border-[#17130f] transition-colors"
+        className="flex items-center gap-1 rounded-[3px] border border-[#e6eaec] px-2.5 py-1.5 text-[11px] text-[#2b2d42] hover:border-[#2b2d42] transition-colors"
       >
         <Sparkle /> AI
       </button>
@@ -352,12 +352,12 @@ export function SocialPostButton({ product, onToast }: { product: ProductInfo; o
           <div className="fixed inset-0 z-[100] bg-black/30" onClick={() => setOpen(false)} />
           <div className="fixed left-1/2 top-1/2 z-[110] w-[520px] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 rounded-[8px] bg-white shadow-2xl flex flex-col max-h-[80vh]">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-[#f0ece6] px-5 py-4">
+            <div className="flex items-center justify-between border-b border-[#eef2f3] px-5 py-4">
               <div>
-                <p className="text-[13px] font-medium text-[#17130f]">{product.brand} · {product.name}</p>
-                <p className="text-[11px] text-[#9c8f7d]">AI-генератор контенту</p>
+                <p className="text-[13px] font-medium text-[#2b2d42]">{product.brand} · {product.name}</p>
+                <p className="text-[11px] text-[#8a94a0]">AI-генератор контенту</p>
               </div>
-              <button onClick={() => setOpen(false)} className="text-[#9c8f7d] hover:text-[#17130f]">
+              <button onClick={() => setOpen(false)} className="text-[#8a94a0] hover:text-[#2b2d42]">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-5 w-5">
                   <path d="M6 6l12 12M18 6 6 18" />
                 </svg>
@@ -365,11 +365,11 @@ export function SocialPostButton({ product, onToast }: { product: ProductInfo; o
             </div>
 
             {/* Mode tabs */}
-            <div className="flex gap-1 border-b border-[#f0ece6] px-5 pt-3">
+            <div className="flex gap-1 border-b border-[#eef2f3] px-5 pt-3">
               {([["post","📣 Пост для соцмереж"],["desc","📝 Опис товару"]] as const).map(([id, label]) => (
                 <button key={id} onClick={() => { setMode(id); setText(""); }}
                   className={`mb-[-1px] rounded-t-[4px] border border-b-white px-4 py-2 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                    mode === id ? "border-[#e8e4de] bg-white text-[#17130f]" : "border-transparent text-[#9c8f7d] hover:text-[#17130f]"
+                    mode === id ? "border-[#e6eaec] bg-white text-[#2b2d42]" : "border-transparent text-[#8a94a0] hover:text-[#2b2d42]"
                   }`}>
                   {label}
                 </button>
@@ -381,7 +381,7 @@ export function SocialPostButton({ product, onToast }: { product: ProductInfo; o
               <button
                 onClick={() => generate(mode === "post" ? "social-post" : "product-desc")}
                 disabled={loading}
-                className="flex h-10 w-full items-center justify-center gap-2 bg-[#17130f] text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50 rounded-[4px]"
+                className="flex h-10 w-full items-center justify-center gap-2 bg-[#2b2d42] text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50 rounded-[4px]"
               >
                 {loading ? (
                   <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Генерую…</>
@@ -391,10 +391,10 @@ export function SocialPostButton({ product, onToast }: { product: ProductInfo; o
               </button>
 
               {text && (
-                <div className="relative rounded-[4px] border border-[#e8e4de] bg-[#fafaf8] p-4">
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#17130f]">{text}</p>
+                <div className="relative rounded-[4px] border border-[#e6eaec] bg-[#fafbfc] p-4">
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#2b2d42]">{text}</p>
                   <button onClick={copy}
-                    className="mt-3 flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] hover:border-[#17130f]">
+                    className="mt-3 flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] hover:border-[#2b2d42]">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                       <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>

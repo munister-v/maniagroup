@@ -185,22 +185,22 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative z-10 max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-[6px] border border-[#e8e4de] bg-white p-5 shadow-xl">
+      <div className="relative z-10 max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-[6px] border border-[#e6eaec] bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-medium text-[#17130f]">Масове завантаження фото</h3>
-            <p className="mt-0.5 text-[12px] text-[#9c8f7d]">Назвіть файли кодом товару — система сама знайде відповідний товар</p>
+            <h3 className="text-base font-medium text-[#2b2d42]">Масове завантаження фото</h3>
+            <p className="mt-0.5 text-[12px] text-[#8a94a0]">Назвіть файли кодом товару — система сама знайде відповідний товар</p>
           </div>
-          <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]" aria-label="Закрити">✕</button>
+          <button onClick={onClose} className="text-[#8a94a0] hover:text-[#2b2d42]" aria-label="Закрити">✕</button>
         </div>
 
-        <div className="mb-4 flex items-center gap-0.5 rounded-[3px] border border-[#e8e4de] p-0.5">
+        <div className="mb-4 flex items-center gap-0.5 rounded-[3px] border border-[#e6eaec] p-0.5">
           <button onClick={() => setSource("files")}
-            className={`h-8 flex-1 rounded-[2px] text-[11px] uppercase tracking-[0.08em] transition-colors ${source === "files" ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>
+            className={`h-8 flex-1 rounded-[2px] text-[11px] uppercase tracking-[0.08em] transition-colors ${source === "files" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
             З файлів
           </button>
           <button onClick={() => setSource("wp")}
-            className={`h-8 flex-1 rounded-[2px] text-[11px] uppercase tracking-[0.08em] transition-colors ${source === "wp" ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>
+            className={`h-8 flex-1 rounded-[2px] text-[11px] uppercase tracking-[0.08em] transition-colors ${source === "wp" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
             З WP
           </button>
         </div>
@@ -209,9 +209,9 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
           <div className="space-y-4">
             {wpStatus !== "done" && (
               <>
-                <div className="rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2.5 text-[12px] leading-relaxed text-[#6b6253]">
+                <div className="rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-3.5 py-2.5 text-[12px] leading-relaxed text-[#5a6472]">
                   Шукає фото в медіатеках підключених WordPress-сайтів за артикулом/SKU товару (по черзі, поки не знайдеться) — для всіх товарів без фото одразу.
-                  Джерела керуються в <b className="text-[#17130f]">Налаштування → Фото з WP</b>.
+                  Джерела керуються в <b className="text-[#2b2d42]">Налаштування → Фото з WP</b>.
                 </div>
 
                 {wpStatus === "idle" && sourcesCount === 0 && (
@@ -221,14 +221,14 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
                 )}
                 {wpStatus === "idle" && (
                   <button onClick={wpSearch} disabled={sourcesCount === 0 || sourcesCount === null}
-                    className="h-10 w-full rounded-[4px] bg-[#17130f] text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+                    className="h-10 w-full rounded-[4px] border border-[#2f9488] text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
                     Знайти фото для товарів без фото
                   </button>
                 )}
                 {wpStatus === "searching" && (
                   <>
                     <ProgressBar progress={wpProgress} fallback="Шукаємо на джерелі…" />
-                    <button onClick={wpCancel} className="w-full rounded-[4px] border border-[#e8e4de] py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+                    <button onClick={wpCancel} className="w-full rounded-[4px] border border-[#e6eaec] py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Скасувати</button>
                   </>
                 )}
                 {wpError && <p className="text-[12px] text-red-600">{wpError}</p>}
@@ -240,22 +240,22 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
                       не знайдено для <b>{wpPreview.notFound.length}</b>.
                     </div>
                     {wpPreview.found.length > 0 && (
-                      <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-[4px] border border-[#e8e4de] bg-white p-2">
+                      <div className="max-h-56 space-y-1.5 overflow-y-auto rounded-[4px] border border-[#e6eaec] bg-white p-2">
                         {wpPreview.found.slice(0, 30).map((f) => (
                           // eslint-disable-next-line @next/next/no-img-element
                           <div key={f.id} className="flex items-center gap-2.5 text-[12px]">
                             <img src={f.preview} alt="" className="h-8 w-8 shrink-0 rounded-[2px] object-cover" />
-                            <span className="min-w-0 flex-1 truncate text-[#17130f]">{f.name}</span>
-                            <span className="shrink-0 text-[#9c8f7d]">{f.count} фото · {f.source}</span>
+                            <span className="min-w-0 flex-1 truncate text-[#2b2d42]">{f.name}</span>
+                            <span className="shrink-0 text-[#8a94a0]">{f.count} фото · {f.source}</span>
                           </div>
                         ))}
-                        {wpPreview.found.length > 30 && <p className="text-[11px] text-[#9c8f7d]">…і ще {wpPreview.found.length - 30}</p>}
+                        {wpPreview.found.length > 30 && <p className="text-[11px] text-[#8a94a0]">…і ще {wpPreview.found.length - 30}</p>}
                       </div>
                     )}
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => { setWpStatus("idle"); setWpPreview(null); }} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+                      <button onClick={() => { setWpStatus("idle"); setWpPreview(null); }} className="rounded-[4px] border border-[#e6eaec] px-4 py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Скасувати</button>
                       <button onClick={wpApply} disabled={wpPreview.found.length === 0}
-                        className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+                        className="rounded-[4px] border border-[#2f9488] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
                         Завантажити й прив&apos;язати ({wpPreview.found.length})
                       </button>
                     </div>
@@ -264,7 +264,7 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
                 {wpStatus === "applying" && (
                   <>
                     <ProgressBar progress={wpProgress} fallback="Завантажуємо фото…" />
-                    <button onClick={wpCancel} className="w-full rounded-[4px] border border-[#e8e4de] py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+                    <button onClick={wpCancel} className="w-full rounded-[4px] border border-[#e6eaec] py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Скасувати</button>
                   </>
                 )}
               </>
@@ -290,8 +290,8 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
-                  <button onClick={wpSearchAgain} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Шукати ще</button>
-                  <button onClick={onClose} className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85">Готово</button>
+                  <button onClick={wpSearchAgain} className="rounded-[4px] border border-[#e6eaec] px-4 py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Шукати ще</button>
+                  <button onClick={onClose} className="rounded-[4px] border border-[#2f9488] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white">Готово</button>
                 </div>
               </div>
             )}
@@ -300,8 +300,8 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
 
         {source === "files" && status !== "done" && (
           <>
-            <div className="mb-3 rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2.5 text-[12px] leading-relaxed text-[#6b6253]">
-              <b className="text-[#17130f]">Як назвати файли:</b> артикул або SKU товару на початку назви —
+            <div className="mb-3 rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-3.5 py-2.5 text-[12px] leading-relaxed text-[#5a6472]">
+              <b className="text-[#2b2d42]">Як назвати файли:</b> артикул або SKU товару на початку назви —
               <code className="mx-1 rounded bg-white px-1 py-0.5 text-[11px]">90101.jpg</code>,
               <code className="mx-1 rounded bg-white px-1 py-0.5 text-[11px]">90101-1.jpg</code>,
               <code className="mx-1 rounded bg-white px-1 py-0.5 text-[11px]">DEMO-PALTO-01_2.png</code> — кілька фото одного товару впорядкуються за номером у кінці назви.
@@ -313,23 +313,23 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
               onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
               onClick={() => document.getElementById("bulk-photo-input")?.click()}
               className={`flex h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-[4px] border-2 border-dashed text-center transition-colors ${
-                dragOver ? "border-[#107C41] bg-[#f0faf4]" : "border-[#e8e4de] hover:border-[#c9bdab]"
+                dragOver ? "border-[#2f9488] bg-[#f0faf4]" : "border-[#e6eaec] hover:border-[#b6c0ca]"
               }`}
             >
-              <svg viewBox="0 0 24 24" className="h-6 w-6 text-[#9c8f7d]" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <p className="text-[13px] text-[#424242]">Перетягніть фото сюди або натисніть</p>
+              <svg viewBox="0 0 24 24" className="h-6 w-6 text-[#8a94a0]" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <p className="text-[13px] text-[#3a4250]">Перетягніть фото сюди або натисніть</p>
               <input id="bulk-photo-input" type="file" accept="image/*" multiple className="hidden"
                 onChange={(e) => { if (e.target.files) addFiles(e.target.files); }} />
             </div>
 
             {files.length > 0 && (
               <div className="mt-3">
-                <p className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Обрано файлів: {files.length}</p>
-                <div className="max-h-32 space-y-0.5 overflow-y-auto rounded-[4px] border border-[#e8e4de] bg-white p-2 text-[11px] text-[#6b6253]">
+                <p className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Обрано файлів: {files.length}</p>
+                <div className="max-h-32 space-y-0.5 overflow-y-auto rounded-[4px] border border-[#e6eaec] bg-white p-2 text-[11px] text-[#5a6472]">
                   {files.map((f, i) => (
                     <div key={i} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">{f.name}</span>
-                      <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="shrink-0 text-[#9c8f7d] hover:text-red-600">✕</button>
+                      <button onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="shrink-0 text-[#8a94a0] hover:text-red-600">✕</button>
                     </div>
                   ))}
                 </div>
@@ -346,9 +346,9 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
             )}
 
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={onClose} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+              <button onClick={onClose} className="rounded-[4px] border border-[#e6eaec] px-4 py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Скасувати</button>
               <button onClick={run} disabled={files.length === 0 || status === "running"}
-                className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+                className="rounded-[4px] border border-[#2f9488] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
                 {status === "running" ? "Обробка…" : `Завантажити й прив'язати (${files.length})`}
               </button>
             </div>
@@ -362,14 +362,14 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
             </div>
 
             {byProduct.size > 0 && (
-              <div className="rounded-[4px] border border-[#e8e4de] bg-white">
+              <div className="rounded-[4px] border border-[#e6eaec] bg-white">
                 <div className="divide-y divide-[#F5F5F5]">
                   {Array.from(byProduct.entries()).map(([key, items]) => {
                     const [, name] = key.split(":");
                     return (
                       <div key={key} className="px-4 py-2 text-[12px]">
-                        <span className="font-medium text-[#17130f]">{name}</span>
-                        <span className="ml-2 text-[#9c8f7d]">{items.length} фото</span>
+                        <span className="font-medium text-[#2b2d42]">{name}</span>
+                        <span className="ml-2 text-[#8a94a0]">{items.length} фото</span>
                       </div>
                     );
                   })}
@@ -394,7 +394,7 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
             )}
 
             <div className="flex justify-end">
-              <button onClick={onClose} className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85">Готово</button>
+              <button onClick={onClose} className="rounded-[4px] border border-[#2f9488] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white">Готово</button>
             </div>
           </div>
         )}
@@ -406,20 +406,20 @@ export function BulkPhotoMatcher({ onClose, onToast }: { onClose: () => void; on
 function ProgressBar({ progress, fallback }: { progress: { label: string; done: number; total: number } | null; fallback: string }) {
   if (!progress || progress.total === 0) {
     return (
-      <div className="flex items-center justify-center gap-2 py-4 text-[13px] text-[#9c8f7d]">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-[#9c8f7d]" /> {fallback}
+      <div className="flex items-center justify-center gap-2 py-4 text-[13px] text-[#8a94a0]">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-[#8a94a0]" /> {fallback}
       </div>
     );
   }
   const pct = Math.round((progress.done / progress.total) * 100);
   return (
     <div className="space-y-2 py-2">
-      <div className="flex items-center justify-between text-[12px] text-[#6b6253]">
+      <div className="flex items-center justify-between text-[12px] text-[#5a6472]">
         <span>{progress.label}…</span>
         <span>{progress.done} / {progress.total}</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e8e4de]">
-        <div className="h-full rounded-full bg-[#17130f] transition-all" style={{ width: `${pct}%` }} />
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e6eaec]">
+        <div className="h-full rounded-full bg-[#2b2d42] transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

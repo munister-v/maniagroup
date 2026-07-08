@@ -8,6 +8,7 @@ import { AdminOrders } from "./AdminOrders";
 import { AdminCustomers } from "./AdminCustomers";
 import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
+import { AdminVariants } from "./AdminVariants";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { MonitoringSection } from "./MonitoringSection";
@@ -16,7 +17,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -67,6 +68,11 @@ const NAV_MAIN: { id: Section; label: string; d: string }[] = [
     id: "products",
     label: "Каталог",
     d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+  },
+  {
+    id: "offers",
+    label: "Пропозиції",
+    d: "M7 7h.01M3 5a2 2 0 012-2h5.586a1 1 0 01.707.293l7.414 7.414a2 2 0 010 2.828l-5.586 5.586a2 2 0 01-2.828 0l-7.414-7.414A1 1 0 013 10.586V5z",
   },
   {
     id: "catalog",
@@ -143,9 +149,9 @@ const STATUS: Record<string, { label: string; bg: string; color: string }> = {
   failed:     { label: "Помилка",       bg: "#ffebee", color: "#c62828" },
 };
 
-function SvgIcon({ d }: { d: string }) {
+function SvgIcon({ d, className = "h-4 w-4 shrink-0" }: { d: string; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d={d} />
     </svg>
   );
@@ -225,88 +231,93 @@ export function AdminDashboard({
   const navLabel = [...NAV_MAIN, ...NAV_ADMIN].find((n) => n.id === section)?.label ?? "";
 
   return (
-    <div className="fixed inset-0 z-[60] flex overflow-hidden bg-[#f7f5f2] font-sans text-[#17130f]">
+    <div className="fixed inset-0 z-[60] flex overflow-hidden bg-[#f4f6f7] font-sans text-[#2b2d42]">
       {/* Mobile backdrop */}
       {navOpen && <div onClick={() => setNavOpen(false)} className="fixed inset-0 z-[65] bg-black/40 md:hidden" />}
 
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[70] flex w-60 flex-col bg-[#17130f] text-white transition-transform duration-300 md:static md:z-auto md:w-56 md:shrink-0 md:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="border-b border-white/10 px-5 py-5">
-          <p className="font-display text-lg tracking-[0.14em]">MANIA GROUP</p>
-          <p className="mt-0.5 text-[9px] uppercase tracking-[0.18em] text-white/35">Адмін-панель</p>
+      {/* Sidebar — Intertop-style icon rail */}
+      <aside className={`fixed inset-y-0 left-0 z-[70] flex w-16 flex-col items-center bg-[#2b2d42] text-white transition-transform duration-300 md:static md:z-auto md:shrink-0 md:translate-x-0 ${navOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        {/* Wordmark */}
+        <div className="flex h-14 w-full shrink-0 items-center justify-center border-b border-white/10">
+          <span className="text-[15px] font-bold tracking-[0.08em] text-white">MG</span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-2 py-4">
-          <div className="space-y-0.5">
-            {NAV_MAIN.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setSection(item.id); setNavOpen(false); }}
-                className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] transition-colors ${
-                  section === item.id
-                    ? "bg-white/12 text-white"
-                    : "text-white/40 hover:bg-white/6 hover:text-white/65"
-                }`}
-              >
-                <SvgIcon d={item.d} />
+        <nav className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto py-3">
+          {NAV_MAIN.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => { setSection(item.id); setNavOpen(false); }}
+              title={item.label}
+              className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] transition-colors ${
+                section === item.id
+                  ? "bg-[#2f9488] text-white shadow-[0_2px_8px_rgba(47,148,136,0.4)]"
+                  : "text-white/45 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <SvgIcon d={item.d} className="h-5 w-5 shrink-0" />
+              {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e5484d] px-1 text-[9px] font-medium tabular-nums text-white ring-2 ring-[#2b2d42]">
+                  {stats.pending + stats.processing}
+                </span>
+              )}
+              <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-[5px] bg-[#2b2d42] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">
                 {item.label}
-                {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
-                  <span className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-[#c0392b] px-1 text-[9px] tabular-nums text-white">
-                    {stats.pending + stats.processing}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+              </span>
+            </button>
+          ))}
 
-          <div className="my-3 border-t border-white/8" />
+          <div className="my-2 h-px w-7 shrink-0 bg-white/10" />
 
-          <div className="space-y-0.5">
-            {NAV_ADMIN.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { setSection(item.id); setNavOpen(false); }}
-                className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.12em] transition-colors ${
-                  section === item.id
-                    ? "bg-white/12 text-white"
-                    : "text-white/30 hover:bg-white/6 hover:text-white/55"
-                }`}
-              >
-                <SvgIcon d={item.d} />
+          {NAV_ADMIN.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => { setSection(item.id); setNavOpen(false); }}
+              title={item.label}
+              className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] transition-colors ${
+                section === item.id
+                  ? "bg-[#2f9488] text-white shadow-[0_2px_8px_rgba(47,148,136,0.4)]"
+                  : "text-white/35 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              <SvgIcon d={item.d} className="h-5 w-5 shrink-0" />
+              <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-[5px] bg-[#2b2d42] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">
                 {item.label}
-              </button>
-            ))}
-          </div>
+              </span>
+            </button>
+          ))}
         </nav>
 
-        <div className="space-y-0.5 border-t border-white/10 px-2 py-3">
+        <div className="flex w-full shrink-0 flex-col items-center gap-1 border-t border-white/10 py-3">
           <a
             href="/"
             target="_blank"
-            className="flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-white/35 transition-colors hover:text-white/55"
+            title="Сайт"
+            className="group relative flex h-11 w-11 items-center justify-center rounded-[12px] text-white/35 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <SvgIcon d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            Сайт
+            <SvgIcon d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" className="h-5 w-5 shrink-0" />
+            <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-[5px] bg-[#2b2d42] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">Сайт</span>
           </a>
           <button
             onClick={logout}
-            className="flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-left text-[11px] uppercase tracking-[0.12em] text-white/35 transition-colors hover:text-white/55"
+            title="Вийти"
+            className="group relative flex h-11 w-11 items-center justify-center rounded-[12px] text-white/35 transition-colors hover:bg-white/10 hover:text-white"
           >
-            <SvgIcon d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
-            Вийти
+            <SvgIcon d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" className="h-5 w-5 shrink-0" />
+            <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-[5px] bg-[#2b2d42] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">Вийти</span>
           </button>
+          <div className="mt-1 flex h-7 w-9 items-center justify-center rounded-[5px] border border-white/25 text-[11px] font-semibold tracking-wide text-white/80">UA</div>
         </div>
       </aside>
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e8e4de] bg-white px-4 sm:px-8">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-[#e6eaec] bg-white px-4 sm:px-8">
           <div className="flex items-center gap-3">
-            <button onClick={() => setNavOpen(true)} aria-label="Меню" className="-ml-1 text-[#17130f] md:hidden">
+            <button onClick={() => setNavOpen(true)} aria-label="Меню" className="-ml-1 text-[#2b2d42] md:hidden">
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" /></svg>
             </button>
-            <h1 className="text-sm font-medium">{navLabel}</h1>
+            <h1 className="text-[19px] font-semibold tracking-tight text-[#2b2d42]">{navLabel}</h1>
           </div>
           <div className="flex items-center gap-3" />
         </header>
@@ -341,6 +352,7 @@ export function AdminDashboard({
           {section === "products" && (
             <CatalogGrid onToast={showToast} onImport={goToImport} dataVersion={dataVersion} focus={catalogFocus} />
           )}
+          {section === "offers" && <AdminVariants onToast={showToast} />}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}
@@ -358,7 +370,7 @@ export function AdminDashboard({
 
 {/* Toast */}
       {toast && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-[4px] bg-[#17130f] px-5 py-3 text-[12px] tracking-wide text-white shadow-lg">
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2 rounded-[4px] bg-[#2b2d42] px-5 py-3 text-[12px] tracking-wide text-white shadow-lg">
           {toast}
         </div>
       )}
@@ -409,10 +421,10 @@ function OverviewSection({
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Revenue chart */}
-        <div className="lg:col-span-2 rounded-[4px] border border-[#e8e4de] bg-white p-5">
+        <div className="lg:col-span-2 rounded-[4px] border border-[#e6eaec] bg-white p-5">
           <div className="mb-4 flex items-baseline justify-between">
-            <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Виручка · 7 днів</h2>
-            <span className="text-[13px] font-medium text-[#17130f]">{loading ? "" : fmtUah(stats!.revenue_7d)}</span>
+            <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Виручка · 7 днів</h2>
+            <span className="text-[13px] font-medium text-[#2b2d42]">{loading ? "" : fmtUah(stats!.revenue_7d)}</span>
           </div>
           <div className="flex h-40 items-end gap-2">
             {(stats?.revenue_series ?? []).map((d) => {
@@ -420,21 +432,21 @@ function OverviewSection({
               const label = new Date(d.day).toLocaleDateString("uk-UA", { weekday: "short" });
               return (
                 <div key={d.day} className="group flex flex-1 flex-col items-center gap-1.5">
-                  <span className="text-[10px] tabular-nums text-[#b9ae9b] opacity-0 group-hover:opacity-100">{d.total > 0 ? Math.round(d.total / 1000) + "k" : ""}</span>
+                  <span className="text-[10px] tabular-nums text-[#aab4bf] opacity-0 group-hover:opacity-100">{d.total > 0 ? Math.round(d.total / 1000) + "k" : ""}</span>
                   <div className="flex w-full flex-1 items-end">
-                    <div className="w-full rounded-t-[2px] bg-[#17130f] transition-all" style={{ height: `${Math.max(2, h)}%` }} title={fmtUah(d.total)} />
+                    <div className="w-full rounded-t-[2px] bg-[#2b2d42] transition-all" style={{ height: `${Math.max(2, h)}%` }} title={fmtUah(d.total)} />
                   </div>
-                  <span className="text-[10px] uppercase text-[#b9ae9b]">{label}</span>
+                  <span className="text-[10px] uppercase text-[#aab4bf]">{label}</span>
                 </div>
               );
             })}
-            {loading && <div className="flex-1 animate-pulse rounded bg-[#ede9e3]" />}
+            {loading && <div className="flex-1 animate-pulse rounded bg-[#eef2f3]" />}
           </div>
         </div>
 
         {/* Catalog funnel — where products actually leak before reaching the site */}
-        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
-          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Шлях товару до сайту</h2>
+        <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
+          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Шлях товару до сайту</h2>
           {(() => {
             const total = stats?.products_total ?? 0;
             const withStock = stats?.in_stock ?? 0;
@@ -443,7 +455,7 @@ function OverviewSection({
             const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
             const rows: { label: string; value: number; color: string; focus: { stock?: string; siteStatus?: string } }[] = [
               { label: "Всього", value: total, color: "bg-[#d0c8be]", focus: {} },
-              { label: "Зі залишком", value: withStock, color: "bg-[#b9ae9b]", focus: { stock: "in" } },
+              { label: "Зі залишком", value: withStock, color: "bg-[#aab4bf]", focus: { stock: "in" } },
               { label: "З фото", value: withPhoto, color: "bg-amber-400", focus: { siteStatus: "live" } },
               { label: "LIVE на сайті", value: live, color: "bg-emerald-500", focus: requirePhoto ? { siteStatus: "live" } : { stock: "in" } },
             ];
@@ -452,17 +464,17 @@ function OverviewSection({
                 {rows.map((r) => (
                   <button key={r.label} onClick={() => onFocusCatalog(r.focus)} className="block w-full text-left">
                     <div className="mb-1 flex items-center justify-between text-[12px]">
-                      <span className="text-[#6b6253]">{r.label}</span>
-                      <span className="tabular-nums text-[#17130f]">{loading ? "—" : r.value.toLocaleString("uk-UA")}</span>
+                      <span className="text-[#5a6472]">{r.label}</span>
+                      <span className="tabular-nums text-[#2b2d42]">{loading ? "—" : r.value.toLocaleString("uk-UA")}</span>
                     </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#f0ece6]">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#eef2f3]">
                       <div className={`h-full rounded-full ${r.color} transition-all`} style={{ width: `${loading ? 0 : pct(r.value)}%` }} />
                     </div>
                   </button>
                 ))}
-                <div className="flex items-center justify-between border-t border-[#f0ece6] pt-2 text-[12px]">
-                  <span className="text-[#9c8f7d]">Нових клієнтів · 30 днів</span>
-                  <span className="tabular-nums text-[#17130f]">{loading ? "—" : stats!.new_customers_30d}</span>
+                <div className="flex items-center justify-between border-t border-[#eef2f3] pt-2 text-[12px]">
+                  <span className="text-[#8a94a0]">Нових клієнтів · 30 днів</span>
+                  <span className="tabular-nums text-[#2b2d42]">{loading ? "—" : stats!.new_customers_30d}</span>
                 </div>
               </div>
             );
@@ -472,32 +484,32 @@ function OverviewSection({
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Top products */}
-        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
-          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Топ товарів</h2>
+        <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
+          <h2 className="mb-4 text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Топ товарів</h2>
           {stats && stats.top_products.length > 0 ? (
             <div className="space-y-2.5">
               {stats.top_products.map((p, i) => (
                 <div key={p.product_id} className="flex items-center gap-3">
-                  <span className="w-4 text-[12px] tabular-nums text-[#b9ae9b]">{i + 1}</span>
+                  <span className="w-4 text-[12px] tabular-nums text-[#aab4bf]">{i + 1}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] text-[#17130f]">{p.name}</p>
-                    <p className="text-[11px] text-[#9c8f7d]">{p.brand}</p>
+                    <p className="truncate text-[13px] text-[#2b2d42]">{p.name}</p>
+                    <p className="text-[11px] text-[#8a94a0]">{p.brand}</p>
                   </div>
-                  <span className="text-[12px] tabular-nums text-[#9c8f7d]">{p.qty} шт</span>
-                  <span className="w-20 text-right text-[12px] font-medium tabular-nums text-[#17130f]">{fmtUah(p.revenue)}</span>
+                  <span className="text-[12px] tabular-nums text-[#8a94a0]">{p.qty} шт</span>
+                  <span className="w-20 text-right text-[12px] font-medium tabular-nums text-[#2b2d42]">{fmtUah(p.revenue)}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="py-6 text-center text-[12px] text-[#9c8f7d]">{loading ? "Завантаження…" : "Поки немає продажів"}</p>
+            <p className="py-6 text-center text-[12px] text-[#8a94a0]">{loading ? "Завантаження…" : "Поки немає продажів"}</p>
           )}
         </div>
 
         {/* Recent orders */}
-        <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+        <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Останні замовлення</h2>
-            <button onClick={() => onNavigate("orders")} className="text-[11px] uppercase tracking-wider text-[#9c8f7d] underline underline-offset-2 hover:text-[#17130f]">Всі</button>
+            <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Останні замовлення</h2>
+            <button onClick={() => onNavigate("orders")} className="text-[11px] uppercase tracking-wider text-[#8a94a0] underline underline-offset-2 hover:text-[#2b2d42]">Всі</button>
           </div>
           {recentOrders.length > 0 ? (
             <div className="space-y-2.5">
@@ -505,16 +517,16 @@ function OverviewSection({
                 const st = STATUS[o.status] ?? { label: o.status, bg: "#f5f5f5", color: "#555" };
                 return (
                   <div key={o.id} className="flex items-center gap-3">
-                    <span className="font-mono text-[12px] text-[#9c8f7d]">{o.number}</span>
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#17130f]">{o.billing.first_name} {o.billing.last_name}</span>
-                    <span className="text-[12px] font-medium tabular-nums text-[#17130f]">{Number(o.total).toLocaleString("uk-UA")} ₴</span>
+                    <span className="font-mono text-[12px] text-[#8a94a0]">{o.number}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#2b2d42]">{o.billing.first_name} {o.billing.last_name}</span>
+                    <span className="text-[12px] font-medium tabular-nums text-[#2b2d42]">{Number(o.total).toLocaleString("uk-UA")} ₴</span>
                     <span className="inline-block rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider" style={{ background: st.bg, color: st.color }}>{st.label}</span>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <p className="py-6 text-center text-[12px] text-[#9c8f7d]">{loading ? "Завантаження…" : "Замовлень ще немає"}</p>
+            <p className="py-6 text-center text-[12px] text-[#8a94a0]">{loading ? "Завантаження…" : "Замовлень ще немає"}</p>
           )}
         </div>
       </div>
@@ -550,57 +562,57 @@ function TodayBlock({ stats, onNavigate, onFocusCatalog }: { stats: Stats | null
   const hasAnyTask = pendingOrders > 0 || lowStockCount > 0 || driftCount > 0 || noPhotoCount > 0;
 
   return (
-    <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+    <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Що зробити сьогодні</h2>
-        {hasAnyTask && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c0392b] px-1.5 text-[10px] tabular-nums text-white">{pendingOrders + lowStockCount + driftCount + noPhotoCount}</span>}
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Що зробити сьогодні</h2>
+        {hasAnyTask && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#e5484d] px-1.5 text-[10px] tabular-nums text-white">{pendingOrders + lowStockCount + driftCount + noPhotoCount}</span>}
       </div>
       {!hasAnyTask && stats !== null && erp !== null ? (
-        <p className="py-2 text-[13px] text-[#9c8f7d]">✓ Все гаразд — термінових задач немає</p>
+        <p className="py-2 text-[13px] text-[#8a94a0]">✓ Все гаразд — термінових задач немає</p>
       ) : (
         <div className="space-y-2">
           {pendingOrders > 0 && (
-            <button onClick={() => onNavigate("orders")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+            <button onClick={() => onNavigate("orders")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e6eaec] px-4 py-2.5 text-left transition-colors hover:border-[#2b2d42]">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fdf0ee] text-[14px]">📦</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[#17130f]">{pendingOrders} замовлень чекають обробки</p>
-                <p className="text-[11px] text-[#9c8f7d]">{stats!.pending} нових · {stats!.processing} в обробці</p>
+                <p className="text-[13px] font-medium text-[#2b2d42]">{pendingOrders} замовлень чекають обробки</p>
+                <p className="text-[11px] text-[#8a94a0]">{stats!.pending} нових · {stats!.processing} в обробці</p>
               </div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#aab4bf]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           )}
           {lowStockCount > 0 && (
-            <button onClick={() => onNavigate("products")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+            <button onClick={() => onNavigate("products")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e6eaec] px-4 py-2.5 text-left transition-colors hover:border-[#2b2d42]">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff8e6] text-[14px]">⚠️</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[#17130f]">{lowStockCount} варіантів на межі запасу</p>
-                <p className="text-[11px] text-[#9c8f7d]">Залишок ≤ порогу — потрібне поповнення</p>
+                <p className="text-[13px] font-medium text-[#2b2d42]">{lowStockCount} варіантів на межі запасу</p>
+                <p className="text-[11px] text-[#8a94a0]">Залишок ≤ порогу — потрібне поповнення</p>
               </div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#aab4bf]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           )}
           {driftCount > 0 && (
-            <button onClick={() => onNavigate("products")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+            <button onClick={() => onNavigate("products")} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e6eaec] px-4 py-2.5 text-left transition-colors hover:border-[#2b2d42]">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef2ff] text-[14px]">🔄</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[#17130f]">{driftCount} позицій — розбіжність залишків</p>
-                <p className="text-[11px] text-[#9c8f7d]">Дані магазину розходяться з ERP — потрібна звірка</p>
+                <p className="text-[13px] font-medium text-[#2b2d42]">{driftCount} позицій — розбіжність залишків</p>
+                <p className="text-[11px] text-[#8a94a0]">Дані магазину розходяться з ERP — потрібна звірка</p>
               </div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#aab4bf]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           )}
           {noPhotoCount > 0 && (
-            <button onClick={() => onFocusCatalog({ siteStatus: "no_photo" })} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e8e4de] px-4 py-2.5 text-left transition-colors hover:border-[#17130f]">
+            <button onClick={() => onFocusCatalog({ siteStatus: "no_photo" })} className="flex w-full items-center gap-3 rounded-[3px] border border-[#e6eaec] px-4 py-2.5 text-left transition-colors hover:border-[#2b2d42]">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#fff3e0] text-[14px]">🖼️</span>
               <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-medium text-[#17130f]">{noPhotoCount} товарів не на сайті — немає фото</p>
-                <p className="text-[11px] text-[#9c8f7d]">Є в наявності, але вітрина ховає товари без фото — Каталог → «Фото масово»</p>
+                <p className="text-[13px] font-medium text-[#2b2d42]">{noPhotoCount} товарів не на сайті — немає фото</p>
+                <p className="text-[11px] text-[#8a94a0]">Є в наявності, але вітрина ховає товари без фото — Каталог → «Фото масово»</p>
               </div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#b9ae9b]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4 shrink-0 text-[#aab4bf]"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           )}
           {(stats === null || erp === null) && !hasAnyTask && (
-            <p className="py-2 text-[13px] text-[#b9ae9b]">Завантаження…</p>
+            <p className="py-2 text-[13px] text-[#aab4bf]">Завантаження…</p>
           )}
         </div>
       )}
@@ -638,22 +650,22 @@ function AnalyticsCard() {
   const maxCat = data ? Math.max(1, ...data.by_category.map((c) => c.revenue)) : 1;
 
   return (
-    <div className="rounded-[4px] border border-[#e8e4de] bg-white p-5">
+    <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">Аналітика продажів</h2>
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Аналітика продажів</h2>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 rounded-[3px] border border-[#e8e4de] p-0.5">
+          <div className="flex gap-1 rounded-[3px] border border-[#e6eaec] p-0.5">
             {RANGES.map((r) => (
               <button key={r} onClick={() => setDays(r)}
                 className={`rounded-[2px] px-3 py-1 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                  days === r ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+                  days === r ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"
                 }`}>
                 {r} дн
               </button>
             ))}
           </div>
           <a href="/api/admin/orders/export" download
-            className="flex h-7 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] hover:border-[#17130f]">
+            className="flex h-7 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] hover:border-[#2b2d42]">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
               <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
@@ -665,27 +677,27 @@ function AnalyticsCard() {
       {/* Windowed KPIs */}
       <div className="mb-5 grid grid-cols-3 gap-4">
         <div>
-          <p className="text-[20px] font-light tabular-nums text-[#17130f]">{loading ? "…" : fmtUah(data!.revenue)}</p>
-          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Виручка</p>
+          <p className="text-[20px] font-light tabular-nums text-[#2b2d42]">{loading ? "…" : fmtUah(data!.revenue)}</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Виручка</p>
         </div>
         <div>
-          <p className="text-[20px] font-light tabular-nums text-[#17130f]">{loading ? "…" : data!.orders}</p>
-          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Замовлень</p>
+          <p className="text-[20px] font-light tabular-nums text-[#2b2d42]">{loading ? "…" : data!.orders}</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Замовлень</p>
         </div>
         <div>
-          <p className="text-[20px] font-light tabular-nums text-[#17130f]">{loading ? "…" : fmtUah(data!.avg)}</p>
-          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Середній чек</p>
+          <p className="text-[20px] font-light tabular-nums text-[#2b2d42]">{loading ? "…" : fmtUah(data!.avg)}</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Середній чек</p>
         </div>
       </div>
 
       {data && data.revenue === 0 ? (
-        <p className="py-6 text-center text-[12px] text-[#9c8f7d]">За обраний період продажів не було</p>
+        <p className="py-6 text-center text-[12px] text-[#8a94a0]">За обраний період продажів не було</p>
       ) : (
         <>
           {/* Sparkline */}
           <div className="mb-5 flex h-24 items-end gap-px">
             {(data?.series ?? []).map((d) => (
-              <div key={d.day} className="flex-1 rounded-t-[1px] bg-[#d8c7a8] transition-all hover:bg-[#17130f]"
+              <div key={d.day} className="flex-1 rounded-t-[1px] bg-[#d8c7a8] transition-all hover:bg-[#2b2d42]"
                 style={{ height: `${Math.max(2, Math.round((d.total / maxRev) * 100))}%` }}
                 title={`${new Date(d.day).toLocaleDateString("uk-UA")}: ${fmtUah(d.total)}`} />
             ))}
@@ -706,21 +718,21 @@ function Breakdown({ title, rows, max, loading }: {
 }) {
   return (
     <div>
-      <h3 className="mb-3 text-[10px] uppercase tracking-[0.14em] text-[#b9ae9b]">{title}</h3>
+      <h3 className="mb-3 text-[10px] uppercase tracking-[0.14em] text-[#aab4bf]">{title}</h3>
       {loading ? (
-        <p className="text-[12px] text-[#9c8f7d]">Завантаження…</p>
+        <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>
       ) : rows.length === 0 ? (
-        <p className="text-[12px] text-[#9c8f7d]">Немає даних</p>
+        <p className="text-[12px] text-[#8a94a0]">Немає даних</p>
       ) : (
         <div className="space-y-2">
           {rows.map((r) => (
             <div key={r.name}>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 flex-1 truncate text-[12px] text-[#17130f]">{r.name}</span>
-                <span className="text-[12px] tabular-nums text-[#9c8f7d]">{fmtUah(r.revenue)}</span>
+                <span className="min-w-0 flex-1 truncate text-[12px] text-[#2b2d42]">{r.name}</span>
+                <span className="text-[12px] tabular-nums text-[#8a94a0]">{fmtUah(r.revenue)}</span>
               </div>
-              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#f0ece6]">
-                <div className="h-full rounded-full bg-[#17130f]" style={{ width: `${Math.max(3, Math.round((r.revenue / max) * 100))}%` }} />
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#eef2f3]">
+                <div className="h-full rounded-full bg-[#2b2d42]" style={{ width: `${Math.max(3, Math.round((r.revenue / max) * 100))}%` }} />
               </div>
             </div>
           ))}
@@ -735,18 +747,18 @@ function KpiCard({ label, value, sub, accent, warn, onClick }: {
 }) {
   if (onClick) {
     return (
-      <button onClick={onClick} className={`flex flex-col gap-1 rounded-[4px] border bg-white p-5 text-left transition-shadow hover:shadow-sm ${accent ? "border-[#17130f]" : "border-[#e8e4de]"}`}>
-        <span className={`text-[26px] font-light leading-none tabular-nums ${warn ? "text-[#c0392b]" : "text-[#17130f]"}`}>{value}</span>
-        <span className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">{label}</span>
-        {sub && <span className="text-[11px] text-[#b9ae9b]">{sub}</span>}
+      <button onClick={onClick} className={`flex flex-col gap-1 rounded-[4px] border bg-white p-5 text-left transition-shadow hover:shadow-sm ${accent ? "border-[#2b2d42]" : "border-[#e6eaec]"}`}>
+        <span className={`text-[26px] font-light leading-none tabular-nums ${warn ? "text-[#e5484d]" : "text-[#2b2d42]"}`}>{value}</span>
+        <span className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">{label}</span>
+        {sub && <span className="text-[11px] text-[#aab4bf]">{sub}</span>}
       </button>
     );
   }
   return (
-    <div className={`flex flex-col gap-1 rounded-[4px] border bg-white p-5 ${accent ? "border-[#17130f]" : "border-[#e8e4de]"}`}>
-      <span className={`text-[26px] font-light leading-none tabular-nums ${warn ? "text-[#c0392b]" : "text-[#17130f]"}`}>{value}</span>
-      <span className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">{label}</span>
-      {sub && <span className="text-[11px] text-[#b9ae9b]">{sub}</span>}
+    <div className={`flex flex-col gap-1 rounded-[4px] border bg-white p-5 ${accent ? "border-[#2b2d42]" : "border-[#e6eaec]"}`}>
+      <span className={`text-[26px] font-light leading-none tabular-nums ${warn ? "text-[#e5484d]" : "text-[#2b2d42]"}`}>{value}</span>
+      <span className="mt-1 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">{label}</span>
+      {sub && <span className="text-[11px] text-[#aab4bf]">{sub}</span>}
     </div>
   );
 }
@@ -757,24 +769,24 @@ function SyncCard({ sync, onNavigate, onImport }: { sync: SyncState | null; onNa
     : null;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[3px] border border-[#e8e4de] bg-white px-6 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[3px] border border-[#e6eaec] bg-white px-6 py-4">
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${sync?.total_products ? "bg-emerald-500" : "bg-[#d0c8be]"}`} />
-          <span className="text-[11px] uppercase tracking-[0.12em] text-[#17130f]">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-[#2b2d42]">
             {sync?.total_products
               ? `PostgreSQL · ${sync.total_products.toLocaleString("uk-UA")} товарів`
               : "Каталог порожній"}
           </span>
         </div>
-        <p className="ml-4 text-[11px] text-[#9c8f7d]">
+        <p className="ml-4 text-[11px] text-[#8a94a0]">
           {lastSync ? `Останній імпорт: ${lastSync}` : "Каталог ще не імпортувався"}
         </p>
       </div>
 
       <button
         onClick={onImport}
-        className="flex h-8 items-center gap-2 rounded-[3px] border border-[#e8e4de] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:border-[#17130f]"
+        className="flex h-8 items-center gap-2 rounded-[3px] border border-[#e6eaec] bg-white px-4 text-[11px] uppercase tracking-[0.12em] text-[#2b2d42] transition-colors hover:border-[#2b2d42]"
       >
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M4 4h16v4H4V4zm0 6h16v10H4V10zm4 3h8" />
@@ -792,7 +804,7 @@ function CharCounter({ value, max }: { value: string; max: number }) {
   const over = n > max;
   const warn = !over && n > max * 0.85;
   return (
-    <span className={`text-[10px] tabular-nums ${over ? "text-red-500 font-medium" : warn ? "text-amber-500" : "text-[#b9ae9b]"}`}>
+    <span className={`text-[10px] tabular-nums ${over ? "text-red-500 font-medium" : warn ? "text-amber-500" : "text-[#aab4bf]"}`}>
       {n}/{max}
     </span>
   );
@@ -803,7 +815,7 @@ function AnnouncementPreview({ text, color }: { text: string; color?: string }) 
   return (
     <div
       className="mt-3 rounded-[3px] px-4 py-2.5 text-center text-[11px] tracking-[0.1em] text-white shadow-sm"
-      style={{ background: color || "#17130f" }}
+      style={{ background: color || "#2b2d42" }}
     >
       {text}
     </div>
@@ -812,8 +824,8 @@ function AnnouncementPreview({ text, color }: { text: string; color?: string }) 
 
 function SeoGooglePreview({ title, desc, url = "maniagroup.munister.com.ua" }: { title: string; desc: string; url?: string }) {
   return (
-    <div className="rounded-[4px] border border-[#e8e4de] bg-white p-4 shadow-sm">
-      <p className="mb-2.5 text-[10px] uppercase tracking-wider text-[#b9ae9b]">Вигляд у Google</p>
+    <div className="rounded-[4px] border border-[#e6eaec] bg-white p-4 shadow-sm">
+      <p className="mb-2.5 text-[10px] uppercase tracking-wider text-[#aab4bf]">Вигляд у Google</p>
       <div className="font-sans">
         <p className="text-[14px] leading-snug text-[#1a0dab]">{title || "Заголовок сторінки"}</p>
         <p className="mt-0.5 text-[12px] text-[#006621]">{url}</p>
@@ -851,7 +863,7 @@ function AiField({
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">
           {label}
           {hint && <span className="ml-1.5 font-normal lowercase tracking-normal text-[#c8c0b4]">· {hint}</span>}
         </span>
@@ -861,10 +873,10 @@ function AiField({
             <button
               onClick={improve}
               disabled={improving}
-              className="flex items-center gap-1 rounded-[2px] border border-[#e8e4de] px-2 py-0.5 text-[10px] text-[#9c8f7d] transition-colors hover:border-[#7c6f5e] hover:text-[#17130f] disabled:opacity-40"
+              className="flex items-center gap-1 rounded-[2px] border border-[#e6eaec] px-2 py-0.5 text-[10px] text-[#8a94a0] transition-colors hover:border-[#7c6f5e] hover:text-[#2b2d42] disabled:opacity-40"
             >
               {improving ? (
-                <span className="h-2.5 w-2.5 animate-spin rounded-full border border-[#9c8f7d] border-t-transparent" />
+                <span className="h-2.5 w-2.5 animate-spin rounded-full border border-[#8a94a0] border-t-transparent" />
               ) : (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-2.5 w-2.5">
                   <path d="M12 2l2.4 7.4L22 12l-7.6 2.6L12 22l-2.4-7.4L2 12l7.6-2.6z" strokeLinecap="round" strokeLinejoin="round" />
@@ -881,14 +893,14 @@ function AiField({
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={3}
-          className="w-full resize-none rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+          className="w-full resize-none rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 py-2 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
         />
       ) : (
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+          className="h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
         />
       )}
     </div>
@@ -937,19 +949,19 @@ function HomeSectionsEditor({
   return (
     <ul className="space-y-2">
       {items.map((s, i) => (
-        <li key={s.id} className="flex items-center gap-3 rounded-[3px] border border-[#eceae6] bg-white px-3 py-2">
+        <li key={s.id} className="flex items-center gap-3 rounded-[3px] border border-[#eef2f3] bg-white px-3 py-2">
           <div className="flex flex-col gap-0.5">
             <button onClick={() => move(i, -1)} disabled={i === 0}
-              className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#9c8f7d] hover:bg-[#f5f1ea] disabled:opacity-25">▲</button>
+              className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#8a94a0] hover:bg-[#f7f9fa] disabled:opacity-25">▲</button>
             <button onClick={() => move(i, 1)} disabled={i === items.length - 1}
-              className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#9c8f7d] hover:bg-[#f5f1ea] disabled:opacity-25">▼</button>
+              className="flex h-4 w-5 items-center justify-center rounded-[2px] text-[9px] text-[#8a94a0] hover:bg-[#f7f9fa] disabled:opacity-25">▼</button>
           </div>
           <span className="w-6 text-center text-[11px] tabular-nums text-[#bdb3a4]">{i + 1}</span>
-          <span className={`flex-1 text-[13px] ${s.enabled ? "text-[#17130f]" : "text-[#bdb3a4] line-through"}`}>
+          <span className={`flex-1 text-[13px] ${s.enabled ? "text-[#2b2d42]" : "text-[#bdb3a4] line-through"}`}>
             {labelOf(s.id)}
           </span>
           <button onClick={() => toggle(i)}
-            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${s.enabled ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${s.enabled ? "bg-[#2b2d42]" : "bg-[#d5dbe0]"}`}
             aria-label={s.enabled ? "Сховати" : "Показати"}>
             <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${s.enabled ? "left-[18px]" : "left-0.5"}`} />
           </button>
@@ -973,12 +985,12 @@ function FooterColumnsEditor({
   const setLink = (ci: number, li: number, patch: Partial<{ label: string; href: string }>) =>
     setCol(ci, { links: columns[ci].links.map((l, k) => (k === li ? { ...l, ...patch } : l)) });
 
-  const inputCls = "h-9 w-full border border-[#e5ded3] bg-white px-2.5 text-[13px] focus:border-[#17130f] focus:outline-none";
+  const inputCls = "h-9 w-full border border-[#e6eaec] bg-white px-2.5 text-[13px] focus:border-[#2b2d42] focus:outline-none";
 
   return (
     <div className="space-y-5">
       {columns.map((col, ci) => (
-        <div key={ci} className="rounded-[3px] border border-[#eceae6] p-4">
+        <div key={ci} className="rounded-[3px] border border-[#eef2f3] p-4">
           <div className="mb-3 flex items-center gap-2">
             <input value={col.title} onChange={(e) => setCol(ci, { title: e.target.value })}
               placeholder="Заголовок колонки" className={`${inputCls} font-medium`} />
@@ -993,18 +1005,18 @@ function FooterColumnsEditor({
                 <input value={l.href} onChange={(e) => setLink(ci, li, { href: e.target.value })}
                   placeholder="/catalog" className={inputCls} />
                 <button onClick={() => setCol(ci, { links: col.links.filter((_, k) => k !== li) })}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[2px] text-[#9c8f7d] hover:bg-[#fdecec] hover:text-[#c62828]" aria-label="Прибрати">
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#fdecec] hover:text-[#c62828]" aria-label="Прибрати">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="h-4 w-4"><path d="M5 12h14" /></svg>
                 </button>
               </div>
             ))}
             <button onClick={() => setCol(ci, { links: [...col.links, { label: "", href: "" }] })}
-              className="text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:text-[#17130f]">+ Додати посилання</button>
+              className="text-[11px] uppercase tracking-wider text-[#8a94a0] hover:text-[#2b2d42]">+ Додати посилання</button>
           </div>
         </div>
       ))}
       <button onClick={() => onChange([...columns, { title: "Нова колонка", links: [] }])}
-        className="flex h-10 items-center gap-2 border border-[#17130f] px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:bg-[#17130f] hover:text-white">
+        className="flex h-10 items-center gap-2 border border-[#2f9488] px-4 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
         + Додати колонку
       </button>
     </div>
@@ -1048,13 +1060,13 @@ function ContentSection({
   return (
     <div className="max-w-3xl">
       {/* Sub-tabs */}
-      <div className="mb-6 flex gap-1 rounded-[3px] border border-[#e8e4de] bg-white p-1">
+      <div className="mb-6 flex gap-1 rounded-[3px] border border-[#e6eaec] bg-white p-1">
         {CONTENT_TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex-1 rounded-[2px] py-1.5 text-[11px] uppercase tracking-[0.12em] transition-colors ${
-              tab === t.id ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"
+              tab === t.id ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"
             }`}
           >
             {t.label}
@@ -1079,19 +1091,19 @@ function ContentSection({
               <AnnouncementPreview text={content.announcement} />
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <label className="block">
-                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Показувати з</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Показувати з</span>
                   <input type="date" value={content.announcementFrom}
                     onChange={(e) => set("announcementFrom", e.target.value)}
-                    className="mt-1.5 h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                    className="mt-1.5 h-10 w-full border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Показувати до</span>
+                  <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Показувати до</span>
                   <input type="date" value={content.announcementTo}
                     onChange={(e) => set("announcementTo", e.target.value)}
-                    className="mt-1.5 h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                    className="mt-1.5 h-10 w-full border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
                 </label>
               </div>
-              <p className="mt-2 text-[11px] text-[#9c8f7d]">Залиште дати порожніми — смуга показується завжди (поки текст не порожній).</p>
+              <p className="mt-2 text-[11px] text-[#8a94a0]">Залиште дати порожніми — смуга показується завжди (поки текст не порожній).</p>
             </Card>
 
             <Card title="Hero-блок" subtitle="Перший екран головної сторінки">
@@ -1112,8 +1124,8 @@ function ContentSection({
             <Card title="Статистика в hero" subtitle="3 цифри під кнопками">
               <div className="grid grid-cols-3 gap-4">
                 {content.hero.stats.map((s, i) => (
-                  <div key={i} className="space-y-3 rounded-[3px] border border-[#eceae6] p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Цифра {i + 1}</p>
+                  <div key={i} className="space-y-3 rounded-[3px] border border-[#eef2f3] p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Цифра {i + 1}</p>
                     <Field label="Значення" value={s.value}
                       onChange={(v) => hero("stats", content.hero.stats.map((x, j) => j === i ? { ...x, value: v } : x))} />
                     <Field label="Підпис" value={s.label}
@@ -1126,8 +1138,8 @@ function ContentSection({
             <Card title="Блоки переваг" subtitle="4 картки перед футером">
               <div className="grid grid-cols-2 gap-4">
                 {content.services.map((s, i) => (
-                  <div key={i} className="space-y-3 rounded-[3px] border border-[#eceae6] p-4">
-                    <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Блок {i + 1}</p>
+                  <div key={i} className="space-y-3 rounded-[3px] border border-[#eef2f3] p-4">
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Блок {i + 1}</p>
                     <Field label="Заголовок" value={s.title}
                       onChange={(v) => set("services", content.services.map((x, j) => j === i ? { ...x, title: v } : x))} />
                     <Field label="Текст" value={s.text}
@@ -1156,7 +1168,7 @@ function ContentSection({
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">
                       Заголовок головної (title)
                       <span className="ml-1.5 font-normal lowercase tracking-normal text-[#c8c0b4]">· до 60 символів</span>
                     </span>
@@ -1166,13 +1178,13 @@ function ContentSection({
                     value={content.seo.defaultTitle}
                     onChange={(e) => seoF("defaultTitle", e.target.value)}
                     placeholder="Mania Group — брендовий одяг…"
-                    className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                    className="h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">
                       Шаблон заголовка інших сторінок
                     </span>
                   </div>
@@ -1180,9 +1192,9 @@ function ContentSection({
                     value={content.seo.titleTemplate}
                     onChange={(e) => seoF("titleTemplate", e.target.value)}
                     placeholder="%s — Mania Group"
-                    className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                    className="h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
                   />
-                  <p className="mt-1 text-[11px] text-[#9c8f7d]">%s замінюється назвою сторінки (напр. «Каталог»).</p>
+                  <p className="mt-1 text-[11px] text-[#8a94a0]">%s замінюється назвою сторінки (напр. «Каталог»).</p>
                 </div>
 
                 <AiField
@@ -1202,16 +1214,16 @@ function ContentSection({
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">OG-зображення (URL)</span>
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">OG-зображення (URL)</span>
                   </div>
                   <input
                     value={content.seo.ogImage}
                     onChange={(e) => seoF("ogImage", e.target.value)}
                     placeholder="/images/hero.webp"
-                    className="h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                    className="h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
                   />
                   {content.seo.ogImage && (
-                    <div className="mt-2 overflow-hidden rounded-[3px] border border-[#e8e4de]">
+                    <div className="mt-2 overflow-hidden rounded-[3px] border border-[#e6eaec]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={content.seo.ogImage}
@@ -1315,9 +1327,9 @@ function ContentSection({
             <Card title="Наші принципи" subtitle="4 картки «Чому обирають нас»">
               <div className="space-y-4">
                 {content.about.values.map((v, i) => (
-                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                  <div key={i} className="rounded-[3px] border border-[#eef2f3] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Принцип {i + 1}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Принцип {i + 1}</p>
                       <button onClick={() => aboutF("values", content.about.values.filter((_, j) => j !== i))}
                         className="text-[10px] text-red-400 hover:text-red-600">✕ Видалити</button>
                     </div>
@@ -1328,7 +1340,7 @@ function ContentSection({
                   </div>
                 ))}
                 <button onClick={() => aboutF("values", [...content.about.values, { title: "", text: "" }])}
-                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  className="w-full rounded-[3px] border border-dashed border-[#d5dbe0] py-2 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
                   + Додати принцип
                 </button>
               </div>
@@ -1347,9 +1359,9 @@ function ContentSection({
             <Card title="Інфо-картки" subtitle="4 блоки умов доставки">
               <div className="space-y-4">
                 {content.delivery.cards.map((c, i) => (
-                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                  <div key={i} className="rounded-[3px] border border-[#eef2f3] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Картка {i + 1}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Картка {i + 1}</p>
                       <button onClick={() => deliveryF("cards", content.delivery.cards.filter((_, j) => j !== i))}
                         className="text-[10px] text-red-400 hover:text-red-600">✕</button>
                     </div>
@@ -1364,7 +1376,7 @@ function ContentSection({
                   </div>
                 ))}
                 <button onClick={() => deliveryF("cards", [...content.delivery.cards, { eyebrow: "", title: "", text: "" }])}
-                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  className="w-full rounded-[3px] border border-dashed border-[#d5dbe0] py-2 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
                   + Додати картку
                 </button>
               </div>
@@ -1378,9 +1390,9 @@ function ContentSection({
             <Card title="Часті питання (FAQ)" subtitle="Запитання та відповіді внизу сторінки">
               <div className="space-y-4">
                 {content.delivery.faq.map((item, i) => (
-                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                  <div key={i} className="rounded-[3px] border border-[#eef2f3] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Питання {i + 1}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Питання {i + 1}</p>
                       <button onClick={() => deliveryF("faq", content.delivery.faq.filter((_, j) => j !== i))}
                         className="text-[10px] text-red-400 hover:text-red-600">✕</button>
                     </div>
@@ -1391,7 +1403,7 @@ function ContentSection({
                   </div>
                 ))}
                 <button onClick={() => deliveryF("faq", [...content.delivery.faq, { q: "", a: "" }])}
-                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  className="w-full rounded-[3px] border border-dashed border-[#d5dbe0] py-2 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
                   + Додати питання
                 </button>
               </div>
@@ -1415,9 +1427,9 @@ function ContentSection({
             <Card title="Три кроки" subtitle="Покроковий процес повернення">
               <div className="space-y-4">
                 {content.returns.steps.map((s, i) => (
-                  <div key={i} className="rounded-[3px] border border-[#eceae6] p-4 space-y-3">
+                  <div key={i} className="rounded-[3px] border border-[#eef2f3] p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Крок {i + 1}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Крок {i + 1}</p>
                       <button onClick={() => returnsF("steps", content.returns.steps.filter((_, j) => j !== i))}
                         className="text-[10px] text-red-400 hover:text-red-600">✕</button>
                     </div>
@@ -1428,7 +1440,7 @@ function ContentSection({
                   </div>
                 ))}
                 <button onClick={() => returnsF("steps", [...content.returns.steps, { title: "", text: "" }])}
-                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  className="w-full rounded-[3px] border border-dashed border-[#d5dbe0] py-2 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
                   + Додати крок
                 </button>
               </div>
@@ -1438,19 +1450,19 @@ function ContentSection({
               <div className="space-y-3">
                 {content.returns.conditions.map((cond, i) => (
                   <div key={i} className="flex items-start gap-2">
-                    <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-[#9c8f7d]" />
+                    <span className="mt-2.5 h-1 w-1 shrink-0 rounded-full bg-[#8a94a0]" />
                     <textarea
                       value={cond}
                       onChange={(e) => returnsF("conditions", content.returns.conditions.map((x, j) => j === i ? e.target.value : x))}
                       rows={2}
-                      className="flex-1 resize-none rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-sm text-[#17130f] focus:border-[#17130f] focus:bg-white focus:outline-none"
+                      className="flex-1 resize-none rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 py-2 text-sm text-[#2b2d42] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
                     />
                     <button onClick={() => returnsF("conditions", content.returns.conditions.filter((_, j) => j !== i))}
                       className="mt-2 text-[11px] text-red-400 hover:text-red-600">✕</button>
                   </div>
                 ))}
                 <button onClick={() => returnsF("conditions", [...content.returns.conditions, ""])}
-                  className="w-full rounded-[3px] border border-dashed border-[#d5cfc6] py-2 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+                  className="w-full rounded-[3px] border border-dashed border-[#d5dbe0] py-2 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
                   + Додати умову
                 </button>
               </div>
@@ -1529,7 +1541,7 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
     onToast?.("Видалено");
   }
 
-  const inp = "h-9 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none";
+  const inp = "h-9 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none";
   const uah = (v: number) => Number(v).toLocaleString("uk-UA") + " ₴";
 
   return (
@@ -1547,20 +1559,20 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
           <input value={form.expires_at} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} type="date" className={inp} />
         </div>
         <button onClick={create} disabled={saving}
-          className="mt-4 h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+          className="mt-4 h-10 rounded-[3px] border border-[#2f9488] px-6 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
           {saving ? "Створюємо…" : "Створити промокод"}
         </button>
       </Card>
 
       {loading ? (
-        <div className="space-y-2">{[1,2,3].map((i) => <div key={i} className="h-12 animate-pulse rounded-[3px] bg-[#ede9e3]" />)}</div>
+        <div className="space-y-2">{[1,2,3].map((i) => <div key={i} className="h-12 animate-pulse rounded-[3px] bg-[#eef2f3]" />)}</div>
       ) : coupons.length === 0 ? (
-        <p className="rounded-[3px] border border-[#e8e4de] bg-white px-4 py-12 text-center text-sm text-[#9c8f7d]">Промокодів ще немає</p>
+        <p className="rounded-[3px] border border-[#e6eaec] bg-white px-4 py-12 text-center text-sm text-[#8a94a0]">Промокодів ще немає</p>
       ) : (
-        <div className="overflow-x-auto rounded-[3px] border border-[#e8e4de] bg-white">
+        <div className="overflow-x-auto rounded-[3px] border border-[#e6eaec] bg-white">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-[#f0ece6] text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+              <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
                 <th className="px-4 py-3 text-left">Код</th>
                 <th className="px-4 py-3 text-left">Знижка</th>
                 <th className="px-4 py-3 text-right">Мін. сума</th>
@@ -1570,16 +1582,16 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f7f4f0]">
+            <tbody className="divide-y divide-[#f7f9fa]">
               {coupons.map((c) => (
                 <tr key={c.id} className={c.active ? "" : "opacity-50"}>
-                  <td className="px-4 py-3 font-mono text-[13px] font-medium text-[#17130f]">{c.code}</td>
+                  <td className="px-4 py-3 font-mono text-[13px] font-medium text-[#2b2d42]">{c.code}</td>
                   <td className="px-4 py-3 text-[13px]">{c.type === "percent" ? `${c.value}%` : uah(c.value)}</td>
-                  <td className="px-4 py-3 text-right text-[12px] tabular-nums text-[#9c8f7d]">{c.min_subtotal ? uah(c.min_subtotal) : "—"}</td>
-                  <td className="px-4 py-3 text-right text-[12px] tabular-nums text-[#9c8f7d]">{c.used_count}{c.usage_limit ? ` / ${c.usage_limit}` : ""}</td>
-                  <td className="px-4 py-3 text-[12px] text-[#9c8f7d]">{c.expires_at ? new Date(c.expires_at).toLocaleDateString("uk-UA") : "—"}</td>
+                  <td className="px-4 py-3 text-right text-[12px] tabular-nums text-[#8a94a0]">{c.min_subtotal ? uah(c.min_subtotal) : "—"}</td>
+                  <td className="px-4 py-3 text-right text-[12px] tabular-nums text-[#8a94a0]">{c.used_count}{c.usage_limit ? ` / ${c.usage_limit}` : ""}</td>
+                  <td className="px-4 py-3 text-[12px] text-[#8a94a0]">{c.expires_at ? new Date(c.expires_at).toLocaleDateString("uk-UA") : "—"}</td>
                   <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggle(c)} className={`relative mx-auto block h-5 w-9 rounded-full transition-colors ${c.active ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}>
+                    <button onClick={() => toggle(c)} className={`relative mx-auto block h-5 w-9 rounded-full transition-colors ${c.active ? "bg-[#2b2d42]" : "bg-[#d5dbe0]"}`}>
                       <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${c.active ? "left-[18px]" : "left-0.5"}`} />
                     </button>
                   </td>
@@ -1672,13 +1684,13 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium text-[#17130f]">Медіа-бібліотека</h2>
-          <p className="text-[12px] text-[#9c8f7d]">{files.length} зображень · jpg, png, webp, avif, gif · до 8 МБ · перетягніть файли будь-де на сторінці</p>
+          <h2 className="text-lg font-medium text-[#2b2d42]">Медіа-бібліотека</h2>
+          <p className="text-[12px] text-[#8a94a0]">{files.length} зображень · jpg, png, webp, avif, gif · до 8 МБ · перетягніть файли будь-де на сторінці</p>
         </div>
         <input ref={inputRef} type="file" accept="image/*" multiple hidden
           onChange={(e) => upload(e.target.files)} />
         <button onClick={() => inputRef.current?.click()} disabled={uploading}
-          className="flex h-10 items-center gap-2 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+          className="flex h-10 items-center gap-2 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
             <path d="M12 4v12m0-12l-4 4m4-4l4 4M4 20h16" />
           </svg>
@@ -1688,29 +1700,29 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
 
       {loading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {[1,2,3,4,5,6,7,8].map((i) => <div key={i} className="aspect-square animate-pulse bg-[#f3efe8]" />)}
+          {[1,2,3,4,5,6,7,8].map((i) => <div key={i} className="aspect-square animate-pulse bg-[#f7f9fa]" />)}
         </div>
       ) : files.length === 0 ? (
-        <div className={`rounded-[3px] border border-dashed px-4 py-16 text-center text-sm transition-colors ${dragOver ? "border-[#17130f] bg-[#f7f5f2] text-[#17130f]" : "border-[#d8d2c8] bg-white text-[#9c8f7d]"}`}>
+        <div className={`rounded-[3px] border border-dashed px-4 py-16 text-center text-sm transition-colors ${dragOver ? "border-[#2b2d42] bg-[#f4f6f7] text-[#2b2d42]" : "border-[#d5dbe0] bg-white text-[#8a94a0]"}`}>
           {dragOver ? "Відпустіть, щоб завантажити" : "Бібліотека порожня. Перетягніть фото сюди або натисніть «Завантажити»."}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {files.map((f) => (
-            <div key={f.name} className="group relative overflow-hidden rounded-[3px] border border-[#eceae6] bg-white">
+            <div key={f.name} className="group relative overflow-hidden rounded-[3px] border border-[#eef2f3] bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={f.url} alt={f.name} className="aspect-square w-full object-cover" loading="lazy" />
               <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                <span className="truncate text-[10px] text-[#9c8f7d]" title={f.name}>{fmtSize(f.size)}</span>
+                <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>{fmtSize(f.size)}</span>
                 <div className="flex shrink-0 gap-1">
                   <button onClick={() => copy(f.url)} title="Копіювати посилання"
-                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#9c8f7d] hover:bg-[#f5f1ea] hover:text-[#17130f]">
+                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                       <path d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
                     </svg>
                   </button>
                   <button onClick={() => remove(f.name)} title="Видалити"
-                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#9c8f7d] hover:bg-[#fdecec] hover:text-[#c62828]">
+                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#fdecec] hover:text-[#c62828]">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
                       <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m1 0v12a1 1 0 01-1 1H8a1 1 0 01-1-1V7" />
                     </svg>
@@ -1758,14 +1770,14 @@ function SubscribersSection() {
     <div className="max-w-3xl">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium text-[#17130f]">Підписники</h2>
-          <p className="text-[12px] text-[#9c8f7d]">{total.toLocaleString("uk-UA")} email у розсилці</p>
+          <h2 className="text-lg font-medium text-[#2b2d42]">Підписники</h2>
+          <p className="text-[12px] text-[#8a94a0]">{total.toLocaleString("uk-UA")} email у розсилці</p>
         </div>
         <div className="flex items-center gap-2">
           <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Пошук email…"
-            className="h-10 w-56 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+            className="h-10 w-56 border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
           <a href="/api/admin/subscribers?format=csv" download
-            className="flex h-10 items-center gap-2 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85">
+            className="flex h-10 items-center gap-2 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
               <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
@@ -1775,22 +1787,22 @@ function SubscribersSection() {
       </div>
 
       {loading ? (
-        <div className="space-y-2">{[1,2,3,4,5].map((i) => <div key={i} className="h-12 animate-pulse bg-[#f3efe8]" />)}</div>
+        <div className="space-y-2">{[1,2,3,4,5].map((i) => <div key={i} className="h-12 animate-pulse bg-[#f7f9fa]" />)}</div>
       ) : rows.length === 0 ? (
-        <p className="py-10 text-center text-sm text-[#9c8f7d]">{search ? "Нічого не знайдено" : "Поки немає підписників"}</p>
+        <p className="py-10 text-center text-sm text-[#8a94a0]">{search ? "Нічого не знайдено" : "Поки немає підписників"}</p>
       ) : (
-        <div className="border border-[#eee7db]">
-          <div className="flex items-center gap-3 border-b border-[#eee7db] bg-[#faf8f5] px-4 py-2 text-[10px] uppercase tracking-wider text-[#9c8f7d]">
+        <div className="border border-[#eef2f3]">
+          <div className="flex items-center gap-3 border-b border-[#eef2f3] bg-[#f7f9fa] px-4 py-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">
             <span className="flex-1">Email</span>
             <span className="w-24">Джерело</span>
             <span className="w-28 text-right">Дата</span>
           </div>
-          <div className="divide-y divide-[#eee7db]">
+          <div className="divide-y divide-[#eef2f3]">
             {rows.map((s) => (
               <div key={s.id} className="flex items-center gap-3 px-4 py-2.5 text-[13px]">
-                <span className="min-w-0 flex-1 truncate text-[#17130f]">{s.email}</span>
-                <span className="w-24 truncate text-[12px] text-[#9c8f7d]">{s.source || "—"}</span>
-                <span className="w-28 text-right text-[12px] tabular-nums text-[#9c8f7d]">
+                <span className="min-w-0 flex-1 truncate text-[#2b2d42]">{s.email}</span>
+                <span className="w-24 truncate text-[12px] text-[#8a94a0]">{s.source || "—"}</span>
+                <span className="w-28 text-right text-[12px] tabular-nums text-[#8a94a0]">
                   {new Date(s.created_at).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit" })}
                 </span>
               </div>
@@ -1843,26 +1855,26 @@ function AutoBackupsCard() {
     <Card title="Автоматичні резервні копії" subtitle="Щоночі о 03:00 — повний дамп PostgreSQL, зберігається останні 14 днів">
       <div className="mb-4 flex items-center gap-3">
         <button onClick={runNow} disabled={running}
-          className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85 disabled:opacity-50">
+          className="inline-flex h-9 items-center rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] transition-opacity hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
           {running ? "Створюємо…" : "Створити копію зараз"}
         </button>
         {msg && <span className={`text-[11px] ${msg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{msg}</span>}
       </div>
 
       {files === null ? (
-        <p className="text-[12px] text-[#9c8f7d]">Завантаження…</p>
+        <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>
       ) : files.length === 0 ? (
-        <p className="text-[12px] text-[#b9ae9b]">Ще немає жодної автоматичної копії.</p>
+        <p className="text-[12px] text-[#aab4bf]">Ще немає жодної автоматичної копії.</p>
       ) : (
-        <div className="divide-y divide-[#F5F5F5] rounded-[4px] border border-[#e8e4de] bg-white">
+        <div className="divide-y divide-[#F5F5F5] rounded-[4px] border border-[#e6eaec] bg-white">
           {files.map((f) => (
             <div key={f.name} className="flex items-center gap-3 px-4 py-2.5 text-[12px]">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-              <span className="min-w-0 flex-1 truncate font-medium text-[#212121]">{f.name}</span>
-              <span className="shrink-0 tabular-nums text-[#9c8f7d]">{fmtBackupBytes(f.size)}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-[#1f2733]">{f.name}</span>
+              <span className="shrink-0 tabular-nums text-[#8a94a0]">{fmtBackupBytes(f.size)}</span>
               <span className="shrink-0 text-[11px] text-[#BDBDBD]">{fmtBackupDate(f.mtime)}</span>
               <a href={`/api/admin/backups/download?file=${encodeURIComponent(f.name)}`} download
-                className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#17130f] hover:underline">
+                className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] hover:underline">
                 ↓ Завантажити
               </a>
             </div>
@@ -1915,17 +1927,17 @@ function BackupSection() {
           <a
             href="/api/admin/backup"
             download
-            className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85"
+            className="inline-flex h-9 items-center rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] transition-opacity hover:bg-[#2f9488] hover:text-white"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
               <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0L8 12m4 4V4" />
             </svg>
             Завантажити дамп .sql
           </a>
-          <span className="text-[12px] text-[#9c8f7d]">maniagroup-db-YYYY-MM-DD.sql</span>
+          <span className="text-[12px] text-[#8a94a0]">maniagroup-db-YYYY-MM-DD.sql</span>
         </div>
-        <p className="mt-4 text-[11px] text-[#b9ae9b]">
-          Відновлення на сервері: <code className="rounded bg-[#f3efe8] px-1.5 py-0.5 text-[#6b6052]">psql &quot;$DATABASE_URL&quot; &lt; файл.sql</code>
+        <p className="mt-4 text-[11px] text-[#aab4bf]">
+          Відновлення на сервері: <code className="rounded bg-[#f7f9fa] px-1.5 py-0.5 text-[#6b6052]">psql &quot;$DATABASE_URL&quot; &lt; файл.sql</code>
         </p>
       </Card>
 
@@ -1934,20 +1946,20 @@ function BackupSection() {
           <a
             href="/api/admin/export"
             download
-            className="inline-flex h-9 items-center rounded-[3px] bg-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-white transition-opacity hover:opacity-85"
+            className="inline-flex h-9 items-center rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] transition-opacity hover:bg-[#2f9488] hover:text-white"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
               <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0L8 12m4 4V4" />
             </svg>
             Завантажити JSON
           </a>
-          <span className="text-[12px] text-[#9c8f7d]">maniagroup-backup-YYYY-MM-DD.json</span>
+          <span className="text-[12px] text-[#8a94a0]">maniagroup-backup-YYYY-MM-DD.json</span>
         </div>
       </Card>
 
       <Card title="Відновлення з файлу" subtitle="Завантажте раніше збережену копію — перезапише поточний контент">
         <div className="flex flex-wrap items-center gap-4">
-          <label className={`inline-flex h-9 cursor-pointer items-center rounded-[3px] border border-[#e8e4de] bg-white px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] transition-colors hover:bg-[#f7f5f2] ${importStatus === "importing" ? "pointer-events-none opacity-50" : ""}`}>
+          <label className={`inline-flex h-9 cursor-pointer items-center rounded-[3px] border border-[#e6eaec] bg-white px-5 text-[11px] uppercase tracking-[0.12em] text-[#2b2d42] transition-colors hover:bg-[#f4f6f7] ${importStatus === "importing" ? "pointer-events-none opacity-50" : ""}`}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4">
               <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
@@ -1960,7 +1972,7 @@ function BackupSection() {
       </Card>
 
       <Card title="Що входить до JSON-копії контенту">
-        <ul className="space-y-2 text-[12px] text-[#9c8f7d]">
+        <ul className="space-y-2 text-[12px] text-[#8a94a0]">
           {[
             "Рядок оголошень",
             "Hero-блок (заголовки, підзаголовок)",
@@ -1969,12 +1981,12 @@ function BackupSection() {
             "Тексти сторінок: Про нас, Доставка, Повернення",
           ].map((item) => (
             <li key={item} className="flex items-center gap-2">
-              <span className="h-1 w-1 rounded-full bg-[#b9ae9b]" />
+              <span className="h-1 w-1 rounded-full bg-[#aab4bf]" />
               {item}
             </li>
           ))}
         </ul>
-        <p className="mt-4 text-[11px] text-[#b9ae9b]">
+        <p className="mt-4 text-[11px] text-[#aab4bf]">
           Товари, замовлення та клієнти зберігаються в PostgreSQL — для них використовуйте повний дамп бази даних вище.
         </p>
       </Card>
@@ -2153,9 +2165,9 @@ function SettingsSection() {
     setTimeout(() => setPwdStatus("idle"), 2500);
   }
 
-  const inp = "mt-1.5 h-10 w-full rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] text-[#17130f] focus:border-[#17130f] focus:outline-none";
-  const lbl = "text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]";
-  const btn = "h-10 rounded-[3px] bg-[#17130f] px-6 text-[11px] uppercase tracking-[0.12em] text-white hover:opacity-85 disabled:opacity-50";
+  const inp = "mt-1.5 h-10 w-full rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none";
+  const lbl = "text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]";
+  const btn = "h-10 rounded-[3px] border border-[#2f9488] px-6 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50";
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -2171,16 +2183,16 @@ function SettingsSection() {
             <input type="email" className={inp} value={store.store_email} onChange={(e) => setStore({ ...store, store_email: e.target.value })} placeholder="hello@maniagroup.com.ua" /></label>
         </div>
 
-        <div className="mt-5 rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] p-4">
+        <div className="mt-5 rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] p-4">
           <label className="flex items-start gap-2.5">
             <button type="button" onClick={() => setStore({ ...store, require_product_photo: store.require_product_photo === "0" ? "1" : "0" })}
-              className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${store.require_product_photo !== "0" ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}
+              className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${store.require_product_photo !== "0" ? "bg-[#2b2d42]" : "bg-[#d5dbe0]"}`}
               aria-label="Приховувати товари без фото">
               <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${store.require_product_photo !== "0" ? "left-[18px]" : "left-0.5"}`} />
             </button>
             <span>
-              <span className="block text-[13px] text-[#17130f]">Приховувати товари без фото на сайті</span>
-              <span className="mt-1 block text-[11px] leading-relaxed text-[#9c8f7d]">
+              <span className="block text-[13px] text-[#2b2d42]">Приховувати товари без фото на сайті</span>
+              <span className="mt-1 block text-[11px] leading-relaxed text-[#8a94a0]">
                 Увімкнено (за замовчуванням) — вітрина показує лише сфотографовані товари.
                 Вимкніть, якщо треба одразу показати щойно завантажені товари (наприклад, після MG-імпорту), поки фото ще не додані.
               </span>
@@ -2201,7 +2213,7 @@ function SettingsSection() {
             <input type="password" required className={inp} value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} placeholder="мінімум 6 символів" /></label>
           <label className="block"><span className={lbl}>Повторіть новий пароль</span>
             <input type="password" required className={inp} value={pwd.next2} onChange={(e) => setPwd({ ...pwd, next2: e.target.value })} /></label>
-          {pwdError && <p className="text-[13px] text-[#b3392c]">{pwdError}</p>}
+          {pwdError && <p className="text-[13px] text-[#e5484d]">{pwdError}</p>}
           <button type="submit" disabled={pwdStatus === "saving"} className={btn}>
             {pwdStatus === "saving" ? "Зберігаємо…" : pwdStatus === "saved" ? "✓ Пароль змінено" : "Змінити пароль"}
           </button>
@@ -2211,19 +2223,19 @@ function SettingsSection() {
       <Card title="Сповіщення · Telegram" subtitle="Миттєвий пінг у Telegram при новому замовленні та зміні статусу">
         <label className="mb-4 flex items-center gap-2.5">
           <button onClick={() => setTg({ ...tg, telegram_enabled: tg.telegram_enabled ? "" : "1" })}
-            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${tg.telegram_enabled ? "bg-[#17130f]" : "bg-[#d8d2c8]"}`}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${tg.telegram_enabled ? "bg-[#2b2d42]" : "bg-[#d5dbe0]"}`}
             aria-label="Увімкнути">
             <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${tg.telegram_enabled ? "left-[18px]" : "left-0.5"}`} />
           </button>
-          <span className="text-[13px] text-[#17130f]">Надсилати сповіщення</span>
+          <span className="text-[13px] text-[#2b2d42]">Надсилати сповіщення</span>
         </label>
         <div className="space-y-4">
           <label className="block"><span className={lbl}>Bot Token</span>
             <input className={inp} value={tg.telegram_bot_token} onChange={(e) => setTg({ ...tg, telegram_bot_token: e.target.value })} placeholder="123456:ABC-DEF…" /></label>
           <label className="block"><span className={lbl}>Chat ID</span>
             <input className={inp} value={tg.telegram_chat_id} onChange={(e) => setTg({ ...tg, telegram_chat_id: e.target.value })} placeholder="-1001234567890 або ваш user id" /></label>
-          <p className="text-[11px] leading-relaxed text-[#9c8f7d]">
-            Створіть бота через <span className="text-[#17130f]">@BotFather</span> → отримайте токен. Chat ID свого акаунта дізнайтеся у <span className="text-[#17130f]">@userinfobot</span>, або додайте бота в групу й візьміть її id.
+          <p className="text-[11px] leading-relaxed text-[#8a94a0]">
+            Створіть бота через <span className="text-[#2b2d42]">@BotFather</span> → отримайте токен. Chat ID свого акаунта дізнайтеся у <span className="text-[#2b2d42]">@userinfobot</span>, або додайте бота в групу й візьміть її id.
           </p>
         </div>
         <div className="mt-5 flex items-center gap-3">
@@ -2231,10 +2243,10 @@ function SettingsSection() {
             {tgStatus === "saving" ? "Зберігаємо…" : tgStatus === "saved" ? "✓ Збережено" : "Зберегти"}
           </button>
           <button onClick={testTg} disabled={tgTest.state === "testing" || !tg.telegram_bot_token || !tg.telegram_chat_id}
-            className="h-10 rounded-[3px] border border-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+            className="h-10 rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
             {tgTest.state === "testing" ? "Надсилаємо…" : "Тест"}
           </button>
-          {tgTest.msg && <span className={`text-[12px] ${tgTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#b3392c]"}`}>{tgTest.msg}</span>}
+          {tgTest.msg && <span className={`text-[12px] ${tgTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#e5484d]"}`}>{tgTest.msg}</span>}
         </div>
       </Card>
 
@@ -2242,8 +2254,8 @@ function SettingsSection() {
         <label className="block"><span className={lbl}>OpenRouter API Key</span>
           <input type="password" autoComplete="new-password" className={inp} value={ai.openrouter_api_key}
             onChange={(e) => setAi({ openrouter_api_key: e.target.value })} placeholder="sk-or-v1-…" /></label>
-        <p className="mt-2 text-[11px] leading-relaxed text-[#9c8f7d]">
-          Безкоштовний ключ — зареєструйтесь на <span className="text-[#17130f]">openrouter.ai</span>, створіть ключ у розділі Keys і вставте сюди.
+        <p className="mt-2 text-[11px] leading-relaxed text-[#8a94a0]">
+          Безкоштовний ключ — зареєструйтесь на <span className="text-[#2b2d42]">openrouter.ai</span>, створіть ключ у розділі Keys і вставте сюди.
           Це замінює потребу заходити на сервер через термінал.
         </p>
         <div className="mt-5 flex items-center gap-3">
@@ -2251,10 +2263,10 @@ function SettingsSection() {
             {aiStatus === "saving" ? "Зберігаємо…" : aiStatus === "saved" ? "✓ Збережено" : "Зберегти"}
           </button>
           <button onClick={testAi} disabled={aiTest.state === "testing" || !ai.openrouter_api_key}
-            className="h-10 rounded-[3px] border border-[#17130f] px-5 text-[11px] uppercase tracking-[0.12em] text-[#17130f] hover:bg-[#17130f] hover:text-white disabled:opacity-40">
+            className="h-10 rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
             {aiTest.state === "testing" ? "Перевіряємо…" : "Перевірити"}
           </button>
-          {aiTest.msg && <span className={`text-[12px] ${aiTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#b3392c]"}`}>{aiTest.msg}</span>}
+          {aiTest.msg && <span className={`text-[12px] ${aiTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#e5484d]"}`}>{aiTest.msg}</span>}
         </div>
       </Card>
 
@@ -2262,25 +2274,25 @@ function SettingsSection() {
         {photoSources.length > 0 && (
           <div className="mb-4 space-y-2">
             {photoSources.map((s, i) => (
-              <div key={s.id} className="flex items-center gap-2 rounded-[4px] border border-[#e8e4de] px-3 py-2">
+              <div key={s.id} className="flex items-center gap-2 rounded-[4px] border border-[#e6eaec] px-3 py-2">
                 <div className="flex flex-col gap-0.5">
-                  <button onClick={() => movePhotoSource(s.id, -1)} disabled={i === 0} className="text-[10px] text-[#9c8f7d] hover:text-[#17130f] disabled:opacity-30">▲</button>
-                  <button onClick={() => movePhotoSource(s.id, 1)} disabled={i === photoSources.length - 1} className="text-[10px] text-[#9c8f7d] hover:text-[#17130f] disabled:opacity-30">▼</button>
+                  <button onClick={() => movePhotoSource(s.id, -1)} disabled={i === 0} className="text-[10px] text-[#8a94a0] hover:text-[#2b2d42] disabled:opacity-30">▲</button>
+                  <button onClick={() => movePhotoSource(s.id, 1)} disabled={i === photoSources.length - 1} className="text-[10px] text-[#8a94a0] hover:text-[#2b2d42] disabled:opacity-30">▼</button>
                 </div>
                 <label className="flex items-center gap-2 shrink-0">
-                  <input type="checkbox" checked={s.enabled} onChange={(e) => togglePhotoSource(s.id, e.target.checked)} className="h-4 w-4 accent-[#17130f]" />
+                  <input type="checkbox" checked={s.enabled} onChange={(e) => togglePhotoSource(s.id, e.target.checked)} className="h-4 w-4 accent-[#2b2d42]" />
                 </label>
                 <div className="min-w-0 flex-1">
-                  <div className={`truncate text-[13px] ${s.enabled ? "text-[#17130f]" : "text-[#9c8f7d] line-through"}`}>{s.name || s.base_url}</div>
-                  <div className="truncate text-[11px] text-[#9c8f7d]">{s.base_url}</div>
+                  <div className={`truncate text-[13px] ${s.enabled ? "text-[#2b2d42]" : "text-[#8a94a0] line-through"}`}>{s.name || s.base_url}</div>
+                  <div className="truncate text-[11px] text-[#8a94a0]">{s.base_url}</div>
                 </div>
                 {pingState[s.id] === "ok" && <span className="shrink-0 text-[11px] text-emerald-600">✓ доступний</span>}
-                {pingState[s.id] === "fail" && <span className="shrink-0 text-[11px] text-[#b3392c]">✗ не відповідає</span>}
+                {pingState[s.id] === "fail" && <span className="shrink-0 text-[11px] text-[#e5484d]">✗ не відповідає</span>}
                 <button onClick={() => testPhotoSource(s.id, s.base_url)} disabled={pingState[s.id] === "testing"}
-                  className="shrink-0 text-[11px] uppercase tracking-[0.08em] text-[#6b6253] hover:text-[#17130f] disabled:opacity-40">
+                  className="shrink-0 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:text-[#2b2d42] disabled:opacity-40">
                   {pingState[s.id] === "testing" ? "Перевіряємо…" : "Перевірити"}
                 </button>
-                <button onClick={() => deletePhotoSource(s.id)} className="shrink-0 text-[11px] uppercase tracking-[0.08em] text-[#b3392c] hover:opacity-70">Видалити</button>
+                <button onClick={() => deletePhotoSource(s.id)} className="shrink-0 text-[11px] uppercase tracking-[0.08em] text-[#e5484d] hover:opacity-70">Видалити</button>
               </div>
             ))}
           </div>
@@ -2294,9 +2306,9 @@ function SettingsSection() {
             {sourceStatus === "saving" ? "Додаємо…" : "Додати"}
           </button>
         </div>
-        {sourceError && <p className="mt-2 text-[12px] text-[#b3392c]">{sourceError}</p>}
+        {sourceError && <p className="mt-2 text-[12px] text-[#e5484d]">{sourceError}</p>}
         {sourceWarning && <p className="mt-2 text-[12px] text-amber-700">{sourceWarning}</p>}
-        <p className="mt-3 text-[11px] leading-relaxed text-[#9c8f7d]">
+        <p className="mt-3 text-[11px] leading-relaxed text-[#8a94a0]">
           Будь-який сайт на WordPress — фото шукаються через його публічну медіатеку за назвою файлу, що починається з артикулу/SKU товару.
           Можна додати кілька — вимкнені (без галочки) пропускаються, порядок задає чергу пошуку.
         </p>
@@ -2317,10 +2329,10 @@ function SettingsSection() {
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-[3px] border border-[#e8e4de] bg-white p-6">
+    <div className="rounded-[3px] border border-[#e6eaec] bg-white p-6">
       <div className="mb-5">
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#9c8f7d]">{title}</h2>
-        {subtitle && <p className="mt-1 text-[12px] text-[#b9ae9b]">{subtitle}</p>}
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">{title}</h2>
+        {subtitle && <p className="mt-1 text-[12px] text-[#aab4bf]">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -2330,8 +2342,8 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-4">
-      <span className="w-28 shrink-0 text-[11px] uppercase tracking-wider text-[#9c8f7d]">{label}</span>
-      <span className="font-mono text-[12px] text-[#17130f]">{value}</span>
+      <span className="w-28 shrink-0 text-[11px] uppercase tracking-wider text-[#8a94a0]">{label}</span>
+      <span className="font-mono text-[12px] text-[#2b2d42]">{value}</span>
     </div>
   );
 }
@@ -2347,21 +2359,21 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">{label}</span>
       {textarea ? (
         <textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           rows={3}
-          className="mt-1.5 w-full resize-none rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 py-2 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+          className="mt-1.5 w-full resize-none rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 py-2 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
         />
       ) : (
         <input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="mt-1.5 h-9 w-full rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] px-3 text-sm text-[#17130f] placeholder:text-[#cdc7bd] focus:border-[#17130f] focus:bg-white focus:outline-none"
+          className="mt-1.5 h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
         />
       )}
     </label>

@@ -22,6 +22,11 @@ type Row = {
   color: string;
   season: string;
   composition: string;
+  /** Manufacturer's factory article (Заводський артикул) — distinct from our
+   *  internal `sku`; the bridge code OFFERS/ОСТАТКИ files match on. */
+  factory_article: string;
+  /** Pre-formatted "DD.MM.YYYY HH:MM" from the list query. */
+  updated_at?: string;
   /** Has real per-size stock rows — when true, is_in_stock is a MIRROR
    *  recomputed from those rows (see lib/erp.ts), not a free-standing flag. */
   has_variants: boolean;
@@ -79,12 +84,12 @@ function siteStatus(row: Row): {
 } {
   if (row.status !== "publish")
     return {
-      label: "Приховано", dot: "bg-[#9c8f7d]",
+      label: "Приховано", dot: "bg-[#8a94a0]",
       title: "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується",
       fix: { patch: { status: "publish" }, label: "Опублікувати" },
     };
   if (!row.is_in_stock)
-    return { label: "Без залишку", dot: "bg-[#c9bdab]", title: "Немає в наявності (0 на складі) — на сайті не показується" };
+    return { label: "Без залишку", dot: "bg-[#b6c0ca]", title: "Немає в наявності (0 на складі) — на сайті не показується" };
   if (!row.image_src && !row.show_without_photo)
     return {
       label: "Без фото", dot: "bg-[#d97706]",
@@ -99,13 +104,13 @@ function siteStatus(row: Row): {
 /** One documentation card in the help panel — icon badge + title + body. */
 function HelpCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
   return (
-    <div className="flex gap-3 rounded-[5px] border border-[#e8e4de] bg-[#faf8f5] p-3.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#8a7a5c] shadow-[0_0_0_1px_#e8e4de]">
+    <div className="flex gap-3 rounded-[5px] border border-[#e6eaec] bg-[#f7f9fa] p-3.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#8a94a0] shadow-[0_0_0_1px_#e6eaec]">
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="mb-1 text-[12px] font-semibold text-[#17130f]">{title}</p>
-        <div className="space-y-1.5 text-[12px] leading-relaxed text-[#6b6253]">{children}</div>
+        <p className="mb-1 text-[12px] font-semibold text-[#2b2d42]">{title}</p>
+        <div className="space-y-1.5 text-[12px] leading-relaxed text-[#5a6472]">{children}</div>
       </div>
     </div>
   );
@@ -124,7 +129,7 @@ const EXPORT_COLUMNS = [
 type CatalogFocus = { stock?: string; siteStatus?: string; token: number } | null;
 
 export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }: { onToast?: (m: string) => void; onImport?: () => void; dataVersion?: number; focus?: CatalogFocus }) {
-  const [mode, setMode] = useState<"grid" | "cards">("grid");
+  const [mode, setMode] = useState<"grid" | "cards" | "list">("grid");
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -231,7 +236,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   }, [page, perPage, sortBy, sortDir, filterParams]);
 
   // Reload rows on filter/sort/page changes and after an import (dataVersion).
-  useEffect(() => { if (mode === "grid") load(); }, [load, mode, dataVersion]);
+  useEffect(() => { if (mode !== "cards") load(); }, [load, mode, dataVersion]);
 
   // Filter facets (brands / categories / colors) — refresh after an import too,
   // so a newly imported brand shows up in the dropdowns.
@@ -394,12 +399,12 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
       .join("");
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Каталог Mania Group</title>
       <style>
-        body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#17130f;padding:24px}
+        body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2b2d42;padding:24px}
         h1{font-size:18px;margin:0 0 4px} p{color:#888;font-size:12px;margin:0 0 16px}
         table{width:100%;border-collapse:collapse;font-size:11px}
         th,td{border:1px solid #ddd;padding:5px 7px;text-align:left;vertical-align:top}
-        th{background:#f3f0ea;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
-        tr:nth-child(even){background:#faf8f5}
+        th{background:#f7f9fa;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
+        tr:nth-child(even){background:#f7f9fa}
       </style></head><body>
       <h1>Каталог Mania Group</h1>
       <p>${data.length} позицій · ${new Date().toLocaleString("uk-UA")}</p>
@@ -421,7 +426,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const inp = "h-7 w-full bg-transparent px-1.5 text-[13px] leading-7 text-[#17130f] outline-none";
+  const inp = "h-7 w-full bg-transparent px-1.5 text-[13px] leading-7 text-[#2b2d42] outline-none";
 
   // Active-cell derived values for the formula bar
   const aRow = active ? rows.find((r) => r.id === active.row) ?? null : null;
@@ -436,12 +441,12 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
       <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} onBulkPhotos={() => setBulkPhotoOpen(true)} />
 
       {/* Intro / how-to — one compact line, expands on demand */}
-      <div className="mb-3 flex items-center gap-2 rounded-[4px] border border-[#e8e4de] bg-[#faf8f5] px-3.5 py-2 text-[12px] text-[#6b6253]">
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-[#9c8f7d]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
+      <div className="mb-3 flex items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-3.5 py-2 text-[12px] text-[#5a6472]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-[#8a94a0]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
         <span className="min-w-0 flex-1 truncate">
-          <b className="text-[#17130f]">Таблиця як Excel</b> — клікніть клітинку, редагуйте, <b>Enter</b>/<b>Tab</b> — рух, потім «Зберегти всі».
+          <b className="text-[#2b2d42]">Таблиця як Excel</b> — клікніть клітинку, редагуйте, <b>Enter</b>/<b>Tab</b> — рух, потім «Зберегти всі».
         </span>
-        <button onClick={() => setHelpOpen((v) => !v)} className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">
+        <button onClick={() => setHelpOpen((v) => !v)} className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0] hover:text-[#2b2d42]">
           {helpOpen ? "Згорнути" : "Докладніше"}
         </button>
       </div>
@@ -525,49 +530,49 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Пошук: назва, бренд, артикул…"
-          className="h-9 w-56 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[13px] text-[#17130f] focus:border-[#17130f] focus:outline-none"
+          className="h-9 w-56 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none"
         />
         <select value={stock} onChange={(e) => { setStock(e.target.value); setPage(1); }}
-          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Усі</option>
           <option value="in">В наявності</option>
           <option value="out">Немає</option>
         </select>
         <select value={brand} onChange={(e) => { setBrand(e.target.value); setPage(1); }}
-          className="h-9 max-w-44 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 max-w-44 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Усі бренди</option>
           {brands.map((b) => <option key={b.brand} value={b.brand}>{b.brand} ({b.count})</option>)}
         </select>
         <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}
-          className="h-9 max-w-44 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 max-w-44 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Усі категорії</option>
           {facets.categories.map((c) => <option key={c.slug} value={c.slug}>{c.name} ({c.count})</option>)}
         </select>
         <select value={gender} onChange={(e) => { setGender(e.target.value); setPage(1); }}
-          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Стать</option>
           <option value="women">Жіноче</option>
           <option value="men">Чоловіче</option>
         </select>
         <select value={color} onChange={(e) => { setColor(e.target.value); setPage(1); }}
-          className="h-9 max-w-36 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 max-w-36 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Колір</option>
           {facets.colors.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={season} onChange={(e) => { setSeason(e.target.value); setPage(1); }}
-          className="h-9 max-w-36 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 max-w-36 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Сезон</option>
           {facets.seasons.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={statusF} onChange={(e) => { setStatusF(e.target.value); setPage(1); }}
-          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">Статус</option>
           <option value="publish">Опубліковані</option>
           <option value="draft">Чернетки</option>
         </select>
         <select value={siteStatusF} onChange={(e) => { setSiteStatusF(e.target.value); setPage(1); }}
           title="Чи видно товар на сайті прямо зараз"
-          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="">На сайті: всі</option>
           <option value="live">🟢 LIVE</option>
           <option value="no_photo">🟡 Без фото</option>
@@ -576,18 +581,18 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         </select>
         <input value={minPrice} onChange={(e) => { setMinPrice(e.target.value.replace(/\D/g, "")); setPage(1); }}
           placeholder="₴ від" inputMode="numeric"
-          className="h-9 w-20 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none" />
+          className="h-9 w-20 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none" />
         <input value={maxPrice} onChange={(e) => { setMaxPrice(e.target.value.replace(/\D/g, "")); setPage(1); }}
           placeholder="₴ до" inputMode="numeric"
-          className="h-9 w-20 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none" />
+          className="h-9 w-20 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none" />
         {activeFilters > 0 && (
           <button onClick={resetFilters}
-            className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+            className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
             Скинути ({activeFilters})
           </button>
         )}
         <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
-          className="h-9 rounded-[3px] border border-[#e8e4de] bg-white px-2 text-[12px] text-[#17130f] focus:border-[#17130f] focus:outline-none">
+          className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           {PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}/стор.</option>)}
         </select>
 
@@ -595,7 +600,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         <button
           onClick={() => { setLoading(true); load(); }}
           title="Оновити дані"
-          className="ml-auto flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#107C41] hover:text-[#107C41]"
+          className="ml-auto flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M20 11A8 8 0 006 5.3L3 8m0 0V3m0 5h5m-5 5a8 8 0 0014 5.7l3-2.7m0 0v5m0-5h-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           Оновити
@@ -604,7 +609,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         {/* Export — opens settings dialog */}
         <button
           onClick={() => { setExportScope(selected.size ? "selected" : "filtered"); setExportOpen(true); }}
-          className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]"
+          className="flex h-9 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] transition-colors hover:border-[#2b2d42]"
         >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           Експорт{selected.size ? ` (${selected.size})` : ""}
@@ -630,90 +635,91 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         <div className="sticky top-0 z-30 mb-2 flex items-center gap-3 rounded-[4px] border border-amber-300 bg-amber-50 px-3 py-2">
           <span className="text-[12px] text-amber-800">Незбережені зміни: <b>{dirtyCount}</b> товарів</span>
           <button onClick={saveEdits} disabled={saving}
-            className="ml-auto h-8 rounded-[3px] bg-[#17130f] px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+            className="ml-auto h-8 rounded-[3px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
             {saving ? "Зберігаємо…" : "Зберегти всі"}
           </button>
-          <button onClick={discardEdits} className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">Скасувати</button>
+          <button onClick={discardEdits} className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0] hover:text-[#2b2d42]">Скасувати</button>
         </div>
       )}
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e8e4de] bg-white px-3 py-2 text-[11px] uppercase tracking-[0.1em]">
-          <span className="text-[#9c8f7d]">Обрано {selected.size}</span>
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-white px-3 py-2 text-[11px] uppercase tracking-[0.1em]">
+          <span className="text-[#8a94a0]">Обрано {selected.size}</span>
           {[
             { a: "publish", l: "Опублікувати" }, { a: "unpublish", l: "Сховати" },
             { a: "in_stock", l: "В наявн." }, { a: "out_of_stock", l: "Немає" },
             { a: "feature", l: "В обране" }, { a: "unfeature", l: "З обраного" },
             { a: "show_without_photo", l: "Показати без фото" }, { a: "hide_without_photo", l: "Сховати без фото" },
           ].map((b) => (
-            <button key={b.a} onClick={() => bulk(b.a)} className="text-[#17130f] underline-offset-2 hover:underline">{b.l}</button>
+            <button key={b.a} onClick={() => bulk(b.a)} className="text-[#2b2d42] underline-offset-2 hover:underline">{b.l}</button>
           ))}
           <button onClick={() => { if (confirm(`Видалити ${selected.size} товарів?`)) bulk("delete"); }}
             className="text-red-600 underline-offset-2 hover:underline">Видалити</button>
         </div>
       )}
 
+      {mode === "grid" && (<>
       {/* Formula bar (Excel-style) */}
-      <div className="flex items-stretch border border-b-0 border-[#b7b7b7] bg-[#f9f9f9] text-[13px]">
-        <div className="flex w-[94px] shrink-0 items-center justify-center border-r border-[#b7b7b7] px-2 font-medium tabular-nums text-[#444]">
+      <div className="flex items-stretch border border-b-0 border-[#d5dbe0] bg-[#f7f9fa] text-[13px]">
+        <div className="flex w-[94px] shrink-0 items-center justify-center border-r border-[#d5dbe0] px-2 font-medium tabular-nums text-[#444]">
           {aRef || "—"}
         </div>
-        <div className="flex w-9 shrink-0 items-center justify-center border-r border-[#b7b7b7] font-serif text-[15px] italic text-[#9a9a9a]">fx</div>
+        <div className="flex w-9 shrink-0 items-center justify-center border-r border-[#d5dbe0] font-serif text-[15px] italic text-[#9a9a9a]">fx</div>
         <input
           value={aRow && aCol ? String(cell(aRow, aCol.key) ?? "") : ""}
           readOnly={!aEditable}
           onChange={(e) => aRow && aCol && setCell(aRow.id, aCol.key, e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && aRow && aCol) moveVertical(aRow.id, aCol.key, 1); }}
           placeholder="Оберіть клітинку для редагування…"
-          className="h-8 flex-1 bg-white px-2.5 text-[#17130f] outline-none placeholder:text-[#bbb] read-only:bg-[#fafafa] read-only:text-[#8a8a8a]"
+          className="h-8 flex-1 bg-white px-2.5 text-[#2b2d42] outline-none placeholder:text-[#bbb] read-only:bg-[#fafafa] read-only:text-[#8a8a8a]"
         />
       </div>
 
       {/* Grid — Excel look */}
-      <div className="max-h-[68vh] overflow-auto border border-[#b7b7b7] bg-white">
+      <div className="max-h-[68vh] overflow-auto border border-[#d5dbe0] bg-white">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
               {/* select-all corner */}
-              <th className="sticky left-0 top-0 z-30 w-10 min-w-10 border-b border-r border-[#b7b7b7] bg-[#f0f0f0] p-0">
+              <th className="sticky left-0 top-0 z-30 w-10 min-w-10 border-b border-r border-[#d5dbe0] bg-[#eef2f3] p-0">
                 <button onClick={toggleAll} title="Виділити все" className="relative block h-full min-h-[38px] w-full">
                   <span className="absolute bottom-[3px] right-[3px] h-0 w-0 border-b-[7px] border-l-[7px] border-b-[#9a9a9a] border-l-transparent" />
                 </button>
               </th>
               {/* photo (frozen) */}
-              <th className="sticky left-10 top-0 z-30 w-11 min-w-11 border-b border-r border-[#b7b7b7] bg-[#f0f0f0] text-center align-bottom">
+              <th className="sticky left-10 top-0 z-30 w-11 min-w-11 border-b border-r border-[#d5dbe0] bg-[#eef2f3] text-center align-bottom">
                 <div className="pb-1 text-[10px] text-[#8a8a8a]">Фото</div>
               </th>
               {/* site status (computed, not editable) */}
-              <th className="top-0 z-20 w-[132px] min-w-[132px] border-b border-r border-[#b7b7b7] bg-[#f0f0f0] text-center align-bottom">
+              <th className="top-0 z-20 w-[132px] min-w-[132px] border-b border-r border-[#d5dbe0] bg-[#eef2f3] text-center align-bottom">
                 <div className="pb-1 text-[10px] text-[#8a8a8a]">На сайті</div>
               </th>
               {COLS.map((c, ci) => {
                 const isActiveCol = active?.col === c.key;
                 return (
                   <th key={c.key} style={{ minWidth: c.w }}
-                    className={`sticky top-0 z-20 border-b border-r border-[#b7b7b7] px-2 pb-1 pt-0.5 text-left align-bottom ${isActiveCol ? "bg-[#dff0e6]" : "bg-[#f0f0f0]"}`}>
-                    <div className={`text-center text-[10px] font-normal leading-none ${isActiveCol ? "text-[#107C41]" : "text-[#8a8a8a]"}`}>{colLetter(ci)}</div>
+                    className={`sticky top-0 z-20 border-b border-r border-[#d5dbe0] px-2 pb-1 pt-0.5 text-left align-bottom ${isActiveCol ? "bg-[#e3f2f0]" : "bg-[#eef2f3]"}`}>
+                    <div className={`text-center text-[10px] font-normal leading-none ${isActiveCol ? "text-[#2f9488]" : "text-[#8a8a8a]"}`}>{colLetter(ci)}</div>
                     {c.sortable ? (
-                      <button onClick={() => toggleSort(c.key)} className="mt-1 flex w-full items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-[#3a3a3a] hover:text-[#107C41]">
-                        {c.label}{sortBy === c.key && <span className="text-[#107C41]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+                      <button onClick={() => toggleSort(c.key)} className="mt-1 flex w-full items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-[#3a4250] hover:text-[#2f9488]">
+                        {c.label}{sortBy === c.key && <span className="text-[#2f9488]">{sortDir === "asc" ? "▲" : "▼"}</span>}
                       </button>
                     ) : (
-                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-[#3a3a3a]">{c.label}</div>
+                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-[#3a4250]">{c.label}</div>
                     )}
                   </th>
                 );
               })}
-              <th className="sticky top-0 z-20 w-16 min-w-16 border-b border-[#b7b7b7] bg-[#f0f0f0]" />
+              <th className="sticky top-0 z-20 w-16 min-w-16 border-b border-[#d5dbe0] bg-[#eef2f3]" />
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={COLS.length + 4} className="px-3 py-10 text-center text-[#9c8f7d]">Завантаження…</td></tr>
+              <tr><td colSpan={COLS.length + 4} className="px-3 py-10 text-center text-[#8a94a0]">Завантаження…</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={COLS.length + 4} className="px-3 py-10 text-center text-[#9c8f7d]">Нічого не знайдено</td></tr>
+              <tr><td colSpan={COLS.length + 4} className="px-3 py-10 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
             )}
             {!loading && rows.map((row, ri) => {
               const rowDirty = !!edits[row.id];
@@ -721,17 +727,17 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
               const isActiveRow = active?.row === row.id;
               const rowNum = (page - 1) * perPage + ri + 1;
               return (
-                <tr key={row.id} className={rowDirty ? "bg-[#fff8e6]" : "hover:bg-[#f3faf5]"}>
+                <tr key={row.id} className={rowDirty ? "bg-[#fff8e6]" : "hover:bg-[#eef7f6]"}>
                   {/* row number / row select */}
                   <td onClick={() => toggleRow(row.id)} title="Клік — виділити рядок"
                     className={`sticky left-0 z-10 h-7 cursor-pointer select-none border-b border-r text-center text-[11px] tabular-nums ${
-                      isSel ? "border-[#0e6a39] bg-[#107C41] font-semibold text-white"
-                      : isActiveRow ? "border-[#b7b7b7] bg-[#dff0e6] font-semibold text-[#107C41]"
-                      : "border-[#d4d4d4] bg-[#f0f0f0] text-[#8a8a8a] hover:bg-[#e4e4e4]"}`}>
+                      isSel ? "border-[#277d73] bg-[#2f9488] font-semibold text-white"
+                      : isActiveRow ? "border-[#d5dbe0] bg-[#e3f2f0] font-semibold text-[#2f9488]"
+                      : "border-[#e6eaec] bg-[#eef2f3] text-[#8a8a8a] hover:bg-[#e4e4e4]"}`}>
                     {rowNum}
                   </td>
                   {/* photo (frozen) */}
-                  <td className={`sticky left-10 z-10 border-b border-r border-[#d4d4d4] p-0 ${isSel ? "bg-[#eaf6ef]" : "bg-white"}`}>
+                  <td className={`sticky left-10 z-10 border-b border-r border-[#e6eaec] p-0 ${isSel ? "bg-[#eef7f6]" : "bg-white"}`}>
                     <div className="flex h-7 items-center justify-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       {row.image_src
@@ -743,17 +749,17 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                   {(() => {
                     const st = siteStatus(row);
                     return (
-                      <td title={st.title} className={`border-b border-r border-[#d4d4d4] px-1.5 ${isSel ? "bg-[#eaf6ef]" : ""}`}>
+                      <td title={st.title} className={`border-b border-r border-[#e6eaec] px-1.5 ${isSel ? "bg-[#eef7f6]" : ""}`}>
                         {st.fix ? (
                           <button onClick={() => quickFix(row.id, st.fix!.patch)} disabled={fixingId === row.id}
-                            className="flex w-full items-center justify-center gap-1 rounded-[2px] border border-[#e0e0e0] bg-white px-1 py-0.5 text-[10px] text-[#107C41] hover:border-[#107C41] disabled:opacity-50">
+                            className="flex w-full items-center justify-center gap-1 rounded-[2px] border border-[#e0e0e0] bg-white px-1 py-0.5 text-[10px] text-[#2f9488] hover:border-[#2f9488] disabled:opacity-50">
                             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
                             {fixingId === row.id ? "…" : st.fix.label}
                           </button>
                         ) : (
                           <div className="flex items-center justify-center gap-1.5">
                             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
-                            <span className="truncate text-[10.5px] text-[#5a5347]">{st.label}</span>
+                            <span className="truncate text-[10.5px] text-[#5a6472]">{st.label}</span>
                           </div>
                         )}
                       </td>
@@ -765,18 +771,18 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                     return (
                       <td key={c.key}
                         onClick={() => setActive({ row: row.id, col: c.key })}
-                        className={`border-b border-r border-[#d4d4d4] p-0 ${isSel ? "bg-[#eaf6ef]" : ""}`}
-                        style={isActive ? { boxShadow: "inset 0 0 0 2px #107C41" } : undefined}>
+                        className={`border-b border-r border-[#e6eaec] p-0 ${isSel ? "bg-[#eef7f6]" : ""}`}
+                        style={isActive ? { boxShadow: "inset 0 0 0 2px #2f9488" } : undefined}>
                         {c.type === "bool" ? (
                           c.key === "is_in_stock" && row.has_variants ? (
                             <div className="flex h-7 items-center justify-center" title="Розраховується автоматично із залишків розмірів — редагуйте в «Картці», а не тут">
                               <input type="checkbox" checked={Boolean(cell(row, c.key))} disabled
-                                className="h-3.5 w-3.5 accent-[#c9bdab] cursor-not-allowed" />
+                                className="h-3.5 w-3.5 accent-[#b6c0ca] cursor-not-allowed" />
                             </div>
                           ) : (
                             <div className="flex h-7 items-center justify-center">
                               <input type="checkbox" checked={Boolean(cell(row, c.key))}
-                                onChange={(e) => setCell(row.id, c.key, e.target.checked)} className="h-3.5 w-3.5 accent-[#107C41]" />
+                                onChange={(e) => setCell(row.id, c.key, e.target.checked)} className="h-3.5 w-3.5 accent-[#2f9488]" />
                             </div>
                           )
                         ) : c.type === "gender" ? (
@@ -807,7 +813,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                       </td>
                     );
                   })}
-                  <td className={`border-b border-[#d4d4d4] px-2 ${isSel ? "bg-[#eaf6ef]" : ""}`}>
+                  <td className={`border-b border-[#e6eaec] px-2 ${isSel ? "bg-[#eef7f6]" : ""}`}>
                     <div className="flex items-center justify-end gap-1">
                       <SocialPostButton
                         product={{
@@ -824,7 +830,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                         onToast={onToast}
                       />
                       <button onClick={() => openFullCard(row.id)} title="Відкрити картку товару"
-                        className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#c9c9c9] bg-white text-[#3a3a3a] transition-colors hover:border-[#107C41] hover:text-[#107C41]">
+                        className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#c9c9c9] bg-white text-[#3a4250] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]">
                         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-1.5-9.5a2.1 2.1 0 013 3L12 16l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" /></svg>
                       </button>
                     </div>
@@ -837,24 +843,34 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
       </div>
 
       {/* Excel status bar + sheet tab */}
-      <div className="flex items-center justify-between border border-t-0 border-[#b7b7b7] bg-[#f3f3f3] px-1.5 py-1 text-[11px] text-[#555]">
+      <div className="flex items-center justify-between border border-t-0 border-[#d5dbe0] bg-[#f3f3f3] px-1.5 py-1 text-[11px] text-[#555]">
         <div className="flex items-end gap-0.5">
-          <span className="rounded-t-[3px] border border-b-0 border-[#b7b7b7] bg-white px-3 py-0.5 font-medium text-[#107C41]">Товари</span>
+          <span className="rounded-t-[3px] border border-b-0 border-[#d5dbe0] bg-white px-3 py-0.5 font-medium text-[#2f9488]">Товари</span>
           <span className="px-1.5 text-[#aaa]">＋</span>
         </div>
         <div className="flex items-center gap-4 tabular-nums">
           <span>Записів: {total.toLocaleString("uk-UA")}</span>
-          {selected.size > 0 && <span className="font-medium text-[#107C41]">Виділено: {selected.size}</span>}
+          {selected.size > 0 && <span className="font-medium text-[#2f9488]">Виділено: {selected.size}</span>}
           {dirtyCount > 0 && <span className="font-medium text-[#b8860b]">Змінено: {dirtyCount}</span>}
           <span>Стор. {page} / {totalPages}</span>
           <div className="flex gap-1">
             <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-              className="h-6 rounded-[2px] border border-[#c9c9c9] bg-white px-2 disabled:opacity-30 hover:enabled:border-[#107C41]">‹</button>
+              className="h-6 rounded-[2px] border border-[#c9c9c9] bg-white px-2 disabled:opacity-30 hover:enabled:border-[#2f9488]">‹</button>
             <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-              className="h-6 rounded-[2px] border border-[#c9c9c9] bg-white px-2 disabled:opacity-30 hover:enabled:border-[#107C41]">›</button>
+              className="h-6 rounded-[2px] border border-[#c9c9c9] bg-white px-2 disabled:opacity-30 hover:enabled:border-[#2f9488]">›</button>
           </div>
         </div>
       </div>
+      </>)}
+
+      {mode === "list" && (
+        <ProductListView
+          rows={rows} loading={loading} total={total} page={page} perPage={perPage}
+          setPage={setPage} setPerPage={setPerPage} totalPages={totalPages}
+          selected={selected} toggleRow={toggleRow} toggleAll={toggleAll}
+          onOpen={openFullCard}
+        />
+      )}
 
       {/* Danger zone — deliberately tucked away at the very bottom, separate
           from every normal action, so it's never one accidental click away. */}
@@ -875,41 +891,169 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   );
 }
 
-function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "grid" | "cards"; setMode: (m: "grid" | "cards") => void; onImport?: () => void; onNew?: () => void; onBulkPhotos?: () => void }) {
+function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "grid" | "cards" | "list"; setMode: (m: "grid" | "cards" | "list") => void; onImport?: () => void; onNew?: () => void; onBulkPhotos?: () => void }) {
   return (
     <div className="mb-4 flex items-center gap-2">
-      <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e8e4de] p-0.5">
+      <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e6eaec] p-0.5">
         <button onClick={() => setMode("grid")}
-          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "grid" ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>
+          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "grid" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
           Таблиця
         </button>
+        <button onClick={() => setMode("list")}
+          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "list" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
+          Список
+        </button>
         <button onClick={() => setMode("cards")}
-          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "cards" ? "bg-[#17130f] text-white" : "text-[#9c8f7d] hover:text-[#17130f]"}`}>
+          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "cards" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
           Картки + фото
         </button>
       </div>
       <div className="ml-auto flex items-center gap-2">
         {onNew && (
           <button onClick={onNew}
-            className="flex h-8 items-center gap-1.5 rounded-[3px] bg-[#17130f] px-3 text-[11px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-85">
+            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#2f9488] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
             Новий товар
           </button>
         )}
         {onBulkPhotos && (
           <button onClick={onBulkPhotos} title="Масово прив'язати фото за назвою файлу (SKU/артикул)"
-            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]">
+            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#2f9488] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z" /></svg>
             Фото масово
           </button>
         )}
         {onImport && (
           <button onClick={onImport}
-            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e8e4de] px-3 text-[11px] uppercase tracking-[0.1em] text-[#17130f] transition-colors hover:border-[#17130f]">
+            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#2f9488] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             Імпорт XLS
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Read-only product list — a faithful clone of the Intertop partner catalog
+      list view (ID · фото · назва · бренд · категорія · Код товару · Заводський
+      артикул · статус · публікація · остання зміна). Shares the grid's filters,
+      selection and paging; row-click opens the full card for editing. ──────── */
+function ProductListView({
+  rows, loading, total, page, perPage, setPage, setPerPage, totalPages,
+  selected, toggleRow, toggleAll, onOpen,
+}: {
+  rows: Row[]; loading: boolean; total: number; page: number; perPage: number;
+  setPage: (v: number | ((p: number) => number)) => void;
+  setPerPage: (n: number) => void; totalPages: number;
+  selected: Set<string>; toggleRow: (id: string) => void; toggleAll: () => void;
+  onOpen: (id: string) => void;
+}) {
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const to = Math.min(page * perPage, total);
+  const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
+
+  // Compact page window: 1 … p-1 p p+1 … last
+  const pages: (number | "…")[] = [];
+  const win = new Set([1, totalPages, page, page - 1, page + 1].filter((n) => n >= 1 && n <= totalPages));
+  let prev = 0;
+  for (let n = 1; n <= totalPages; n++) {
+    if (!win.has(n)) continue;
+    if (prev && n - prev > 1) pages.push("…");
+    pages.push(n); prev = n;
+  }
+
+  const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
+
+  return (
+    <div>
+      <div className="overflow-x-auto rounded-[6px] border border-[#e6eaec] bg-white">
+        <table className="w-full border-collapse text-[13px]">
+          <thead>
+            <tr>
+              <th className="w-10 border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5">
+                <input type="checkbox" checked={allOnPage} onChange={toggleAll}
+                  className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
+              </th>
+              <th className={thCls}>ID товару</th>
+              <th className={thCls}>Зображення</th>
+              <th className={thCls}>Назва</th>
+              <th className={thCls}>Бренд</th>
+              <th className={thCls}>Категорія</th>
+              <th className={thCls}>Код товару</th>
+              <th className={thCls}>Заводський артикул</th>
+              <th className={thCls}>Статус</th>
+              <th className={`${thCls} text-center`}>Публікувався</th>
+              <th className={thCls}>Востаннє змінено</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={11} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={11} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
+            ) : rows.map((row) => {
+              const st = siteStatus(row);
+              const isSel = selected.has(row.id);
+              return (
+                <tr key={row.id} onClick={() => onOpen(row.id)}
+                  className={`cursor-pointer border-b border-[#eef2f3] transition-colors ${isSel ? "bg-[#eef7f6]" : "hover:bg-[#f7f9fa]"}`}>
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={isSel} onChange={() => toggleRow(row.id)}
+                      className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
+                  </td>
+                  <td className="px-3 py-2.5 font-medium tabular-nums text-[#5a6472]">{row.id}</td>
+                  <td className="px-3 py-2">
+                    {row.image_src
+                      ? <img src={row.image_src} alt="" className="h-11 w-11 rounded-[4px] border border-[#e6eaec] object-cover" />
+                      : <div className="flex h-11 w-11 items-center justify-center rounded-[4px] border border-dashed border-[#d5dbe0] text-[#b6c0ca]">
+                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z" /></svg>
+                        </div>}
+                  </td>
+                  <td className="max-w-[280px] truncate px-3 py-2.5 text-[#2b2d42]" title={row.name}>{row.name}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.brand}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.category || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.factory_article || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5" title={st.title}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
+                      <span className="text-[12px] text-[#3a4250]">{st.label}</span>
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <span className={`text-[12px] font-medium ${row.status === "publish" ? "text-[#2f9488]" : "text-[#aab4bf]"}`}>
+                      {row.status === "publish" ? "Так" : "Ні"}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[12px] tabular-nums text-[#8a94a0]">{row.updated_at ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Intertop-style pagination footer */}
+      <div className="mt-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-[12px] text-[#5a6472]">
+        <label className="flex items-center gap-2">
+          Показувати на сторінці
+          <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+            className="h-8 rounded-[4px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none">
+            {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        <span className="tabular-nums text-[#8a94a0]">{from.toLocaleString("uk-UA")}–{to.toLocaleString("uk-UA")} / {total.toLocaleString("uk-UA")}</span>
+        <div className="flex items-center gap-1">
+          <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
+            className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-[#e6eaec] bg-white text-[#5a6472] transition-colors disabled:opacity-30 hover:enabled:border-[#2f9488] hover:enabled:text-[#2f9488]">‹</button>
+          {pages.map((p, i) => p === "…"
+            ? <span key={`e${i}`} className="px-1 text-[#aab4bf]">…</span>
+            : <button key={p} onClick={() => setPage(p)}
+                className={`flex h-8 min-w-8 items-center justify-center rounded-[4px] border px-2 tabular-nums transition-colors ${p === page ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] bg-white text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]"}`}>{p}</button>)}
+          <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
+            className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-[#e6eaec] bg-white text-[#5a6472] transition-colors disabled:opacity-30 hover:enabled:border-[#2f9488] hover:enabled:text-[#2f9488]">›</button>
+        </div>
       </div>
     </div>
   );
@@ -948,21 +1092,21 @@ function WipeAllDialog({ onClose, total, onDone }: { onClose: () => void; total:
           <p className="mt-0.5 text-[12px] text-red-700">Незворотна дія — видаляє всі {total.toLocaleString("uk-UA")} товарів із бази.</p>
         </div>
         <div className="space-y-4 px-5 py-4">
-          <p className="text-[12px] leading-relaxed text-[#616161]">
+          <p className="text-[12px] leading-relaxed text-[#5a6472]">
             Перед видаленням система автоматично зробить свіжу резервну копію бази. Якщо бекап не вдасться —
             видалення НЕ відбудеться. Замовлення, клієнти й аналітика не постраждають — очищується лише каталог товарів.
           </p>
           <label className="block">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-[#9c8f7d]">
+            <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">
               Введіть <b className="text-red-700">{WIPE_PHRASE}</b> для підтвердження
             </span>
             <input value={text} onChange={(e) => setText(e.target.value)} autoFocus
-              className="mt-1.5 h-10 w-full rounded-[3px] border border-[#e8e4de] px-3 text-[13px] focus:border-red-500 focus:outline-none" />
+              className="mt-1.5 h-10 w-full rounded-[3px] border border-[#e6eaec] px-3 text-[13px] focus:border-red-500 focus:outline-none" />
           </label>
           {error && <p className="text-[12px] text-red-600">{error}</p>}
         </div>
-        <div className="flex items-center justify-end gap-2 border-t border-[#f0ece6] px-5 py-3.5">
-          <button onClick={onClose} className="h-9 rounded-[3px] px-4 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d] hover:text-[#17130f]">Скасувати</button>
+        <div className="flex items-center justify-end gap-2 border-t border-[#eef2f3] px-5 py-3.5">
+          <button onClick={onClose} className="h-9 rounded-[3px] px-4 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0] hover:text-[#2b2d42]">Скасувати</button>
           <button onClick={run} disabled={text !== WIPE_PHRASE || status === "running"}
             className="h-9 rounded-[3px] bg-red-600 px-4 text-[11px] uppercase tracking-[0.1em] text-white hover:opacity-90 disabled:opacity-40">
             {status === "running" ? "Видаляємо…" : "Видалити все"}
@@ -1006,31 +1150,31 @@ function ExportDialog({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
-      <div className="relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[6px] border border-[#e8e4de] bg-white p-5 shadow-xl">
+      <div className="relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[6px] border border-[#e6eaec] bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-medium text-[#17130f]">Експорт каталогу</h3>
-          <button onClick={onClose} className="text-[#9c8f7d] hover:text-[#17130f]" aria-label="Закрити">✕</button>
+          <h3 className="text-base font-medium text-[#2b2d42]">Експорт каталогу</h3>
+          <button onClick={onClose} className="text-[#8a94a0] hover:text-[#2b2d42]" aria-label="Закрити">✕</button>
         </div>
 
-        <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Що експортувати</p>
+        <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Що експортувати</p>
         <div className="mb-4 grid grid-cols-2 gap-2">
           {scopes.map((s) => (
             <button key={s.id} disabled={s.disabled} onClick={() => setScope(s.id)}
               className={`rounded-[4px] border px-3 py-2 text-left text-[12px] disabled:opacity-40 ${
-                scope === s.id ? "border-[#17130f] bg-[#faf8f5]" : "border-[#e8e4de] hover:border-[#c9bdab]"
+                scope === s.id ? "border-[#2b2d42] bg-[#f7f9fa]" : "border-[#e6eaec] hover:border-[#b6c0ca]"
               }`}>
-              <span className="block font-medium text-[#17130f]">{s.label}</span>
-              <span className="text-[11px] text-[#9c8f7d]">{s.hint}</span>
+              <span className="block font-medium text-[#2b2d42]">{s.label}</span>
+              <span className="text-[11px] text-[#8a94a0]">{s.hint}</span>
             </button>
           ))}
         </div>
 
-        <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Формат</p>
+        <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Формат</p>
         <div className="mb-4 flex flex-wrap gap-2">
           {formats.map((f) => (
             <button key={f.id} onClick={() => setFormat(f.id)}
               className={`rounded-[4px] border px-3 py-1.5 text-[12px] ${
-                format === f.id ? "border-[#17130f] bg-[#faf8f5] text-[#17130f]" : "border-[#e8e4de] text-[#6b6253] hover:border-[#c9bdab]"
+                format === f.id ? "border-[#2b2d42] bg-[#f7f9fa] text-[#2b2d42]" : "border-[#e6eaec] text-[#5a6472] hover:border-[#b6c0ca]"
               }`}>
               {f.label}
             </button>
@@ -1038,15 +1182,15 @@ function ExportDialog({
         </div>
 
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-[11px] uppercase tracking-[0.1em] text-[#9c8f7d]">Стовпці ({cols.size})</p>
+          <p className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Стовпці ({cols.size})</p>
           <div className="flex gap-2 text-[11px]">
-            <button onClick={() => setCols(new Set(EXPORT_COLUMNS))} className="text-[#17130f] hover:underline">Усі</button>
-            <button onClick={() => setCols(new Set())} className="text-[#9c8f7d] hover:underline">Зняти</button>
+            <button onClick={() => setCols(new Set(EXPORT_COLUMNS))} className="text-[#2b2d42] hover:underline">Усі</button>
+            <button onClick={() => setCols(new Set())} className="text-[#8a94a0] hover:underline">Зняти</button>
           </div>
         </div>
         <div className="mb-5 grid max-h-44 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto sm:grid-cols-3">
           {EXPORT_COLUMNS.map((c) => (
-            <label key={c} className="flex items-center gap-1.5 text-[12px] text-[#17130f]">
+            <label key={c} className="flex items-center gap-1.5 text-[12px] text-[#2b2d42]">
               <input type="checkbox" checked={cols.has(c)} onChange={() => toggleCol(c)} />
               {c}
             </label>
@@ -1054,9 +1198,9 @@ function ExportDialog({
         </div>
 
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-[4px] border border-[#e8e4de] px-4 py-2 text-[12px] text-[#6b6253] hover:border-[#17130f]">Скасувати</button>
+          <button onClick={onClose} className="rounded-[4px] border border-[#e6eaec] px-4 py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Скасувати</button>
           <button onClick={onExport} disabled={cols.size === 0}
-            className="rounded-[4px] bg-[#17130f] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-white hover:opacity-85 disabled:opacity-40">
+            className="rounded-[4px] border border-[#2f9488] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
             Експортувати
           </button>
         </div>

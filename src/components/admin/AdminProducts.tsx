@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatPrice } from "@/lib/catalog";
+import { DetailCard } from "./intertop/primitives";
 
 type Row = {
   id: string;
@@ -250,36 +251,36 @@ export function AdminProducts({ onToast, initialOpen }: {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
-  const inp = "h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] text-[#17130f] focus:border-[#17130f] focus:outline-none";
-  const lbl = "text-[10px] uppercase tracking-wider text-[#9c8f7d]";
+  const inp = "h-10 w-full border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none";
+  const lbl = "text-[10px] uppercase tracking-wider text-[#8a94a0]";
 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-medium text-[#17130f]">Товари</h2>
-          <p className="text-[12px] text-[#9c8f7d]">{total.toLocaleString("uk-UA")} у каталозі</p>
+          <h2 className="text-lg font-medium text-[#2b2d42]">Товари</h2>
+          <p className="text-[12px] text-[#8a94a0]">{total.toLocaleString("uk-UA")} у каталозі</p>
         </div>
         <div className="flex items-center gap-2">
           <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Назва, бренд, SKU…"
-            className="h-10 w-64 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
-          <button onClick={openPriceRule} className="h-10 shrink-0 border border-[#e5ded3] bg-white px-4 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+            className="h-10 w-64 border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
+          <button onClick={openPriceRule} className="h-10 shrink-0 border border-[#e6eaec] bg-white px-4 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
             Знижки
           </button>
-          <button onClick={openNew} className="h-10 shrink-0 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85">
+          <button onClick={openNew} className="h-10 shrink-0 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
             + Додати
           </button>
         </div>
       </div>
 
       {showRule && (
-        <div className="mb-4 rounded-[3px] border border-[#e8e4de] bg-[#faf8f5] p-4">
-          <p className="mb-3 text-[11px] uppercase tracking-wider text-[#9c8f7d]">Масова знижка на бренд</p>
+        <div className="mb-4 rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] p-4">
+          <p className="mb-3 text-[11px] uppercase tracking-wider text-[#8a94a0]">Масова знижка на бренд</p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1">
               <span className={lbl}>Бренд</span>
               <select value={rule.scope} onChange={(e) => setRule({ ...rule, scope: e.target.value })}
-                className="h-10 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none">
+                className="h-10 border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none">
                 <option value="">— оберіть —</option>
                 {ruleBrands.map((b) => <option key={b.brand} value={b.brand}>{b.brand} ({b.count})</option>)}
               </select>
@@ -287,18 +288,18 @@ export function AdminProducts({ onToast, initialOpen }: {
             <label className="flex flex-col gap-1">
               <span className={lbl}>Знижка, %</span>
               <input type="number" min="0" max="95" value={rule.percent} onChange={(e) => setRule({ ...rule, percent: e.target.value })}
-                placeholder="20" className="h-10 w-24 border border-[#e5ded3] bg-white px-3 text-[13px] focus:border-[#17130f] focus:outline-none" />
+                placeholder="20" className="h-10 w-24 border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
             </label>
             <button onClick={() => applyRule(false)} disabled={ruleBusy}
-              className="h-10 bg-[#17130f] px-5 text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+              className="h-10 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
               {ruleBusy ? "…" : "Застосувати"}
             </button>
             <button onClick={() => applyRule(true)} disabled={ruleBusy}
-              className="h-10 border border-[#e5ded3] bg-white px-4 text-[11px] uppercase tracking-wider text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]">
+              className="h-10 border border-[#e6eaec] bg-white px-4 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
               Зняти знижку
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-[#9c8f7d]">Встановлює акційну ціну = звичайна × (1 − %). «Зняти знижку» повертає звичайну ціну.</p>
+          <p className="mt-2 text-[11px] text-[#8a94a0]">Встановлює акційну ціну = звичайна × (1 − %). «Зняти знижку» повертає звичайну ціну.</p>
         </div>
       )}
 
@@ -307,7 +308,7 @@ export function AdminProducts({ onToast, initialOpen }: {
         {STOCK_TABS.map((t) => (
           <button key={t.value} onClick={() => setStock(t.value)}
             className={`h-8 rounded-[3px] px-4 text-[11px] uppercase tracking-[0.1em] transition-colors ${
-              stock === t.value ? "bg-[#17130f] text-white" : "border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] hover:text-[#17130f]"
+              stock === t.value ? "bg-[#2f9488] text-white" : "border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]"
             }`}>
             {t.label}
           </button>
@@ -316,7 +317,7 @@ export function AdminProducts({ onToast, initialOpen }: {
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[3px] border border-[#17130f] bg-[#17130f] px-3 py-2 text-white">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[3px] border border-[#2b2d42] bg-[#2b2d42] px-3 py-2 text-white">
           <span className="text-[12px]">Обрано: {selected.size}</span>
           <span className="mx-1 h-4 w-px bg-white/20" />
           <BulkBtn onClick={() => bulk("publish", "Опубліковано")}>Опублікувати</BulkBtn>
@@ -331,30 +332,30 @@ export function AdminProducts({ onToast, initialOpen }: {
       )}
 
       {loading ? (
-        <div className="space-y-2">{[1,2,3,4,5].map((i) => <div key={i} className="h-14 animate-pulse bg-[#f3efe8]" />)}</div>
+        <div className="space-y-2">{[1,2,3,4,5].map((i) => <div key={i} className="h-14 animate-pulse bg-[#f7f9fa]" />)}</div>
       ) : rows.length === 0 ? (
-        <p className="py-10 text-center text-sm text-[#9c8f7d]">Нічого не знайдено</p>
+        <p className="py-10 text-center text-sm text-[#8a94a0]">Нічого не знайдено</p>
       ) : (
-        <div className="border border-[#eee7db]">
-          <div className="flex items-center gap-3 border-b border-[#eee7db] bg-[#faf8f5] px-3 py-2">
+        <div className="border border-[#eef2f3]">
+          <div className="flex items-center gap-3 border-b border-[#eef2f3] bg-[#f7f9fa] px-3 py-2">
             <input type="checkbox" checked={selected.size === rows.length && rows.length > 0} onChange={toggleAll} className="h-4 w-4" />
-            <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Обрати всі на сторінці</span>
+            <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Обрати всі на сторінці</span>
           </div>
-          <div className="divide-y divide-[#eee7db]">
+          <div className="divide-y divide-[#eef2f3]">
             {rows.map((p) => (
-              <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${selected.has(p.id) ? "bg-[#faf8f5]" : ""}`}>
+              <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${selected.has(p.id) ? "bg-[#f7f9fa]" : ""}`}>
                 <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} className="h-4 w-4 shrink-0" />
-                <div className="h-12 w-9 shrink-0 overflow-hidden bg-[#f3efe8]">
+                <div className="h-12 w-9 shrink-0 overflow-hidden bg-[#f7f9fa]">
                   {p.image_src && <img src={p.image_src} alt="" className="h-full w-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] text-[#17130f]">{p.featured && <span title="В обраному" className="mr-1 text-[#bf9b30]">★</span>}{p.name}{p.status !== "publish" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] uppercase text-amber-700">чернетка</span>}</p>
-                  <p className="text-[11px] text-[#9c8f7d]">{p.brand} · {p.category}{p.sku ? ` · ${p.sku}` : ""}</p>
+                  <p className="truncate text-[13px] text-[#2b2d42]">{p.featured && <span title="В обраному" className="mr-1 text-[#bf9b30]">★</span>}{p.name}{p.status !== "publish" && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] uppercase text-amber-700">чернетка</span>}</p>
+                  <p className="text-[11px] text-[#8a94a0]">{p.brand} · {p.category}{p.sku ? ` · ${p.sku}` : ""}</p>
                 </div>
-                {!p.is_in_stock && <span className="rounded bg-[#f5f5f5] px-2 py-0.5 text-[10px] text-[#9c8f7d]">немає</span>}
-                <span className="w-24 text-right text-[13px] tabular-nums text-[#17130f]">{formatPrice(p.price)}</span>
-                <button onClick={() => openEdit(p.id)} className="text-[11px] uppercase tracking-wider text-[#9c8f7d] underline underline-offset-2 hover:text-[#17130f]">Ред.</button>
-                <button onClick={() => remove(p.id, p.name)} className="text-[11px] uppercase tracking-wider text-[#b3392c] hover:opacity-70">✕</button>
+                {!p.is_in_stock && <span className="rounded bg-[#f5f5f5] px-2 py-0.5 text-[10px] text-[#8a94a0]">немає</span>}
+                <span className="w-24 text-right text-[13px] tabular-nums text-[#2b2d42]">{formatPrice(p.price)}</span>
+                <button onClick={() => openEdit(p.id)} className="text-[11px] uppercase tracking-wider text-[#8a94a0] underline underline-offset-2 hover:text-[#2b2d42]">Ред.</button>
+                <button onClick={() => remove(p.id, p.name)} className="text-[11px] uppercase tracking-wider text-[#e5484d] hover:opacity-70">✕</button>
               </div>
             ))}
           </div>
@@ -364,10 +365,10 @@ export function AdminProducts({ onToast, initialOpen }: {
       {!loading && total > PER_PAGE && (
         <div className="mt-4 flex items-center justify-end gap-2">
           <button onClick={() => load(page - 1, search, stock)} disabled={page <= 1}
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] disabled:opacity-30">‹</button>
-          <span className="min-w-16 text-center text-[12px] text-[#9c8f7d]">{page} / {totalPages}</span>
+            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] disabled:opacity-30">‹</button>
+          <span className="min-w-16 text-center text-[12px] text-[#8a94a0]">{page} / {totalPages}</span>
           <button onClick={() => load(page + 1, search, stock)} disabled={page >= totalPages}
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e8e4de] bg-white text-[#9c8f7d] hover:border-[#17130f] disabled:opacity-30">›</button>
+            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] disabled:opacity-30">›</button>
         </div>
       )}
 
@@ -375,66 +376,83 @@ export function AdminProducts({ onToast, initialOpen }: {
       {editorId && (
         <div className="fixed inset-0 z-[80] flex justify-end">
           <div onClick={() => setEditorId(null)} className="absolute inset-0 bg-black/40" />
-          <div className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee7db] bg-white px-6 py-4">
-              <h3 className="text-[15px] font-medium text-[#17130f]">{editorId === "new" ? "Новий товар" : "Редагування товару"}</h3>
-              <button onClick={() => setEditorId(null)} className="text-[#9c8f7d] hover:text-[#17130f]">✕</button>
+          <div className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eef2f3] bg-white px-6 py-4">
+              <h3 className="text-[15px] font-medium text-[#2b2d42]">{editorId === "new" ? "Новий товар" : "Редагування товару"}</h3>
+              <button onClick={() => setEditorId(null)} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
             </div>
 
-            <div className="space-y-4 px-6 py-5">
-              <label className="block"><span className={lbl}>Назва *</span><input className={inp} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block"><span className={lbl}>Бренд</span><input className={inp} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>SKU (внутрішній)</span><input className={inp} value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></label>
-              </div>
-              <label className="block">
-                <span className={lbl}>Заводський артикул постачальника</span>
-                <input className={inp} value={draft.factory_article} onChange={(e) => setDraft({ ...draft, factory_article: e.target.value })}
-                  placeholder="код, яким постачальник позначає товар у файлі ОСТАТКИ" />
-                <span className="mt-1 block text-[10px] text-[#b9ae9b]">Саме за цим кодом залишки/ціни з файлу ОСТАТКИ автоматично підтягнуться до цього товару — без нього доведеться оновлювати вручну.</span>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block"><span className={lbl}>Категорія</span><input className={inp} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>Стать</span>
-                  <select className={inp} value={draft.gender} onChange={(e) => setDraft({ ...draft, gender: e.target.value })}>
-                    <option value="">—</option>
-                    <option value="women">Жінкам</option>
-                    <option value="men">Чоловікам</option>
-                  </select>
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block"><span className={lbl}>Ціна, ₴ *</span><input type="number" className={inp} value={draft.regular_price} onChange={(e) => setDraft({ ...draft, regular_price: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>Акційна ціна, ₴</span><input type="number" className={inp} value={draft.sale_price} onChange={(e) => setDraft({ ...draft, sale_price: e.target.value })} /></label>
-              </div>
-              <SizeQtyEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
+            <div className="bg-[#f4f6f7] px-5 py-5">
+              <DetailCard title="Дані про товар">
+                <div className="space-y-4">
+                  <label className="block"><span className={lbl}>Назва *</span><input className={inp} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block"><span className={lbl}>Бренд</span><input className={inp} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>SKU (внутрішній)</span><input className={inp} value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></label>
+                  </div>
+                  <label className="block">
+                    <span className={lbl}>Заводський артикул постачальника</span>
+                    <input className={inp} value={draft.factory_article} onChange={(e) => setDraft({ ...draft, factory_article: e.target.value })}
+                      placeholder="код, яким постачальник позначає товар у файлі ОСТАТКИ" />
+                    <span className="mt-1 block text-[10px] text-[#aab4bf]">Саме за цим кодом залишки/ціни з файлу ОСТАТКИ автоматично підтягнуться до цього товару — без нього доведеться оновлювати вручну.</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block"><span className={lbl}>Категорія</span><input className={inp} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Стать</span>
+                      <select className={inp} value={draft.gender} onChange={(e) => setDraft({ ...draft, gender: e.target.value })}>
+                        <option value="">—</option>
+                        <option value="women">Жінкам</option>
+                        <option value="men">Чоловікам</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block"><span className={lbl}>Ціна, ₴ *</span><input type="number" className={inp} value={draft.regular_price} onChange={(e) => setDraft({ ...draft, regular_price: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Акційна ціна, ₴</span><input type="number" className={inp} value={draft.sale_price} onChange={(e) => setDraft({ ...draft, sale_price: e.target.value })} /></label>
+                  </div>
+                </div>
+              </DetailCard>
 
-              <ImageManager images={draft.images} onChange={(images) => setDraft({ ...draft, images })} onToast={onToast} />
+              <DetailCard title="Розміри та залишок">
+                <SizeQtyEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
+              </DetailCard>
 
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block"><span className={lbl}>Колір</span><input className={inp} value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>Склад</span><input className={inp} value={draft.composition} onChange={(e) => setDraft({ ...draft, composition: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>Сезон</span><input className={inp} value={draft.season} onChange={(e) => setDraft({ ...draft, season: e.target.value })} /></label>
-                <label className="block"><span className={lbl}>Країна</span><input className={inp} value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></label>
-              </div>
-              <label className="block"><span className={lbl}>Короткий опис</span><textarea rows={2} className="w-full border border-[#e5ded3] bg-white p-3 text-[13px] focus:border-[#17130f] focus:outline-none" value={draft.short_description} onChange={(e) => setDraft({ ...draft, short_description: e.target.value })} /></label>
-              <label className="block"><span className={lbl}>Повний опис</span><textarea rows={4} className="w-full border border-[#e5ded3] bg-white p-3 text-[13px] focus:border-[#17130f] focus:outline-none" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-[13px] text-[#17130f]">
-                  <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
-                </label>
-                <label className="flex items-center gap-2 text-[13px] text-[#17130f]">
-                  <input type="checkbox" checked={draft.status === "publish"} onChange={(e) => setDraft({ ...draft, status: e.target.checked ? "publish" : "draft" })} /> Опубліковано
-                </label>
-              </div>
-              {error && <p className="text-[13px] text-[#b3392c]">{error}</p>}
+              <DetailCard title="Зображення">
+                <ImageManager images={draft.images} onChange={(images) => setDraft({ ...draft, images })} onToast={onToast} />
+              </DetailCard>
+
+              <DetailCard title="Опис та атрибути" defaultOpen={false}>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block"><span className={lbl}>Колір</span><input className={inp} value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Склад</span><input className={inp} value={draft.composition} onChange={(e) => setDraft({ ...draft, composition: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Сезон</span><input className={inp} value={draft.season} onChange={(e) => setDraft({ ...draft, season: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Країна</span><input className={inp} value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></label>
+                  </div>
+                  <label className="block"><span className={lbl}>Короткий опис</span><textarea rows={2} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.short_description} onChange={(e) => setDraft({ ...draft, short_description: e.target.value })} /></label>
+                  <label className="block"><span className={lbl}>Повний опис</span><textarea rows={4} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
+                </div>
+              </DetailCard>
+
+              <DetailCard title="Публікація">
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
+                    <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
+                  </label>
+                  <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
+                    <input type="checkbox" checked={draft.status === "publish"} onChange={(e) => setDraft({ ...draft, status: e.target.checked ? "publish" : "draft" })} /> Опубліковано
+                  </label>
+                </div>
+              </DetailCard>
+
+              {error && <p className="text-[13px] text-[#e5484d]">{error}</p>}
             </div>
 
-            <div className="sticky bottom-0 flex gap-3 border-t border-[#eee7db] bg-white px-6 py-4">
-              <button onClick={save} disabled={saving} className="h-11 flex-1 bg-[#17130f] text-[11px] uppercase tracking-wider text-white hover:opacity-85 disabled:opacity-50">
+            <div className="sticky bottom-0 flex gap-3 border-t border-[#eef2f3] bg-white px-6 py-4">
+              <button onClick={save} disabled={saving} className="h-11 flex-1 border border-[#2f9488] text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
                 {saving ? "Зберігаємо…" : editorId === "new" ? "Створити товар" : "Зберегти зміни"}
               </button>
-              <button onClick={() => setEditorId(null)} className="h-11 border border-[#e5ded3] px-5 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+              <button onClick={() => setEditorId(null)} className="h-11 border border-[#e6eaec] px-5 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
                 Скасувати
               </button>
             </div>
@@ -460,7 +478,7 @@ function BulkBtn({ onClick, children, danger }: { onClick: () => void; children:
  * file has something real to update via offer_code/barcode matching.
  */
 function SizeQtyEditor({ sizes, onChange }: { sizes: SizeRow[]; onChange: (s: SizeRow[]) => void }) {
-  const inputCls = "h-10 w-full border border-[#e5ded3] bg-white px-3 text-[13px] text-[#17130f] focus:border-[#17130f] focus:outline-none";
+  const inputCls = "h-10 w-full border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none";
   function addRow() { onChange([...sizes, { size: "", qty: "0" }]); }
   function removeRow(i: number) { onChange(sizes.filter((_, idx) => idx !== i)); }
   function update(i: number, field: "size" | "qty", val: string) {
@@ -471,19 +489,19 @@ function SizeQtyEditor({ sizes, onChange }: { sizes: SizeRow[]; onChange: (s: Si
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Розміри та залишок</span>
-        {sizes.length > 0 && <span className="text-[10px] text-[#9c8f7d]">Разом: {total} шт.</span>}
+        <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Розміри та залишок</span>
+        {sizes.length > 0 && <span className="text-[10px] text-[#8a94a0]">Разом: {total} шт.</span>}
       </div>
       <div className="space-y-1.5">
         {sizes.map((s, i) => (
           <div key={i} className="flex items-center gap-2">
             <input className={inputCls} style={{ flex: 2 }} placeholder="S, 42, One size…" value={s.size} onChange={(e) => update(i, "size", e.target.value)} />
             <input type="number" min={0} className={inputCls} style={{ flex: 1 }} placeholder="0" value={s.qty} onChange={(e) => update(i, "qty", e.target.value)} />
-            <button type="button" onClick={() => removeRow(i)} className="shrink-0 px-1.5 text-[13px] text-[#b3392c] hover:opacity-70">✕</button>
+            <button type="button" onClick={() => removeRow(i)} className="shrink-0 px-1.5 text-[13px] text-[#e5484d] hover:opacity-70">✕</button>
           </div>
         ))}
       </div>
-      <button type="button" onClick={addRow} className="mt-2 flex h-8 items-center gap-1.5 border border-[#e5ded3] bg-white px-3 text-[11px] uppercase tracking-wider text-[#17130f] hover:border-[#17130f]">
+      <button type="button" onClick={addRow} className="mt-2 flex h-8 items-center gap-1.5 border border-[#e6eaec] bg-white px-3 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
         <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
         Додати розмір
       </button>
@@ -560,13 +578,20 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
 
   return (
     <div onPaste={onPaste}>
-      <span className="text-[10px] uppercase tracking-wider text-[#9c8f7d]">Фото (перше — головне · перетягніть, щоб змінити порядок)</span>
+      <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Фото (перше — головне · перетягніть, щоб змінити порядок)</span>
+      <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-[#8a94a0]">
+        <span>Макс. кількість: <b className="text-[#3a4250]">6</b></span><span className="text-[#d5dbe0]">·</span>
+        <span>Мін.: <b className="text-[#3a4250]">2</b></span><span className="text-[#d5dbe0]">·</span>
+        <span>Розмір: <b className="text-[#3a4250]">2700×3600</b></span><span className="text-[#d5dbe0]">·</span>
+        <span>Пропорції: <b className="text-[#3a4250]">3:4</b></span><span className="text-[#d5dbe0]">·</span>
+        <span>Формат: <b className="text-[#3a4250]">jpeg, png, jpg</b></span>
+      </p>
       {images.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {images.map((src, i) => (
             <div
               key={src + i}
-              className={`group relative cursor-grab active:cursor-grabbing ${overIdx === i && dragIdx !== null && dragIdx !== i ? "ring-2 ring-[#107C41]" : ""}`}
+              className={`group relative cursor-grab active:cursor-grabbing ${overIdx === i && dragIdx !== null && dragIdx !== i ? "ring-2 ring-[#2f9488]" : ""}`}
               draggable
               onDragStart={() => onThumbDragStart(i)}
               onDragOver={(e) => onThumbDragOver(e, i)}
@@ -574,17 +599,17 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
               onDrop={() => onThumbDrop(i)}
               onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
             >
-              <img src={src} alt="" className={`h-24 w-[72px] object-cover ${i === 0 ? "ring-2 ring-[#17130f]" : "border border-[#eee7db]"}`} />
-              {i === 0 && <span className="absolute left-0 top-0 bg-[#17130f] px-1 text-[8px] uppercase text-white">гол.</span>}
+              <img src={src} alt="" className={`h-24 w-[72px] object-cover ${i === 0 ? "ring-2 ring-[#2b2d42]" : "border border-[#eef2f3]"}`} />
+              {i === 0 && <span className="absolute left-0 top-0 bg-[#2b2d42] px-1 text-[8px] uppercase text-white">гол.</span>}
               <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                {i !== 0 && <button onClick={() => makePrimary(i)} title="Зробити головним" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#17130f]">★</button>}
-                <button onClick={() => removeAt(i)} title="Видалити" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#b3392c]">✕</button>
+                {i !== 0 && <button onClick={() => makePrimary(i)} title="Зробити головним" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#2b2d42]">★</button>}
+                <button onClick={() => removeAt(i)} title="Видалити" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#e5484d]">✕</button>
               </div>
             </div>
           ))}
           {pending > 0 && Array.from({ length: pending }).map((_, i) => (
-            <div key={`loading-${i}`} className="flex h-24 w-[72px] items-center justify-center border border-dashed border-[#d8d2c8] bg-[#f7f5f2]">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#c9bdab] border-t-[#17130f]" />
+            <div key={`loading-${i}`} className="flex h-24 w-[72px] items-center justify-center border border-dashed border-[#d5dbe0] bg-[#f4f6f7]">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#b6c0ca] border-t-[#2b2d42]" />
             </div>
           ))}
         </div>
@@ -597,7 +622,7 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
         onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
         onClick={() => fileRef.current?.click()}
         className={`mt-2 flex h-16 cursor-pointer items-center justify-center gap-2 border border-dashed text-[12px] transition-colors ${
-          dragOver ? "border-[#17130f] bg-[#f7f5f2] text-[#17130f]" : "border-[#e5ded3] bg-white text-[#9c8f7d] hover:border-[#c9bdab]"
+          dragOver ? "border-[#2b2d42] bg-[#f4f6f7] text-[#2b2d42]" : "border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#b6c0ca]"
         }`}
       >
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -607,8 +632,8 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
 
       <div className="mt-2 flex gap-2">
         <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addUrl())}
-          placeholder="або вставте URL фото" className="h-9 flex-1 border border-[#e5ded3] bg-white px-3 text-[12px] focus:border-[#17130f] focus:outline-none" />
-        <button type="button" onClick={addUrl} className="h-9 border border-[#e5ded3] px-3 text-[12px] text-[#17130f] hover:border-[#17130f]">Додати</button>
+          placeholder="або вставте URL фото" className="h-9 flex-1 border border-[#e6eaec] bg-white px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none" />
+        <button type="button" onClick={addUrl} className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] hover:border-[#2b2d42]">Додати</button>
       </div>
     </div>
   );

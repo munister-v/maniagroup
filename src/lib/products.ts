@@ -201,7 +201,8 @@ export async function listAdminProducts(opts: ProductFilterOpts & {
     `SELECT id::text AS id, name, slug, sku, brand, category, category_slug, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
             price::float AS price, is_in_stock, status, image_src, featured, show_without_photo,
-            color, season, composition, country, attributes,
+            color, season, composition, country, attributes, factory_article,
+            to_char(updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at,
             EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id AND v.active) AS has_variants
      FROM products ${where} ORDER BY ${col} ${dir} NULLS LAST, id DESC LIMIT ${perPage} OFFSET ${offset}`,
     bind,
