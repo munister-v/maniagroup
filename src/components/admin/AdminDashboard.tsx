@@ -10,6 +10,8 @@ import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
 import { AdminVariants } from "./AdminVariants";
 import { AdminClassifier } from "./AdminClassifier";
+import { AdminProperties } from "./AdminProperties";
+import { AdminSizeCharts } from "./AdminSizeCharts";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { MonitoringSection } from "./MonitoringSection";
@@ -432,8 +434,8 @@ export function AdminDashboard({
           )}
           {section === "offers" && <AdminVariants onToast={showToast} onImport={goToImport} />}
           {section === "classifier" && <AdminClassifier />}
-          {section === "properties" && <ComingSoon title="Властивості товарів" note="Керування атрибутами товарів за категоріями (тип поля, обов'язковість, довідники значень) — у розробці." />}
-          {section === "sizeCharts" && <ComingSoon title="Розмірні сітки" note="Довідник розмірних сіток за категоріями — у розробці." />}
+          {section === "properties" && <AdminProperties />}
+          {section === "sizeCharts" && <AdminSizeCharts />}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}
