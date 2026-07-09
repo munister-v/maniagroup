@@ -351,7 +351,7 @@ export function AdminDashboard({
           {section === "products" && (
             <CatalogGrid onToast={showToast} onImport={goToImport} dataVersion={dataVersion} focus={catalogFocus} />
           )}
-          {section === "offers" && <AdminVariants onToast={showToast} />}
+          {section === "offers" && <AdminVariants onToast={showToast} onImport={goToImport} />}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}

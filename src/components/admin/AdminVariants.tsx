@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PageHeader, SlideOver } from "./intertop/primitives";
+import { SlideOver } from "./intertop/primitives";
 
 /** One product_variants row joined with its parent product. Mirror of
  *  lib/variants.ts AdminVariant. */
@@ -10,6 +10,7 @@ type Variant = {
   product_id: string;
   size: string;
   barcode: string;
+  offer_code: string;
   stock_qty: number;
   price: number | null;
   sale_price: number | null;
@@ -20,24 +21,45 @@ type Variant = {
   brand: string;
   category: string;
   status: string;
+  is_in_stock: boolean;
   base_price: number | null;
   image_src: string;
 };
 
 const PER_PAGE_OPTS = [20, 50, 100, 200];
 
-export function AdminVariants({ onToast }: { onToast?: (m: string) => void }) {
+// Optional columns the «Колонки» chooser can hide. Core columns (checkbox,
+// Штрихкод, Код товару, Статус, Активність) are always shown.
+type OptCol = "category" | "classifier" | "nameUk" | "nameRu";
+const OPT_COLS: { id: OptCol; label: string }[] = [
+  { id: "category", label: "Категорія" },
+  { id: "classifier", label: "Класифікатор" },
+  { id: "nameUk", label: "Назва (укр.)" },
+  { id: "nameRu", label: "Назва (рос.)" },
+];
+
+/** Faithful 1:1 clone of Intertop partner «Торгові пропозиції». */
+export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => void; onImport?: () => void }) {
   const [rows, setRows] = useState<Variant[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(50);
+  const [pageInput, setPageInput] = useState("1");
+  const [perPage, setPerPage] = useState(20);
   const [searchRaw, setSearchRaw] = useState("");
   const [search, setSearch] = useState("");
   const [activeF, setActiveF] = useState("");
   const [stockF, setStockF] = useState("");
+  const [catF, setCatF] = useState("");
+  const [siteF, setSiteF] = useState("");
+  const [cats, setCats] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [kebabOpen, setKebabOpen] = useState(false);
+  const [colsOpen, setColsOpen] = useState(false);
+  const [hidden, setHidden] = useState<Set<OptCol>>(new Set());
   const [editOpen, setEditOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Bulk-edit draft — empty string means "leave unchanged".
@@ -47,12 +69,25 @@ export function AdminVariants({ onToast }: { onToast?: (m: string) => void }) {
   const [pActive, setPActive] = useState<"" | "1" | "0">("");
   const [saving, setSaving] = useState(false);
 
+  // Export drawer state.
+  const [exFormat, setExFormat] = useState("");
+  const [exType, setExType] = useState("");
+  const [exTouched, setExTouched] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/products/facets").then((r) => r.json())
+      .then((d) => setCats([...new Set((d.categories ?? []).map((c: { name: string }) => c.name).filter(Boolean) as string[])].sort()))
+      .catch(() => {});
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     const p = new URLSearchParams({ page: String(page), perPage: String(perPage) });
     if (search.trim()) p.set("q", search.trim());
     if (activeF) p.set("active", activeF);
     if (stockF) p.set("inStock", stockF);
+    if (catF) p.set("category", catF);
+    if (siteF) p.set("siteStatus", siteF);
     try {
       const res = await fetch(`/api/admin/variants?${p}`);
       const data = await res.json();
@@ -62,14 +97,19 @@ export function AdminVariants({ onToast }: { onToast?: (m: string) => void }) {
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, search, activeF, stockF]);
+  }, [page, perPage, search, activeF, stockF, catF, siteF]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPageInput(String(page)); }, [page]);
 
   function onSearch(v: string) {
     setSearchRaw(v);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => { setPage(1); setSearch(v); }, 350);
+  }
+
+  function resetFilters() {
+    setSearchRaw(""); setSearch(""); setActiveF(""); setStockF(""); setCatF(""); setSiteF(""); setPage(1);
   }
 
   function toggleRow(id: string) {
@@ -102,66 +142,145 @@ export function AdminVariants({ onToast }: { onToast?: (m: string) => void }) {
     } finally { setSaving(false); }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const from = total === 0 ? 0 : (page - 1) * perPage + 1;
-  const to = Math.min(page * perPage, total);
-  const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
-
-  const pages: (number | "…")[] = [];
-  const win = new Set([1, totalPages, page, page - 1, page + 1].filter((n) => n >= 1 && n <= totalPages));
-  let prev = 0;
-  for (let n = 1; n <= totalPages; n++) {
-    if (!win.has(n)) continue;
-    if (prev && n - prev > 1) pages.push("…");
-    pages.push(n); prev = n;
+  function runExport() {
+    setExTouched(true);
+    if (!exFormat || !exType) return;
+    const fmt = exFormat === "XML" ? "xml" : exFormat === "CSV" ? "csv" : "xlsx";
+    const p = new URLSearchParams({ format: fmt, scope: "all", requireImage: "0" });
+    if (exType === "selected") {
+      const ids = [...new Set(rows.filter((r) => selected.has(r.id)).map((r) => r.product_id))];
+      if (ids.length === 0) { onToast?.("Немає обраних пропозицій"); return; }
+      p.set("ids", ids.join(","));
+    }
+    window.location.assign(`/api/erp/export?${p}`);
+    onToast?.("Формуємо файл експорту…");
+    setExportOpen(false);
+    setExFormat(""); setExType(""); setExTouched(false);
   }
 
-  const selCls = "h-9 rounded-[4px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const show = (c: OptCol) => !hidden.has(c);
+
   const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
+  const selCls = "h-9 rounded-[4px] border border-[#e6eaec] bg-white px-2.5 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
+  const ghostBtn = "flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#8a94a0] transition-colors hover:text-[#2b2d42]";
   const editLbl = "text-[11px] uppercase tracking-wider text-[#8a94a0]";
   const editInp = "mt-1 h-10 w-full rounded-[4px] border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
 
+  function siteStatus(v: Variant): { label: string; color: string } {
+    if (v.status === "publish" && v.active && v.is_in_stock) return { label: "На сайті", color: "#2f9488" };
+    if (v.status !== "publish") return { label: "Чернетка", color: "#8a94a0" };
+    if (!v.active) return { label: "Неактивна", color: "#c3ccd4" };
+    return { label: "Без залишку", color: "#b6c0ca" };
+  }
+
   return (
     <div>
-      <PageHeader
-        title="Торгові пропозиції"
-        subtitle={`${total.toLocaleString("uk-UA")} пропозицій · рівень розмірів`}
-        onRefresh={load}
-        right={
-          <button
-            disabled={selected.size === 0}
-            onClick={() => setEditOpen(true)}
-            className="flex h-9 items-center gap-2 rounded-[4px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-[0.08em] text-[#2f9488] transition-colors enabled:hover:bg-[#2f9488] enabled:hover:text-white disabled:opacity-40"
-          >
+      {/* ── Header: title + quick search + help · edit-prices + kebab ── */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-4">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#2b2d42]">Торгові пропозиції</h1>
+          <div className="relative">
+            <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#aab4bf]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" /></svg>
+            <input value={searchRaw} onChange={(e) => onSearch(e.target.value)} placeholder="Швидкий пошук"
+              className="h-9 w-64 rounded-[4px] border border-[#e6eaec] bg-white pl-9 pr-3 text-[13px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none" />
+          </div>
+          <span title="Пошук за штрихкодом, кодом товару, назвою або розміром"
+            className="flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-full border border-[#c3ccd4] text-[11px] text-[#8a94a0]">?</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button disabled={selected.size === 0} onClick={() => setEditOpen(true)}
+            className="flex h-9 items-center rounded-[4px] border border-[#2f9488] px-4 text-[11px] font-medium uppercase tracking-[0.06em] text-[#2f9488] transition-colors enabled:hover:bg-[#2f9488] enabled:hover:text-white disabled:cursor-not-allowed disabled:border-[#e6eaec] disabled:text-[#c3ccd4]">
             Редагувати ціни та залишки{selected.size ? ` (${selected.size})` : ""}
           </button>
-        }
-      />
-
-      {/* Toolbar */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <input
-          value={searchRaw} onChange={(e) => onSearch(e.target.value)}
-          placeholder="Пошук: штрихкод, назва, код…"
-          className="h-9 w-64 rounded-[4px] border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none"
-        />
-        <select value={activeF} onChange={(e) => { setActiveF(e.target.value); setPage(1); }} className={selCls}>
-          <option value="">Активність: всі</option>
-          <option value="1">Активні</option>
-          <option value="0">Неактивні</option>
-        </select>
-        <select value={stockF} onChange={(e) => { setStockF(e.target.value); setPage(1); }} className={selCls}>
-          <option value="">Залишок: всі</option>
-          <option value="in">В наявності</option>
-          <option value="out">Немає</option>
-        </select>
-        <button onClick={load} className="ml-auto flex h-9 items-center gap-1.5 rounded-[4px] border border-[#e6eaec] bg-white px-3 text-[11px] uppercase tracking-[0.1em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.9-3M4 15a8 8 0 0014.9 3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          Оновити
-        </button>
+          <div className="relative">
+            <button onClick={() => setKebabOpen((v) => !v)}
+              className="flex h-9 w-9 items-center justify-center rounded-[4px] border border-[#e6eaec] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]" aria-label="Меню">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>
+            </button>
+            {kebabOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setKebabOpen(false)} />
+                <div className="absolute right-0 z-30 mt-1 w-48 overflow-hidden rounded-[5px] border border-[#e6eaec] bg-white py-1 shadow-lg">
+                  <button onClick={() => { setKebabOpen(false); onImport?.(); }} className="block w-full px-4 py-2 text-left text-[13px] text-[#2b2d42] hover:bg-[#f7f9fa]">Імпорт файлу</button>
+                  <button onClick={() => { setKebabOpen(false); setExportOpen(true); }} className="block w-full px-4 py-2 text-left text-[13px] text-[#2b2d42] hover:bg-[#f7f9fa]">Експорт даних</button>
+                  <button onClick={() => { setKebabOpen(false); onToast?.("Джерело даних: PostgreSQL · maniagroup"); }} className="block w-full px-4 py-2 text-left text-[13px] text-[#2b2d42] hover:bg-[#f7f9fa]">Джерело даних</button>
+                  <button disabled className="block w-full px-4 py-2 text-left text-[13px] text-[#c3ccd4]">Видалити</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Table */}
+      {/* ── Toolbar ── */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setFiltersOpen((v) => !v)}
+            className={`flex h-9 items-center gap-1.5 rounded-[4px] px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors ${filtersOpen ? "bg-[#2b2d42] text-white" : "bg-[#2b2d42] text-white hover:bg-[#3a4250]"}`}>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Фільтри
+          </button>
+          <select value={catF} onChange={(e) => { setCatF(e.target.value); setPage(1); }} className={selCls}>
+            <option value="">Категорія</option>
+            {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={siteF} onChange={(e) => { setSiteF(e.target.value); setPage(1); }} className={selCls}>
+            <option value="">Статус</option>
+            <option value="live">На сайті</option>
+            <option value="hidden">Прихована</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-4">
+          <button onClick={load} className={ghostBtn}>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.9-3M4 15a8 8 0 0014.9 3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Оновити
+          </button>
+          <div className="relative">
+            <button onClick={() => setColsOpen((v) => !v)} className={ghostBtn}>
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 5h16M4 12h16M4 19h16M9 5v14" strokeLinecap="round" /></svg>
+              Колонки
+            </button>
+            {colsOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setColsOpen(false)} />
+                <div className="absolute right-0 z-30 mt-1 w-52 rounded-[5px] border border-[#e6eaec] bg-white p-2 shadow-lg">
+                  {OPT_COLS.map((c) => (
+                    <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[13px] text-[#2b2d42] hover:bg-[#f7f9fa]">
+                      <input type="checkbox" checked={show(c.id)} onChange={() => setHidden((h) => { const n = new Set(h); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })} className="h-3.5 w-3.5 accent-[#2f9488]" />
+                      {c.label}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <button onClick={resetFilters} className={ghostBtn}>
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+            Параметри
+          </button>
+        </div>
+      </div>
+
+      {/* Advanced filters (behind «Фільтри») */}
+      {filtersOpen && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-[#e6eaec] bg-[#f7f9fa] px-3 py-2.5">
+          <select value={activeF} onChange={(e) => { setActiveF(e.target.value); setPage(1); }} className={selCls}>
+            <option value="">Активність: всі</option>
+            <option value="1">Активні</option>
+            <option value="0">Неактивні</option>
+          </select>
+          <select value={stockF} onChange={(e) => { setStockF(e.target.value); setPage(1); }} className={selCls}>
+            <option value="">Залишок: всі</option>
+            <option value="in">В наявності</option>
+            <option value="out">Немає</option>
+          </select>
+          <button onClick={resetFilters} className="ml-auto text-[12px] text-[#8a94a0] hover:text-[#2b2d42]">Скинути</button>
+        </div>
+      )}
+
+      {/* ── Table ── */}
       <div className="overflow-x-auto rounded-[6px] border border-[#e6eaec] bg-white">
         <table className="w-full border-collapse text-[13px]">
           <thead>
@@ -170,49 +289,45 @@ export function AdminVariants({ onToast }: { onToast?: (m: string) => void }) {
                 <input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
               </th>
               <th className={thCls}>Штрихкод</th>
-              <th className={thCls}>Код товару</th>
-              <th className={thCls}>Розмір</th>
-              <th className={thCls}>Назва</th>
-              <th className={thCls}>Категорія</th>
-              <th className={`${thCls} text-right`}>Ціна, ₴</th>
-              <th className={`${thCls} text-right`}>Акція, ₴</th>
-              <th className={`${thCls} text-right`}>Залишок</th>
+              {show("category") && <th className={thCls}>Категорія</th>}
+              {show("classifier") && <th className={thCls}>Класифікатор</th>}
               <th className={thCls}>Активність</th>
-              <th className={thCls}>Оновлено</th>
+              <th className={thCls}>Код товару</th>
+              <th className={thCls}>Статус</th>
+              {show("nameUk") && <th className={thCls}>Назва (укр.)</th>}
+              {show("nameRu") && <th className={thCls}>Назва (рос.)</th>}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
+              <tr><td colSpan={9} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={11} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
+              <tr><td colSpan={9} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
             ) : rows.map((v) => {
               const isSel = selected.has(v.id);
-              const inherited = v.price == null;
-              const shown = v.price ?? v.base_price;
+              const st = siteStatus(v);
+              const code = v.offer_code || `mp${v.id}`;
               return (
                 <tr key={v.id} className={`border-b border-[#eef2f3] transition-colors ${isSel ? "bg-[#eef7f6]" : "hover:bg-[#f7f9fa]"}`}>
                   <td className="px-3 py-2.5">
                     <input type="checkbox" checked={isSel} onChange={() => toggleRow(v.id)} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{v.barcode || `${v.sku}-${v.size}`}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{v.sku || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-medium text-[#2b2d42]">{v.size || "—"}</td>
-                  <td className="max-w-[260px] truncate px-3 py-2.5 text-[#2b2d42]" title={v.name}>{v.name}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.category || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-[#2b2d42]">
-                    {shown != null ? shown.toLocaleString("uk-UA") : "—"}
-                    {inherited && <span className="ml-1 text-[10px] text-[#aab4bf]" title="Успадковано від товару">↻</span>}
+                  {show("category") && <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.category || "—"}</td>}
+                  {show("classifier") && <td className="max-w-[240px] truncate px-3 py-2.5 text-[#5a6472]" title={v.category}>{v.category || "—"}</td>}
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.active ? "Так" : "Ні"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5">
+                    <button onClick={() => { setSelected(new Set([v.id])); setEditOpen(true); }}
+                      className="font-mono text-[12px] text-[#2f9488] hover:underline">{code}</button>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-[#e5484d]">{v.sale_price != null ? v.sale_price.toLocaleString("uk-UA") : "—"}</td>
-                  <td className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${v.stock_qty > 0 ? "text-[#2b2d42]" : "text-[#aab4bf]"}`}>{v.stock_qty}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     <span className="inline-flex items-center gap-1.5">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${v.active ? "bg-[#2f9488]" : "bg-[#c3ccd4]"}`} />
-                      <span className="text-[12px] text-[#3a4250]">{v.active ? "Активна" : "Неактивна"}</span>
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: st.color }} />
+                      <span className="text-[12px] text-[#3a4250]">{st.label}</span>
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-[12px] tabular-nums text-[#8a94a0]">{v.updated_at ?? "—"}</td>
+                  {show("nameUk") && <td className="max-w-[260px] truncate px-3 py-2.5 text-[#8a94a0]">—</td>}
+                  {show("nameRu") && <td className="max-w-[280px] truncate px-3 py-2.5 text-[#2b2d42]" title={v.name}>{v.name}</td>}
                 </tr>
               );
             })}
@@ -220,29 +335,73 @@ export function AdminVariants({ onToast }: { onToast?: (m: string) => void }) {
         </table>
       </div>
 
-      {/* Pagination footer */}
-      <div className="mt-3 flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-[12px] text-[#5a6472]">
-        <label className="flex items-center gap-2">
-          Відображати на сторінці
-          <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
-            className="h-8 rounded-[4px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none">
-            {PER_PAGE_OPTS.map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
-        </label>
-        <span className="tabular-nums text-[#8a94a0]">{from.toLocaleString("uk-UA")}–{to.toLocaleString("uk-UA")} / {total.toLocaleString("uk-UA")}</span>
-        <div className="flex items-center gap-1">
+      {/* ── Pagination footer (Intertop bottom bar) ── */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-[#5a6472]">
+        <div className="flex items-center gap-1.5">
           <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
             className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-[#e6eaec] bg-white text-[#5a6472] transition-colors disabled:opacity-30 hover:enabled:border-[#2f9488] hover:enabled:text-[#2f9488]">‹</button>
-          {pages.map((p, i) => p === "…"
-            ? <span key={`e${i}`} className="px-1 text-[#aab4bf]">…</span>
-            : <button key={p} onClick={() => setPage(p)}
-                className={`flex h-8 min-w-8 items-center justify-center rounded-[4px] border px-2 tabular-nums transition-colors ${p === page ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] bg-white text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]"}`}>{p}</button>)}
+          <input value={pageInput} onChange={(e) => setPageInput(e.target.value.replace(/[^0-9]/g, ""))}
+            onKeyDown={(e) => { if (e.key === "Enter") { const n = Math.min(totalPages, Math.max(1, Number(pageInput) || 1)); setPage(n); } }}
+            onBlur={() => { const n = Math.min(totalPages, Math.max(1, Number(pageInput) || 1)); setPage(n); }}
+            className="h-8 w-14 rounded-[4px] border border-[#e6eaec] bg-white px-2 text-center tabular-nums text-[#2b2d42] focus:border-[#2f9488] focus:outline-none" />
+          <span className="tabular-nums text-[#8a94a0]">/ {totalPages.toLocaleString("uk-UA")}</span>
           <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
             className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-[#e6eaec] bg-white text-[#5a6472] transition-colors disabled:opacity-30 hover:enabled:border-[#2f9488] hover:enabled:text-[#2f9488]">›</button>
         </div>
+        <label className="flex items-center gap-2">
+          Відображати на сторінці
+          <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+            className="h-8 rounded-[4px] border border-[#e6eaec] bg-white px-2 text-[13px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none">
+            {PER_PAGE_OPTS.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+        <span className="ml-auto tabular-nums text-[#8a94a0]">Кількість записів: {total.toLocaleString("uk-UA")}</span>
       </div>
 
-      {/* Bulk edit slide-over */}
+      {/* ── Export drawer ── */}
+      <SlideOver
+        open={exportOpen}
+        title="Експорт торгових пропозицій"
+        onClose={() => { setExportOpen(false); setExTouched(false); }}
+        footer={
+          <>
+            <button onClick={runExport} disabled={!exFormat || !exType}
+              className="h-11 flex-1 rounded-[4px] border border-[#2f9488] text-[11px] uppercase tracking-wider text-[#2f9488] transition-colors enabled:hover:bg-[#2f9488] enabled:hover:text-white disabled:cursor-not-allowed disabled:border-[#e6eaec] disabled:text-[#c3ccd4]">
+              Експортувати
+            </button>
+            <button onClick={() => { setExportOpen(false); setExTouched(false); }} className="h-11 rounded-[4px] border border-[#e6eaec] px-5 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
+              Закрити
+            </button>
+          </>
+        }
+      >
+        <p className="mb-5 text-[13px] leading-relaxed text-[#5a6472]">Щоб експортувати торгові пропозиції, оберіть формат файлу та тип шаблону</p>
+        <div className="space-y-4">
+          <label className="block">
+            <span className={editLbl}>Формат файлу *</span>
+            <select value={exFormat} onChange={(e) => setExFormat(e.target.value)}
+              className={`${editInp} ${exTouched && !exFormat ? "border-[#e5484d]" : ""}`}>
+              <option value="">—</option>
+              <option value="XML">XML</option>
+              <option value="CSV">CSV</option>
+              <option value="XLSX">XLSX</option>
+            </select>
+            {exTouched && !exFormat && <span className="mt-1 block text-[11px] text-[#e5484d]">Поле обов&apos;язкове</span>}
+          </label>
+          <label className="block">
+            <span className={editLbl}>Тип *</span>
+            <select value={exType} onChange={(e) => setExType(e.target.value)}
+              className={`${editInp} ${exTouched && !exType ? "border-[#e5484d]" : ""}`}>
+              <option value="">—</option>
+              <option value="all">Усі торгові пропозиції</option>
+              <option value="selected">Обрані торгові пропозиції{selected.size ? ` (${selected.size})` : ""}</option>
+            </select>
+            {exTouched && !exType && <span className="mt-1 block text-[11px] text-[#e5484d]">Поле обов&apos;язкове</span>}
+          </label>
+        </div>
+      </SlideOver>
+
+      {/* ── Bulk edit slide-over ── */}
       <SlideOver
         open={editOpen}
         title={`Редагувати ціни та залишки · ${selected.size}`}

@@ -11,6 +11,7 @@ export type AdminVariant = {
   product_id: string;
   size: string;
   barcode: string;
+  offer_code: string;          // mp-code of the offer (Intertop «Код товару»)
   stock_qty: number;
   price: number | null;        // per-variant override; NULL ⇒ inherits base_price
   sale_price: number | null;
@@ -22,11 +23,12 @@ export type AdminVariant = {
   brand: string;
   category: string;
   status: string;              // parent product status (publish/draft)
+  is_in_stock: boolean;        // parent stock mirror
   base_price: number | null;   // parent regular_price (fallback for price)
   image_src: string;
 };
 
-export type VariantFilter = { q?: string; active?: string; inStock?: string };
+export type VariantFilter = { q?: string; active?: string; inStock?: string; category?: string; siteStatus?: string };
 
 export async function listAdminVariants(
   opts: VariantFilter & { page?: number; perPage?: number },
@@ -46,13 +48,17 @@ export async function listAdminVariants(
   else if (opts.active === "0") where.push(`v.active = FALSE`);
   if (opts.inStock === "in") where.push(`v.stock_qty > 0`);
   else if (opts.inStock === "out") where.push(`v.stock_qty = 0`);
+  if (opts.category?.trim()) { bind.push(opts.category.trim()); where.push(`p.category = $${bind.length}`); }
+  // «На сайті» = parent published, offer active, stock mirror on; «hidden» = not.
+  if (opts.siteStatus === "live") where.push(`(p.status = 'publish' AND v.active AND p.is_in_stock)`);
+  else if (opts.siteStatus === "hidden") where.push(`NOT (p.status = 'publish' AND v.active AND p.is_in_stock)`);
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
   const variants = await q<AdminVariant>(
     `SELECT v.id::text AS id, v.product_id::text AS product_id, v.size, v.barcode,
-            v.stock_qty, v.price::float AS price, v.sale_price::float AS sale_price, v.active,
+            v.offer_code, v.stock_qty, v.price::float AS price, v.sale_price::float AS sale_price, v.active,
             to_char(v.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at,
-            p.sku, p.name, p.brand, p.category, p.status,
+            p.sku, p.name, p.brand, p.category, p.status, p.is_in_stock,
             p.regular_price::float AS base_price, p.image_src
        FROM product_variants v
        JOIN products p ON p.id = v.product_id

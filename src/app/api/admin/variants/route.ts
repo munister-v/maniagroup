@@ -9,6 +9,8 @@ export async function GET(req: Request) {
     q: searchParams.get("q") ?? undefined,
     active: searchParams.get("active") ?? undefined,
     inStock: searchParams.get("inStock") ?? undefined,
+    category: searchParams.get("category") ?? undefined,
+    siteStatus: searchParams.get("siteStatus") ?? undefined,
     page: Number(searchParams.get("page") ?? "1"),
     perPage: searchParams.get("perPage") ? Number(searchParams.get("perPage")) : undefined,
   });

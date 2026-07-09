@@ -29,6 +29,7 @@ export type ExportFilters = {
   minPrice?: number;
   requireImage?: boolean;       // default true (marketplaces reject imageless)
   brand?: string;
+  ids?: string[];               // restrict to these product ids («Обрані»)
 };
 
 export async function getExportRows(f: ExportFilters = {}): Promise<ExportRow[]> {
@@ -38,6 +39,7 @@ export async function getExportRows(f: ExportFilters = {}): Promise<ExportRow[]>
   if (f.requireImage !== false) conds.push("p.images IS NOT NULL AND p.images::text NOT IN ('[]','null','')");
   if (f.minPrice && f.minPrice > 0) { bind.push(f.minPrice); conds.push(`p.price >= $${bind.length}`); }
   if (f.brand) { bind.push(f.brand); conds.push(`p.brand = $${bind.length}`); }
+  if (f.ids?.length) { bind.push(f.ids.map(Number).filter(Number.isFinite)); conds.push(`p.id = ANY($${bind.length})`); }
 
   const rows = await q<{
     id: string; sku: string; name: string; brand: string; category: string;
@@ -227,12 +229,31 @@ ${items}
 
 // ── dispatcher ──────────────────────────────────────────────────────────────────
 
-export const EXPORT_FORMATS = ["csv", "xlsx", "prom", "rozetka", "google"] as const;
+/** Plain offer-level XML (Intertop «Експорт → XML»): one <offer> per row. */
+function toXml(rows: ExportRow[]): string {
+  const body = rows.map((r) =>
+    `  <offer id="${xmlEscape(r.sku)}">\n` +
+    `    <name>${xmlEscape(r.name)}</name>\n` +
+    `    <category>${xmlEscape(r.category)}</category>\n` +
+    `    <brand>${xmlEscape(r.brand)}</brand>\n` +
+    `    <price>${r.price}</price>\n` +
+    (r.oldPrice ? `    <oldPrice>${r.oldPrice}</oldPrice>\n` : "") +
+    `    <stock>${r.stock}</stock>\n` +
+    `    <available>${r.available ? "true" : "false"}</available>\n` +
+    `    <sizes>${xmlEscape(r.sizes)}</sizes>\n` +
+    `    <picture>${xmlEscape(r.image)}</picture>\n` +
+    `  </offer>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<offers>\n${body}\n</offers>`;
+}
+
+export const EXPORT_FORMATS = ["csv", "xlsx", "xml", "prom", "rozetka", "google"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 
 export function buildExport(format: ExportFormat, rows: ExportRow[]): ExportResult {
   const stamp = new Date().toISOString().slice(0, 10);
   switch (format) {
+    case "xml":
+      return { filename: `maniagroup-offers-${stamp}.xml`, contentType: "application/xml; charset=utf-8", body: toXml(rows) };
     case "csv":
       return { filename: `maniagroup-price-${stamp}.csv`, contentType: "text/csv; charset=utf-8", body: toCsv(rows) };
     case "xlsx":

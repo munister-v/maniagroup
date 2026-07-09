@@ -7,11 +7,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 function parseFilters(sp: URLSearchParams): ExportFilters {
+  const ids = sp.get("ids");
   return {
     scope: sp.get("scope") === "all" ? "all" : "instock",
     minPrice: sp.get("minPrice") ? Number(sp.get("minPrice")) : undefined,
     requireImage: sp.get("requireImage") !== "0",
     brand: sp.get("brand") || undefined,
+    ids: ids ? ids.split(",").filter(Boolean) : undefined,
   };
 }
 
