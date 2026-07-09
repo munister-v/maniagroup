@@ -129,7 +129,7 @@ const EXPORT_COLUMNS = [
 type CatalogFocus = { stock?: string; siteStatus?: string; token: number } | null;
 
 export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }: { onToast?: (m: string) => void; onImport?: () => void; dataVersion?: number; focus?: CatalogFocus }) {
-  const [mode, setMode] = useState<"grid" | "cards" | "list">("grid");
+  const [mode, setMode] = useState<"grid" | "cards" | "list">("list");
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1074,7 +1074,7 @@ function ProductListView({
                         </div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.category || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">mp{row.id}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.factory_article || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5" title={st.title}>
