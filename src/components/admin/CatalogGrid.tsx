@@ -117,7 +117,7 @@ function HelpCard({ icon, title, children }: { icon: ReactNode; title: string; c
 }
 const ICON_STROKE = { fill: "none", stroke: "currentColor", strokeWidth: 1.7 } as const;
 
-const PER_PAGE_OPTIONS = [50, 100, 200];
+const PER_PAGE_OPTIONS = [50, 100, 200, 500];
 
 // Export column names — must match the server's localized headers (export route).
 const EXPORT_COLUMNS = [
@@ -139,7 +139,10 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   const [brands, setBrands] = useState<{ brand: string; count: number }[]>([]);
   const [sortBy, setSortBy] = useState("id");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [perPage, setPerPage] = useState(50);
+  const [perPage, setPerPage] = useState(100);
+  // In the Intertop-clone "list" mode the filter row is hidden behind the
+  // funnel icon (like Intertop); grid/cards always show it. Default open.
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [page, setPage] = useState(1);
   const [edits, setEdits] = useState<Record<string, Partial<Record<Field, CellValue>>>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -440,6 +443,58 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     <div className="flex flex-col">
       <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} onBulkPhotos={() => setBulkPhotoOpen(true)} />
 
+      {/* Intertop-clone header for the "list" mode — big title + selection
+          count + the exact action-button cluster (Створити/Завантажити +
+          selection-gated Деактивувати/На модерацію/В чернетку + preview/export/
+          filter icon buttons). */}
+      {mode === "list" && (() => {
+        const gated = "flex h-9 items-center gap-1.5 rounded-[4px] border px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors border-[#d5dbe0] text-[#5a6472] hover:enabled:border-[#2b2d42] hover:enabled:text-[#2b2d42] disabled:cursor-not-allowed disabled:border-[#eef2f3] disabled:text-[#c3ccd4]";
+        const primary = "flex h-9 items-center gap-1.5 rounded-[4px] border border-[#2f9488] px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white";
+        const icon = "flex h-9 w-9 items-center justify-center rounded-[4px] border border-[#2f9488] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white";
+        return (
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[22px] font-semibold tracking-tight text-[#2b2d42]">Список товарів</h2>
+              <p className="mt-0.5 text-[12px] text-[#8a94a0]">
+                {selected.size > 0 ? `Обрано ${selected.size} з ${total.toLocaleString("uk-UA")}` : `Вибрано продуктів ${total.toLocaleString("uk-UA")}`}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={openFullNew} className={primary}>
+                Створити товар
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.9"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+              </button>
+              <button onClick={() => onImport?.()} className={primary}>
+                Завантажити товари
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              <button disabled={!selected.size} onClick={() => bulk("out_of_stock")} className={gated}>
+                Деактивувати<span className="text-[13px] leading-none">−</span>
+              </button>
+              <button disabled={!selected.size} onClick={() => bulk("publish")} className={gated}>
+                На модерацію
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" strokeLinecap="round" /></svg>
+              </button>
+              <button disabled={!selected.size} onClick={() => bulk("unpublish")} className={gated}>
+                В чернетку
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M14 3v4a1 1 0 001 1h4M9 13h6M9 17h6M8 21h8a2 2 0 002-2V7l-5-4H8a2 2 0 00-2 2v14a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              <a href="/" target="_blank" rel="noreferrer" title="Переглянути на сайті" className={icon}>
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+              </a>
+              <button onClick={() => { setExportScope(selected.size ? "selected" : "filtered"); setExportOpen(true); }} title="Експорт" className={icon}>
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>
+              </button>
+              <button onClick={() => setFiltersOpen((v) => !v)} title="Фільтри"
+                className={`flex h-9 w-9 items-center justify-center rounded-[4px] border transition-colors ${filtersOpen ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#2f9488] text-[#2f9488] hover:bg-[#2f9488] hover:text-white"}`}>
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {mode === "grid" && (<>
       {/* Intro / how-to — one compact line, expands on demand */}
       <div className="mb-3 flex items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-3.5 py-2 text-[12px] text-[#5a6472]">
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-[#8a94a0]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
@@ -523,8 +578,11 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           </HelpCard>
         </div>
       )}
+      </>)}
 
-      {/* Toolbar */}
+      {/* Toolbar — search + filters + export. Hidden in list mode until the
+          funnel icon toggles it (Intertop-style); always shown otherwise. */}
+      {(mode !== "list" || filtersOpen) && (
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           value={search}
@@ -615,6 +673,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           Експорт{selected.size ? ` (${selected.size})` : ""}
         </button>
       </div>
+      )}
 
       {exportOpen && (
         <ExportDialog
@@ -908,6 +967,7 @@ function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "g
           Картки + фото
         </button>
       </div>
+      {mode !== "list" && (
       <div className="ml-auto flex items-center gap-2">
         {onNew && (
           <button onClick={onNew}
@@ -931,13 +991,15 @@ function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "g
           </button>
         )}
       </div>
+      )}
     </div>
   );
 }
 
-/* ── Read-only product list — a faithful clone of the Intertop partner catalog
-      list view (ID · фото · назва · бренд · категорія · Код товару · Заводський
-      артикул · статус · публікація · остання зміна). Shares the grid's filters,
+/* ── Read-only product list — a faithful 1:1 clone of the Intertop partner
+      catalog list, exact column order: ID товару · Назва (рос.) · Зображення ·
+      Категорія · Код товару (mp+id) · Заводський артикул · Артикул (sku) ·
+      Статус · Публікувався · Востаннє змінено. Shares the grid's filters,
       selection and paging; row-click opens the full card for editing. ──────── */
 function ProductListView({
   rows, loading, total, page, perPage, setPage, setPerPage, totalPages,
@@ -976,12 +1038,12 @@ function ProductListView({
                   className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
               </th>
               <th className={thCls}>ID товару</th>
+              <th className={thCls}>Назва (рос.)</th>
               <th className={thCls}>Зображення</th>
-              <th className={thCls}>Назва</th>
-              <th className={thCls}>Бренд</th>
               <th className={thCls}>Категорія</th>
               <th className={thCls}>Код товару</th>
               <th className={thCls}>Заводський артикул</th>
+              <th className={thCls}>Артикул</th>
               <th className={thCls}>Статус</th>
               <th className={`${thCls} text-center`}>Публікувався</th>
               <th className={thCls}>Востаннє змінено</th>
@@ -1003,6 +1065,7 @@ function ProductListView({
                       className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
                   </td>
                   <td className="px-3 py-2.5 font-medium tabular-nums text-[#5a6472]">{row.id}</td>
+                  <td className="max-w-[280px] truncate px-3 py-2.5 text-[#2b2d42]" title={row.name}>{row.name}</td>
                   <td className="px-3 py-2">
                     {row.image_src
                       ? <img src={row.image_src} alt="" className="h-11 w-11 rounded-[4px] border border-[#e6eaec] object-cover" />
@@ -1010,11 +1073,10 @@ function ProductListView({
                           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z" /></svg>
                         </div>}
                   </td>
-                  <td className="max-w-[280px] truncate px-3 py-2.5 text-[#2b2d42]" title={row.name}>{row.name}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.brand}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.category || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">mp{row.id}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.factory_article || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5" title={st.title}>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />

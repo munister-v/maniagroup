@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SubTabs } from "./intertop/primitives";
 
 export type AdminOrder = {
   id: number;
@@ -57,6 +58,10 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  // Intertop document-scope tabs: Усі продажі / Замовлення / Повернення.
+  // "returns" forces the refunded status; the status chips narrow within the
+  // other two scopes.
+  const [docScope, setDocScope] = useState<"sales" | "orders" | "returns">("orders");
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -67,12 +72,13 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
 
   const buildParams = useCallback((p: number) => {
     const params = new URLSearchParams({ page: String(p), per_page: String(PER_PAGE) });
-    if (status) params.set("status", status);
+    const effStatus = docScope === "returns" ? "refunded" : status;
+    if (effStatus) params.set("status", effStatus);
     if (search.trim()) params.set("q", search.trim());
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     return params;
-  }, [status, search, from, to]);
+  }, [status, docScope, search, from, to]);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -87,7 +93,7 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
     }
   }, [buildParams]);
 
-  useEffect(() => { load(1); }, [status, from, to, load]);
+  useEffect(() => { load(1); }, [status, docScope, from, to, load]);
 
   function onSearch(v: string) {
     setSearch(v);
@@ -117,6 +123,17 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
 
   return (
     <div className="space-y-5">
+      {/* Intertop document-scope tabs */}
+      <SubTabs
+        tabs={[
+          { id: "sales", label: "Усі продажі" },
+          { id: "orders", label: "Замовлення" },
+          { id: "returns", label: "Повернення" },
+        ]}
+        active={docScope}
+        onChange={(id) => setDocScope(id)}
+      />
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="relative">

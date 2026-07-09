@@ -384,6 +384,50 @@ function fmtUah(n: number) {
   return n.toLocaleString("uk-UA") + " ₴";
 }
 
+/* Intertop-style donut + legend (Головна → «Статуси замовлень» / «Товари»).
+   Segments render as arcs on one SVG circle via stroke-dasharray. */
+function DonutChart({ title, centerLabel, segments }: {
+  title: string; centerLabel?: string;
+  segments: { label: string; value: number; color: string }[];
+}) {
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  const active = segments.filter((s) => s.value > 0);
+  const R = 54, C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div className="rounded-[6px] border border-[#e6eaec] bg-white p-5">
+      <h2 className="mb-4 text-[13px] font-semibold text-[#2b2d42]">{title}</h2>
+      <div className="flex items-center gap-6">
+        <div className="relative h-[140px] w-[140px] shrink-0">
+          <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
+            <circle cx="70" cy="70" r={R} fill="none" stroke="#eef2f3" strokeWidth="16" />
+            {active.map((s) => {
+              const len = total > 0 ? (s.value / total) * C : 0;
+              const dash = <circle key={s.label} cx="70" cy="70" r={R} fill="none" stroke={s.color} strokeWidth="16" strokeLinecap="butt" strokeDasharray={`${len} ${C - len}`} strokeDashoffset={-offset} />;
+              offset += len;
+              return dash;
+            })}
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-[22px] font-semibold tabular-nums text-[#2b2d42]">{total.toLocaleString("uk-UA")}</span>
+            {centerLabel && <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">{centerLabel}</span>}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          {active.length > 0 ? active.map((s) => (
+            <div key={s.label} className="flex items-center gap-2 text-[13px]">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
+              <span className="min-w-0 flex-1 truncate text-[#5a6472]">{s.label}</span>
+              <span className="tabular-nums font-medium text-[#2b2d42]">{s.value.toLocaleString("uk-UA")}</span>
+              <span className="w-10 text-right tabular-nums text-[#8a94a0]">{total > 0 ? Math.round((s.value / total) * 100) : 0}%</span>
+            </div>
+          )) : <p className="text-[12px] text-[#8a94a0]">Немає даних за обраний період</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OverviewSection({
   stats,
   recentOrders,
@@ -410,6 +454,20 @@ function OverviewSection({
     <div className="space-y-7">
       {/* Today's tasks */}
       <TodayBlock stats={stats} onNavigate={onNavigate} onFocusCatalog={onFocusCatalog} />
+
+      {/* Donut charts — Intertop «Головна» hero */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <DonutChart title="Статуси замовлень" centerLabel="замовлень" segments={[
+          { label: "Очікує оплати", value: stats?.pending ?? 0, color: "#d97706" },
+          { label: "В обробці", value: stats?.processing ?? 0, color: "#2f9488" },
+          { label: "На утриманні", value: stats?.on_hold ?? 0, color: "#2b2d42" },
+          { label: "Виконано", value: stats?.completed ?? 0, color: "#2e7d32" },
+        ]} />
+        <DonutChart title="Товари" centerLabel="товарів" segments={[
+          { label: "В наявності", value: stats?.in_stock ?? 0, color: "#2f9488" },
+          { label: "Немає в наявності", value: stats?.out_of_stock ?? 0, color: "#c3ccd4" },
+        ]} />
+      </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
