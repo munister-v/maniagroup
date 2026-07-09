@@ -307,12 +307,15 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
               const isSel = selected.has(v.id);
               const st = siteStatus(v);
               const code = v.offer_code || `mp${v.id}`;
+              // SKU · розмір (напр. 23456-М) — v.sku буває порожнім у старих товарів,
+              // тоді падаємо на product_id, щоб ніколи не показати голий "-L" без номера.
+              const sku = v.barcode || `${v.sku || v.product_id}-${v.size}`;
               return (
                 <tr key={v.id} className={`border-b border-[#eef2f3] transition-colors ${isSel ? "bg-[#eef7f6]" : "hover:bg-[#f7f9fa]"}`}>
                   <td className="px-3 py-2.5">
                     <input type="checkbox" checked={isSel} onChange={() => toggleRow(v.id)} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{v.barcode || `${v.sku}-${v.size}`}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{sku}</td>
                   {show("category") && <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.category || "—"}</td>}
                   {show("classifier") && <td className="max-w-[240px] truncate px-3 py-2.5 text-[#5a6472]" title={v.category}>{v.category || "—"}</td>}
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.active ? "Так" : "Ні"}</td>

@@ -53,7 +53,7 @@ const COLS: Col[] = [
 // (and колір/сезон are already filterable via the toolbar dropdowns).
   { key: "name", label: "Назва", type: "text", w: 190, sortable: true },
   { key: "brand", label: "Бренд", type: "text", w: 112, sortable: true },
-  { key: "sku", label: "Артикул", type: "text", w: 92, sortable: true },
+  { key: "sku", label: "SKU", type: "text", w: 92, sortable: true },
   { key: "category", label: "Категорія", type: "text", w: 110, sortable: true },
   { key: "gender", label: "Стать", type: "gender", w: 74 },
   { key: "regular_price", label: "Ціна", type: "number", w: 82, sortable: true },
@@ -121,7 +121,7 @@ const PER_PAGE_OPTIONS = [50, 100, 200, 500];
 
 // Export column names — must match the server's localized headers (export route).
 const EXPORT_COLUMNS = [
-  "ID", "Артикул", "Назва", "Бренд", "Категорія", "Стать", "Ціна", "Акційна",
+  "ID", "SKU", "Назва", "Бренд", "Категорія", "Стать", "Ціна", "Акційна",
   "Підсумкова", "В наявності", "Статус", "Колір", "Сезон", "Склад", "Країна",
   "Розміри", "Slug", "Фото",
 ];
@@ -1043,7 +1043,7 @@ function ProductListView({
               <th className={thCls}>Категорія</th>
               <th className={thCls}>Код товару</th>
               <th className={thCls}>Заводський артикул</th>
-              <th className={thCls}>Артикул</th>
+              <th className={thCls}>SKU</th>
               <th className={thCls}>Статус</th>
               <th className={`${thCls} text-center`}>Публікувався</th>
               <th className={thCls}>Востаннє змінено</th>

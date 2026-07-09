@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   // Flatten to localized, ordered columns for human-friendly spreadsheets.
   const ALL: Record<string, (r: typeof rows[number]) => string | number> = {
     "ID": (r) => r.id,
-    "Артикул": (r) => r.sku ?? "",
+    "SKU": (r) => r.sku ?? "",
     "Назва": (r) => r.name ?? "",
     "Бренд": (r) => r.brand ?? "",
     "Категорія": (r) => r.category ?? "",
@@ -75,7 +75,7 @@ export async function GET(req: Request) {
 
   // Default: real .xlsx — width per selected column (name/photo wider).
   const WIDTH: Record<string, number> = {
-    "ID": 10, "Артикул": 16, "Назва": 40, "Бренд": 18, "Категорія": 18, "Стать": 10,
+    "ID": 10, "SKU": 16, "Назва": 40, "Бренд": 18, "Категорія": 18, "Стать": 10,
     "Ціна": 10, "Акційна": 10, "Підсумкова": 12, "В наявності": 12, "Статус": 14,
     "Колір": 14, "Сезон": 12, "Склад": 24, "Країна": 14, "Розміри": 16, "Slug": 22, "Фото": 40,
   };
