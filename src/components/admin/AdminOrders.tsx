@@ -8,6 +8,7 @@ export type AdminOrder = {
   number: string;
   status: string;
   date_created: string;
+  date_modified: string;
   payment_method: string;
   billing: { first_name: string; last_name: string; phone: string; email: string };
   shipping_city: string;
@@ -47,10 +48,15 @@ const STATUS_TABS = [
 ];
 
 const ALL_STATUSES = ["pending", "processing", "on-hold", "completed", "cancelled", "refunded"];
-const PER_PAGE = 20;
+const PER_PAGE_OPTS = [20, 50, 100];
 
 function uah(v: string | number) {
   return Number(v).toLocaleString("uk-UA") + " ₴";
+}
+
+/** Intertop's «Договір» column — the payment terms of the document. */
+function contractLabel(paymentMethod: string): string {
+  return paymentMethod === "prepay" ? "Передоплата" : "Накладений платіж";
 }
 
 export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
@@ -66,19 +72,20 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
   const [active, setActive] = useState<AdminOrder | null>(null);
   const [creating, setCreating] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buildParams = useCallback((p: number) => {
-    const params = new URLSearchParams({ page: String(p), per_page: String(PER_PAGE) });
+    const params = new URLSearchParams({ page: String(p), per_page: String(perPage) });
     const effStatus = docScope === "returns" ? "refunded" : status;
     if (effStatus) params.set("status", effStatus);
     if (search.trim()) params.set("q", search.trim());
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     return params;
-  }, [status, docScope, search, from, to]);
+  }, [status, docScope, search, from, to, perPage]);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -93,7 +100,7 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
     }
   }, [buildParams]);
 
-  useEffect(() => { load(1); }, [status, docScope, from, to, load]);
+  useEffect(() => { load(1); }, [status, docScope, from, to, perPage, load]);
 
   function onSearch(v: string) {
     setSearch(v);
@@ -119,7 +126,19 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const pageFrom = total === 0 ? 0 : (page - 1) * perPage + 1;
+  const pageTo = Math.min(page * perPage, total);
+  const pageWindow: (number | "…")[] = [];
+  {
+    const win = new Set([1, totalPages, page, page - 1, page + 1].filter((n) => n >= 1 && n <= totalPages));
+    let prev = 0;
+    for (let n = 1; n <= totalPages; n++) {
+      if (!win.has(n)) continue;
+      if (prev && n - prev > 1) pageWindow.push("…");
+      pageWindow.push(n); prev = n;
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -188,37 +207,39 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
       ) : orders.length === 0 ? (
         <div className="rounded-[3px] border border-[#e6eaec] bg-white px-4 py-14 text-center text-sm text-[#8a94a0]">Замовлень не знайдено</div>
       ) : (
-        <div className="overflow-x-auto rounded-[3px] border border-[#e6eaec] bg-white">
-          <table className="w-full min-w-[720px] text-sm">
+        <div className="overflow-x-auto rounded-[6px] border border-[#e6eaec] bg-white">
+          <table className="w-full min-w-[1080px] text-sm">
             <thead>
-              <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
-                <th className="px-4 py-3 text-left">№</th>
-                <th className="px-4 py-3 text-left">Дата</th>
-                <th className="px-4 py-3 text-left">Покупець</th>
-                <th className="px-4 py-3 text-left hidden lg:table-cell">Доставка</th>
-                <th className="px-4 py-3 text-right">Сума</th>
-                <th className="px-4 py-3 text-left">Статус</th>
+              <tr>
+                {["ID документа", "Номер документа", "Батьківське замовлення", "Тип документа", "Договір", "Коментар продавця", "Статус документа", "Дата створення", "Дата оновлення", "Покупець", "Сума"].map((h, i) => (
+                  <th key={h} className={`whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-[12px] font-semibold text-[#3a4250] ${i === 10 ? "text-right" : "text-left"}`}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f7f9fa]">
+            <tbody>
               {orders.map((o) => {
-                const date = new Date(o.date_created).toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit", year: "2-digit" });
+                const created = new Date(o.date_created).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                const modified = o.date_modified ? new Date(o.date_modified).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
                 return (
-                  <tr key={o.id} onClick={() => setActive(o)} className="cursor-pointer hover:bg-[#fafbfc]">
-                    <td className="px-4 py-3 font-mono text-[12px] font-medium text-[#2b2d42]">{o.number}</td>
-                    <td className="px-4 py-3 text-[12px] tabular-nums text-[#8a94a0]">{date}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-[13px] font-medium">{o.billing.first_name} {o.billing.last_name}</p>
-                      {o.billing.phone && <p className="text-[11px] text-[#8a94a0]">{o.billing.phone}</p>}
+                  <tr key={o.id} onClick={() => setActive(o)} className="cursor-pointer border-b border-[#eef2f3] transition-colors hover:bg-[#f7f9fa]">
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium tabular-nums text-[#5a6472]">{o.id}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <button onClick={(e) => { e.stopPropagation(); setActive(o); }} className="font-mono text-[12px] font-medium text-[#2f9488] hover:underline">{o.number}</button>
                     </td>
-                    <td className="hidden px-4 py-3 text-[12px] text-[#8a94a0] lg:table-cell">
-                      {o.shipping_city ? `${o.shipping_city}` : "—"}
-                      {o.shipping_branch && <span className="block max-w-[160px] truncate text-[11px] text-[#aab4bf]">{o.shipping_branch}</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">{uah(o.total)}</td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-[#8a94a0]">—</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">Замовлення</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{contractLabel(o.payment_method)}</td>
+                    <td className="max-w-[200px] truncate px-3 py-2.5 text-[#5a6472]" title={o.comment}>{o.comment || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <StatusSelect value={o.status} onChange={(s) => changeStatus(o, s)} />
                     </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-[12px] tabular-nums text-[#8a94a0]">{created}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-[12px] tabular-nums text-[#8a94a0]">{modified}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">
+                      <p className="text-[13px] text-[#2b2d42]">{o.billing.first_name} {o.billing.last_name}</p>
+                      {o.billing.phone && <p className="text-[11px] text-[#8a94a0]">{o.billing.phone}</p>}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums text-[#2b2d42]">{uah(o.total)}</td>
                   </tr>
                 );
               })}
@@ -227,16 +248,27 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
         </div>
       )}
 
-      {/* Pagination */}
-      {!loading && total > PER_PAGE && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px] text-[#8a94a0]">{total.toLocaleString("uk-UA")} замовлень</p>
-          <div className="flex items-center gap-2">
+      {/* Intertop-style pagination footer */}
+      {!loading && total > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-[12px] text-[#5a6472]">
+          <label className="flex items-center gap-2">
+            Відображати на сторінці
+            <select value={perPage} onChange={(e) => setPerPage(Number(e.target.value))}
+              className="h-8 rounded-[4px] border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none">
+              {PER_PAGE_OPTS.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+          <span className="tabular-nums text-[#8a94a0]">{pageFrom.toLocaleString("uk-UA")}–{pageTo.toLocaleString("uk-UA")} / {total.toLocaleString("uk-UA")}</span>
+          <span className="tabular-nums text-[#8a94a0]">Кількість записів: {total.toLocaleString("uk-UA")}</span>
+          <div className="flex items-center gap-1">
             <button onClick={() => load(page - 1)} disabled={page <= 1}
-              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42] disabled:opacity-30">‹</button>
-            <span className="min-w-16 text-center text-[12px] text-[#8a94a0]">{page} / {totalPages}</span>
+              className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-[#e6eaec] bg-white text-[#5a6472] transition-colors disabled:opacity-30 hover:enabled:border-[#2f9488] hover:enabled:text-[#2f9488]">‹</button>
+            {pageWindow.map((p, i) => p === "…"
+              ? <span key={`e${i}`} className="px-1 text-[#aab4bf]">…</span>
+              : <button key={p} onClick={() => load(p)}
+                  className={`flex h-8 min-w-8 items-center justify-center rounded-[4px] border px-2 tabular-nums transition-colors ${p === page ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] bg-white text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]"}`}>{p}</button>)}
             <button onClick={() => load(page + 1)} disabled={page >= totalPages}
-              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42] disabled:opacity-30">›</button>
+              className="flex h-8 w-8 items-center justify-center rounded-[4px] border border-[#e6eaec] bg-white text-[#5a6472] transition-colors disabled:opacity-30 hover:enabled:border-[#2f9488] hover:enabled:text-[#2f9488]">›</button>
           </div>
         </div>
       )}

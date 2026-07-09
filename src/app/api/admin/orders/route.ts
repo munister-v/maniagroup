@@ -9,6 +9,7 @@ export function serializeOrder(o: Order) {
     number: o.number,
     status: o.status,
     date_created: o.created_at,
+    date_modified: o.updated_at,
     payment_method: o.payment_method,
     billing: {
       first_name: o.first_name,

@@ -94,6 +94,7 @@ export type Order = {
   shipping_cost: number;
   total: number;
   created_at: string;
+  updated_at: string;
   items: OrderItem[];
 };
 
@@ -398,7 +399,7 @@ async function hydrate(orders: Record<string, unknown>[]): Promise<Order[]> {
 const ORDER_SELECT = `id, number, account_id, email, phone, first_name, last_name, status,
   payment_method, shipping_method, shipping_city, shipping_branch, comment,
   ttn, tracking_url, source, coupon_code, discount,
-  subtotal, shipping_cost, total, created_at`;
+  subtotal, shipping_cost, total, created_at, updated_at`;
 
 /** Orders for a customer (by account id or, as fallback, email). */
 export async function getOrdersForCustomer(
