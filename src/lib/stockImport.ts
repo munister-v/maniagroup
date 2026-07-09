@@ -31,9 +31,23 @@ import { aiDetectImport } from "./aiImport";
 
 export type ImportKind = "offers" | "master" | "unknown";
 
+/**
+ * Descriptive fields opportunistically read from a rich OFFERS file (the
+ * odezda.xlsx template has 55 columns; only these are worth carrying since
+ * they're the ones a new product actually needs — see createProductFromOffer).
+ * Populated only when the file has these columns AND the row has a name.
+ */
+export type OfferProductInfo = {
+  name_uk?: string; name_ru?: string;
+  description_uk?: string; description_ru?: string;
+  brand?: string; category?: string; color?: string; country?: string;
+  gender?: string; composition_uk?: string; composition_ru?: string;
+};
+
 export type OfferRow = {
   external_id: string; factory_article: string; barcode: string; size: string;
   offer_code: string; quantity: number | null; base_price: number; discount_price: number;
+  product?: OfferProductInfo;
 };
 export type MasterRow = {
   kod: string; factory_article: string; brand: string; name: string;
@@ -102,26 +116,55 @@ export function readGrid(buf: Buffer, filename: string): unknown[][] {
   return XLSX.utils.sheet_to_json<unknown[]>(sh, { header: 1, defval: "", blankrows: false });
 }
 
-// Column synonyms for the OFFERS format (machine keys + Ukrainian labels).
-const OFFER_SYN: Record<keyof OfferRow, string[]> = {
+// Column synonyms for the OFFERS format's required fields (machine keys +
+// Ukrainian labels). Deliberately drops "артикул" as an offer_code synonym —
+// in the odezda template that column is identical to "Заводський артикул"
+// (factory_article), so treating it as a distinct offer-level code just
+// duplicated data under the wrong field; barcode is the real per-offer key.
+type OfferReqKey = Exclude<keyof OfferRow, "product">;
+const OFFER_SYN: Record<OfferReqKey, string[]> = {
   external_id:     ["external_id", "код товару", "external_code"],
   factory_article: ["factory_article", "заводський артикул"],
   barcode:         ["barcode", "штрихкод"],
   size:            ["size", "розмір", "розмір одягу", "clother_size"],
-  offer_code:      ["offer_code", "код оффера", "артикул"],
+  offer_code:      ["offer_code", "код оффера"],
   quantity:        ["quantity", "кількість", "наявність", "qty"],
   base_price:      ["base_price", "базова ціна", "ціна"],
   discount_price:  ["discount_price", "акційна ціна"],
 };
 
-function offerColumns(cells: string[]): Record<keyof OfferRow, number> | null {
-  const idx = {} as Record<keyof OfferRow, number>;
-  (Object.keys(OFFER_SYN) as (keyof OfferRow)[]).forEach((k) => {
+// Descriptive columns odezda-style rich OFFERS files carry — optional, only
+// used to auto-create a product when a row's target doesn't resolve to one.
+const PRODUCT_SYN: Record<keyof OfferProductInfo, string[]> = {
+  name_uk:          ["product_name[uk]", "назва (укр)", "назва (укр.)"],
+  name_ru:          ["product_name[ru]", "назва (рос)", "назва (рос.)"],
+  description_uk:   ["product_description[uk]", "опис (укр)", "опис (укр.)"],
+  description_ru:   ["product_description[ru]", "опис (рос)", "опис (рос.)"],
+  brand:            ["brand", "бренд"],
+  category:         ["group", "тип товару"],
+  color:            ["color", "колір"],
+  country:          ["country", "країна"],
+  gender:           ["gender_sap", "гендер sap"],
+  composition_uk:   ["composition[uk]", "склад(укр.)", "склад (укр.)"],
+  composition_ru:   ["composition[ru]", "склад(рос.)", "склад (рос.)"],
+};
+
+function offerColumns(cells: string[]): Record<OfferReqKey, number> | null {
+  const idx = {} as Record<OfferReqKey, number>;
+  (Object.keys(OFFER_SYN) as OfferReqKey[]).forEach((k) => {
     idx[k] = cells.findIndex((c) => OFFER_SYN[k].includes(c));
   });
   // A price/stock file must have a size and at least one of price/quantity.
   if (idx.size < 0) return null;
   if (idx.base_price < 0 && idx.quantity < 0) return null;
+  return idx;
+}
+
+function productColumns(cells: string[]): Record<keyof OfferProductInfo, number> {
+  const idx = {} as Record<keyof OfferProductInfo, number>;
+  (Object.keys(PRODUCT_SYN) as (keyof OfferProductInfo)[]).forEach((k) => {
+    idx[k] = cells.findIndex((c) => PRODUCT_SYN[k].includes(c));
+  });
   return idx;
 }
 
@@ -156,11 +199,24 @@ export function parseImport(buf: Buffer, filename: string): Parsed {
       if (rows.length > 0) return { kind: "offers", filename, rows };
     }
   }
-  // OFFERS: a header row with size + price/quantity columns.
+  // OFFERS: a header row with size + price/quantity columns. odezda.xlsx has
+  // a SECOND header row right under it (machine keys) — check that one too,
+  // since either row may carry the labels that actually match our synonyms,
+  // and grab descriptive columns from whichever row matches.
   for (let i = 0; i < head.length; i++) {
     const cells = (grid[i] ?? []).map(norm);
     const idx = offerColumns(cells);
-    if (idx) return { kind: "offers", filename, rows: parseOffers(grid, i + 1, idx) };
+    if (idx) {
+      const prodIdx = productColumns(cells);
+      const altCells = (grid[i + 1] ?? []).map(norm);
+      const altProdIdx = productColumns(altCells);
+      // Merge: prefer this row's match, fall back to the row right below it.
+      (Object.keys(prodIdx) as (keyof OfferProductInfo)[]).forEach((k) => {
+        if (prodIdx[k] < 0 && altProdIdx[k] >= 0) prodIdx[k] = altProdIdx[k];
+      });
+      const dataStart = altCells.some((c) => c === "size" || c === "clother_size" || c === "article") ? i + 2 : i + 1;
+      return { kind: "offers", filename, rows: parseOffers(grid, dataStart, idx, prodIdx) };
+    }
   }
   return { kind: "unknown", filename, rows: [] };
 }
@@ -349,11 +405,11 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
 
   if (mapping.kind === "offers") {
     const c = mapping.columns;
-    const idx = {
+    const idx: Record<OfferReqKey, number> = {
       external_id: c.external_id ?? -1, factory_article: c.factory_article ?? -1,
       barcode: c.barcode ?? -1, size: c.size ?? -1, offer_code: c.offer_code ?? -1,
       quantity: c.quantity ?? -1, base_price: c.base_price ?? -1, discount_price: c.discount_price ?? -1,
-    } as Record<keyof OfferRow, number>;
+    };
     if (idx.size < 0) return fast;
     return { kind: "offers", filename, rows: parseOffers(grid, mapping.headerRow + 1, idx), ai: true };
   }
@@ -368,7 +424,10 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
   return { kind: "master", filename, rows: parseMasterRows(grid, mapping.headerRow + 1, col), ai: true };
 }
 
-function parseOffers(grid: unknown[][], from: number, idx: Record<keyof OfferRow, number>): OfferRow[] {
+function parseOffers(
+  grid: unknown[][], from: number, idx: Record<OfferReqKey, number>,
+  prodIdx?: Record<keyof OfferProductInfo, number>,
+): OfferRow[] {
   const at = (r: unknown[], i: number) => (i >= 0 ? String(r[i] ?? "").trim() : "");
   const rows: OfferRow[] = [];
   for (let i = from; i < grid.length; i++) {
@@ -381,12 +440,34 @@ function parseOffers(grid: unknown[][], from: number, idx: Record<keyof OfferRow
     if (!size && !ext && !fa && !offer && !bc) continue; // blank line
     // Skip a possible second machine-key header row (e.g. odezda template).
     if (norm(size) === "size" || norm(size) === "clother_size") continue;
+
+    let product: OfferProductInfo | undefined;
+    if (prodIdx) {
+      const nameUk = at(r, prodIdx.name_uk);
+      const nameRu = at(r, prodIdx.name_ru);
+      if (nameUk || nameRu) {
+        product = {
+          name_uk: nameUk || undefined, name_ru: nameRu || undefined,
+          description_uk: at(r, prodIdx.description_uk) || undefined,
+          description_ru: at(r, prodIdx.description_ru) || undefined,
+          brand: at(r, prodIdx.brand) || undefined,
+          category: at(r, prodIdx.category) || undefined,
+          color: at(r, prodIdx.color) || undefined,
+          country: at(r, prodIdx.country) || undefined,
+          gender: genderFromType(at(r, prodIdx.gender)) || undefined,
+          composition_uk: at(r, prodIdx.composition_uk) || undefined,
+          composition_ru: at(r, prodIdx.composition_ru) || undefined,
+        };
+      }
+    }
+
     rows.push({
       external_id: ext, factory_article: fa, barcode: bc, size,
       offer_code: offer,
       quantity: idx.quantity >= 0 && String(r[idx.quantity] ?? "") !== "" ? Math.max(0, Math.round(num(r[idx.quantity]))) : null,
       base_price: idx.base_price >= 0 ? num(r[idx.base_price]) : 0,
       discount_price: idx.discount_price >= 0 ? num(r[idx.discount_price]) : 0,
+      product,
     });
   }
   return rows;
@@ -532,6 +613,77 @@ export async function resolveOfferTargets(rows: OfferRow[]) {
   return target;
 }
 
+/** Stable per-product grouping key for OFFERS rows — prefer factory_article
+ *  (shared across every size of one product in the odezda template), fall
+ *  back to external_id, then offer_code. Empty string ⇒ ungroupable. */
+function offerGroupKey(r: OfferRow): string {
+  return r.factory_article || r.external_id || r.offer_code || "";
+}
+
+/**
+ * Split unmatched OFFERS rows into "will auto-create a product" (grouped by
+ * product so 3 size-rows of one new item make ONE product, not three) vs.
+ * "genuinely unmatched" (no product name to create anything from). Shared by
+ * previewImport and applyImport so the preview's counts match what apply
+ * actually does.
+ */
+function groupNewProductRows(unmatchedRows: OfferRow[]): {
+  toCreate: Map<string, { product: OfferProductInfo; rows: OfferRow[] }>;
+  stillUnmatched: OfferRow[];
+} {
+  const toCreate = new Map<string, { product: OfferProductInfo; rows: OfferRow[] }>();
+  const stillUnmatched: OfferRow[] = [];
+  for (const r of unmatchedRows) {
+    const key = offerGroupKey(r);
+    if (!key || !r.product) { stillUnmatched.push(r); continue; }
+    let g = toCreate.get(key);
+    if (!g) { g = { product: r.product, rows: [] }; toCreate.set(key, g); }
+    g.rows.push(r);
+  }
+  return { toCreate, stillUnmatched };
+}
+
+/**
+ * Create a new product from a rich OFFERS row group (odezda-style file) whose
+ * factory_article/external_id/offer_code matched nothing in the catalogue.
+ * Mirrors createMasterProduct's high-range id convention (see lib/products.ts
+ * ADMIN_ID_FLOOR) so auto-created rows never collide with imported WC ids.
+ * Stock/price for each size is seeded right after via the normal
+ * upsertVariantStock call, same as any other OFFERS row.
+ */
+async function createProductFromOffer(
+  client: import("pg").PoolClient, key: string, product: OfferProductInfo, sample: OfferRow,
+): Promise<number> {
+  const name = product.name_uk || product.name_ru || key;
+  const idRow = await client.query<{ next: string }>(
+    "SELECT (GREATEST(COALESCE(MAX(id),0), 900000000) + 1)::text AS next FROM products",
+  );
+  const id = Number(idRow.rows[0].next);
+  const slugBase = slugifyMaster(name);
+  const slug = slugBase ? `${slugBase}-${id}` : String(id);
+  const category = product.category || "";
+  const categorySlug = category ? slugifyMaster(category) : "";
+  const price = sample.discount_price > 0 && sample.discount_price < sample.base_price ? sample.discount_price : sample.base_price;
+
+  const ins = await client.query<{ id: string }>(
+    `INSERT INTO products
+       (id, sku, factory_article, name, slug, brand, category, category_slug, gender,
+        price, regular_price, sale_price, is_in_stock, status,
+        description, composition, color, country)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'publish',$14,$15,$16,$17)
+     ON CONFLICT (id) DO NOTHING
+     RETURNING id::text`,
+    [
+      id, sample.external_id || "", sample.factory_article || key, name, slug,
+      product.brand || "Mania Group", category, categorySlug, product.gender || "",
+      price, sample.base_price || 0, sample.discount_price > 0 && sample.discount_price < sample.base_price ? sample.discount_price : null,
+      false, product.description_uk || product.description_ru || "",
+      product.composition_uk || product.composition_ru || "", product.color || "", product.country || "",
+    ],
+  );
+  return ins.rows.length ? Number(ins.rows[0].id) : id;
+}
+
 export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   const base: ImportPreview = {
     kind: parsed.kind, filename: parsed.filename, totalRows: parsed.rows.length,
@@ -583,24 +735,45 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   const ids = [...new Set(matched.map((m) => m.pid).filter((x): x is number => !!x))];
   const { byId, variantsByProduct } = await loadProducts(ids);
   const affected = new Set<number>();
+
+  // Rows that resolved to nothing but carry enough product data get grouped
+  // into "will auto-create" instead of dumped in `unmatched` — see
+  // groupNewProductRows. Everything else is genuinely unmatched.
+  const { toCreate, stillUnmatched } = groupNewProductRows(matched.filter((m) => !m.pid).map((m) => m.r));
+  base.newProducts = toCreate.size;
+  for (const [key, g] of toCreate) {
+    const name = g.product.name_uk || g.product.name_ru || key;
+    base.matchedRows += g.rows.length;
+    base.newVariants += g.rows.length;
+    if (base.items.length < 120) base.items.push({
+      name, sku: g.rows[0].external_id || undefined, size: g.rows.map((r) => r.size).join(", "),
+      oldQty: null, newQty: g.rows.reduce((s, r) => s + (r.quantity ?? 0), 0),
+      oldPrice: null, newPrice: g.rows[0].base_price || null, discountPrice: g.rows[0].discount_price || null,
+      isNew: true,
+    });
+    if (base.sample.length < 12) base.sample.push({
+      name, detail: `новий товар · ${g.rows.length} розм. · ${g.product.brand || "—"}`,
+    });
+  }
+  for (const r of stillUnmatched) {
+    base.unmatchedRows++;
+    const ukey = r.factory_article || r.offer_code || r.external_id;
+    // Cap generously (not the old 30) so the admin can export the FULL
+    // unmatched list as CSV, not just a display sample.
+    if (base.unmatched.length < 5000) base.unmatched.push({
+      key: ukey, size: r.size,
+      factory_article: r.factory_article || undefined,
+      external_id: r.external_id || undefined,
+      barcode: r.barcode || undefined,
+      quantity: r.quantity,
+      base_price: r.base_price || undefined,
+      discount_price: r.discount_price || undefined,
+    });
+    if (base.unmatchedSample.length < 8) base.unmatchedSample.push(`${ukey} ${r.size}`);
+  }
+
   for (const { r, pid } of matched) {
-    if (!pid) {
-      base.unmatchedRows++;
-      const ukey = r.factory_article || r.offer_code || r.external_id;
-      // Cap generously (not the old 30) so the admin can export the FULL
-      // unmatched list as CSV, not just a display sample.
-      if (base.unmatched.length < 5000) base.unmatched.push({
-        key: ukey, size: r.size,
-        factory_article: r.factory_article || undefined,
-        external_id: r.external_id || undefined,
-        barcode: r.barcode || undefined,
-        quantity: r.quantity,
-        base_price: r.base_price || undefined,
-        discount_price: r.discount_price || undefined,
-      });
-      if (base.unmatchedSample.length < 8) base.unmatchedSample.push(`${ukey} ${r.size}`);
-      continue;
-    }
+    if (!pid) continue; // handled above (auto-create group or stillUnmatched)
     base.matchedRows++; affected.add(pid);
     const p = byId.get(String(pid));
     const variants = variantsByProduct.get(String(pid)) ?? [];
@@ -692,9 +865,22 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
       // offers
       const rows = parsed.rows;
       const target = await resolveOfferTargets(rows);
+      const targets = new Map<OfferRow, number | null>(rows.map((r) => [r, target(r)]));
+
+      // Rows resolving to nothing but carrying product data (odezda-style)
+      // get grouped into ONE new product per group (see groupNewProductRows),
+      // instead of N duplicate products for N sizes of the same new item.
+      const { toCreate, stillUnmatched } = groupNewProductRows(rows.filter((r) => !targets.get(r)));
+      for (const [key, g] of toCreate) {
+        const pid = await createProductFromOffer(client, key, g.product, g.rows[0]);
+        res.productsCreated++;
+        for (const r of g.rows) targets.set(r, pid);
+      }
+      for (const r of stillUnmatched) res.unmatchedRows++;
+
       for (const r of rows) {
-        const pid = target(r);
-        if (!pid) { res.unmatchedRows++; continue; }
+        const pid = targets.get(r);
+        if (!pid) continue; // counted in stillUnmatched above
         res.matchedRows++; affected.add(pid);
         const sale = r.discount_price > 0 && (!r.base_price || r.discount_price < r.base_price) ? r.discount_price : null;
         res.stockMovements += await upsertVariantStock(
