@@ -9,6 +9,7 @@ import { AdminCustomers } from "./AdminCustomers";
 import { ContentStudio } from "./ContentStudio";
 import { CatalogGrid } from "./CatalogGrid";
 import { AdminVariants } from "./AdminVariants";
+import { AdminClassifier } from "./AdminClassifier";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { MonitoringSection } from "./MonitoringSection";
@@ -17,7 +18,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -58,52 +59,75 @@ type SyncState = {
 
 /* ─── Nav ─── */
 
-const NAV_MAIN: { id: Section; label: string; d: string }[] = [
+/** Rail item: a plain leaf section, or an expandable group whose children are
+ *  sections (Intertop's «Товари» group with a hover-flyout submenu). */
+type RailItem =
+  | { kind: "leaf"; id: Section; label: string; d: string }
+  | { kind: "group"; key: string; label: string; d: string; children: { id: Section; label: string }[] };
+
+const NAV_MAIN: RailItem[] = [
   {
+    kind: "leaf",
     id: "overview",
     label: "Огляд",
     d: "M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6",
   },
   {
-    id: "products",
-    label: "Каталог",
+    kind: "group",
+    key: "products",
+    label: "Товари",
     d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
+    children: [
+      { id: "products", label: "Список товарів" },
+      { id: "offers", label: "Торгові пропозиції" },
+      { id: "properties", label: "Властивості товарів" },
+      { id: "catalog", label: "Імпорт" },
+      { id: "sizeCharts", label: "Розмірні сітки" },
+      { id: "classifier", label: "Класифікатор товарів" },
+    ],
   },
   {
-    id: "offers",
-    label: "Пропозиції",
-    d: "M7 7h.01M3 5a2 2 0 012-2h5.586a1 1 0 01.707.293l7.414 7.414a2 2 0 010 2.828l-5.586 5.586a2 2 0 01-2.828 0l-7.414-7.414A1 1 0 013 10.586V5z",
-  },
-  // "Імпорт" removed from the sidebar — Intertop has no standalone import
-  // section; products are loaded from inside the catalog table itself
-  // (Каталог → «Завантажити товари»). The import screen (section "catalog")
-  // stays reachable via that button, just not as a top-level nav item.
-  {
+    kind: "leaf",
     id: "orders",
     label: "Замовлення",
     d: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01",
   },
   {
+    kind: "leaf",
     id: "customers",
     label: "Клієнти",
     d: "M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 100-6",
   },
   {
+    kind: "leaf",
     id: "coupons",
     label: "Промокоди",
     d: "M9 5H4a1 1 0 00-1 1v3a2 2 0 010 4v3a1 1 0 001 1h5m0-16h11a1 1 0 011 1v3a2 2 0 000 4v3a1 1 0 01-1 1H9m0-16v16",
   },
   {
+    kind: "leaf",
     id: "subscribers",
     label: "Підписники",
     d: "M3 8l9 6 9-6M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z",
   },
   {
+    kind: "leaf",
     id: "accounting",
     label: "Облік",
     d: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
   },
 ];
+
+/** Flat list of every navigable section label (leaves + group children +
+ *  admin items) for topbar title resolution. */
+const SECTION_LABELS: Partial<Record<Section, string>> = (() => {
+  const m: Partial<Record<Section, string>> = {};
+  for (const it of NAV_MAIN) {
+    if (it.kind === "leaf") m[it.id] = it.label;
+    else for (const c of it.children) m[c.id] = c.label;
+  }
+  return m;
+})();
 
 const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
   {
@@ -153,6 +177,23 @@ function SvgIcon({ d, className = "h-4 w-4 shrink-0" }: { d: string; className?:
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
       <path d={d} />
     </svg>
+  );
+}
+
+/** Placeholder for nav sections that exist in the Intertop menu but aren't a
+ *  full feature yet (Властивості товарів, Розмірні сітки). */
+function ComingSoon({ title, note }: { title: string; note: string }) {
+  return (
+    <div>
+      <h2 className="mb-4 text-[22px] font-semibold tracking-tight text-[#2b2d42]">{title}</h2>
+      <div className="flex flex-col items-center justify-center rounded-[8px] border border-dashed border-[#d5dbe0] bg-white px-6 py-20 text-center">
+        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#eef2f3] text-[#8a94a0]">
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 8v4l3 3M12 21a9 9 0 100-18 9 9 0 000 18z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </div>
+        <p className="text-[14px] font-medium text-[#2b2d42]">Екран у розробці</p>
+        <p className="mt-1 max-w-md text-[13px] text-[#8a94a0]">{note}</p>
+      </div>
+    </div>
   );
 }
 
@@ -227,7 +268,7 @@ export function AdminDashboard({
     router.refresh();
   }
 
-  const navLabel = [...NAV_MAIN, ...NAV_ADMIN].find((n) => n.id === section)?.label ?? "";
+  const navLabel = SECTION_LABELS[section] ?? NAV_ADMIN.find((n) => n.id === section)?.label ?? "";
 
   return (
     <div className="fixed inset-0 z-[60] flex overflow-hidden bg-[#f4f6f7] font-sans text-[#2b2d42]">
@@ -242,28 +283,66 @@ export function AdminDashboard({
         </div>
 
         <nav className="flex w-full flex-1 flex-col items-center gap-1 overflow-y-auto py-3">
-          {NAV_MAIN.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => { setSection(item.id); setNavOpen(false); }}
-              title={item.label}
-              className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] transition-colors ${
-                section === item.id
-                  ? "bg-[#2f9488] text-white shadow-[0_2px_8px_rgba(47,148,136,0.4)]"
-                  : "text-white/45 hover:bg-white/10 hover:text-white"
-              }`}
-            >
-              <SvgIcon d={item.d} className="h-5 w-5 shrink-0" />
-              {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e5484d] px-1 text-[9px] font-medium tabular-nums text-white ring-2 ring-[#2b2d42]">
-                  {stats.pending + stats.processing}
+          {NAV_MAIN.map((item) => {
+            if (item.kind === "group") {
+              const groupActive = item.children.some((c) => c.id === section);
+              return (
+                <div key={item.key} className="group relative flex h-11 w-11 shrink-0 items-center justify-center">
+                  <button
+                    onClick={() => { setSection(item.children[0].id); setNavOpen(false); }}
+                    title={item.label}
+                    className={`flex h-11 w-11 items-center justify-center rounded-[12px] transition-colors ${
+                      groupActive
+                        ? "bg-[#2f9488] text-white shadow-[0_2px_8px_rgba(47,148,136,0.4)]"
+                        : "text-white/45 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <SvgIcon d={item.d} className="h-5 w-5 shrink-0" />
+                  </button>
+                  {/* Hover flyout submenu — pl-2 bridges the visual gap while
+                      staying inside the group's hover area. */}
+                  <div className="pointer-events-none absolute left-full top-0 z-50 hidden pl-2 group-hover:block group-hover:pointer-events-auto">
+                    <div className="w-56 rounded-[8px] bg-[#2b2d42] py-2 shadow-2xl ring-1 ring-white/10">
+                      <p className="px-4 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/35">{item.label}</p>
+                      {item.children.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => { setSection(c.id); setNavOpen(false); }}
+                          className={`block w-full px-4 py-2 text-left text-[13px] transition-colors ${
+                            section === c.id ? "bg-[#2f9488] text-white" : "text-white/70 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setSection(item.id); setNavOpen(false); }}
+                title={item.label}
+                className={`group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] transition-colors ${
+                  section === item.id
+                    ? "bg-[#2f9488] text-white shadow-[0_2px_8px_rgba(47,148,136,0.4)]"
+                    : "text-white/45 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <SvgIcon d={item.d} className="h-5 w-5 shrink-0" />
+                {item.id === "orders" && stats && stats.pending + stats.processing > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e5484d] px-1 text-[9px] font-medium tabular-nums text-white ring-2 ring-[#2b2d42]">
+                    {stats.pending + stats.processing}
+                  </span>
+                )}
+                <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-[5px] bg-[#2b2d42] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">
+                  {item.label}
                 </span>
-              )}
-              <span className="pointer-events-none absolute left-full z-50 ml-2 whitespace-nowrap rounded-[5px] bg-[#2b2d42] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg ring-1 ring-white/10 transition-opacity duration-150 group-hover:opacity-100">
-                {item.label}
-              </span>
-            </button>
-          ))}
+              </button>
+            );
+          })}
 
           <div className="my-2 h-px w-7 shrink-0 bg-white/10" />
 
@@ -352,6 +431,9 @@ export function AdminDashboard({
             <CatalogGrid onToast={showToast} onImport={goToImport} dataVersion={dataVersion} focus={catalogFocus} />
           )}
           {section === "offers" && <AdminVariants onToast={showToast} onImport={goToImport} />}
+          {section === "classifier" && <AdminClassifier />}
+          {section === "properties" && <ComingSoon title="Властивості товарів" note="Керування атрибутами товарів за категоріями (тип поля, обов'язковість, довідники значень) — у розробці." />}
+          {section === "sizeCharts" && <ComingSoon title="Розмірні сітки" note="Довідник розмірних сіток за категоріями — у розробці." />}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}
