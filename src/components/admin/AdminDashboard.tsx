@@ -74,11 +74,10 @@ const NAV_MAIN: { id: Section; label: string; d: string }[] = [
     label: "Пропозиції",
     d: "M7 7h.01M3 5a2 2 0 012-2h5.586a1 1 0 01.707.293l7.414 7.414a2 2 0 010 2.828l-5.586 5.586a2 2 0 01-2.828 0l-7.414-7.414A1 1 0 013 10.586V5z",
   },
-  {
-    id: "catalog",
-    label: "Імпорт",
-    d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
-  },
+  // "Імпорт" removed from the sidebar — Intertop has no standalone import
+  // section; products are loaded from inside the catalog table itself
+  // (Каталог → «Завантажити товари»). The import screen (section "catalog")
+  // stays reachable via that button, just not as a top-level nav item.
   {
     id: "orders",
     label: "Замовлення",
