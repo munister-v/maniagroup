@@ -225,11 +225,13 @@ export async function listAdminProducts(opts: ProductFilterOpts & {
   const col = SORTABLE[opts.sortBy ?? "id"] ?? "id";
   const dir = opts.sortDir === "asc" ? "ASC" : "DESC";
   const rows = await q(
-    `SELECT id::text AS id, name, slug, sku, brand, category, category_slug, gender,
+    `SELECT id::text AS id, name, name_uk, slug, sku, brand, category, category_slug, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
             price::float AS price, is_in_stock, status, image_src, featured, show_without_photo,
             color, season, composition, country, attributes, factory_article,
+            description, description_uk, material, subtype, moderation_status, size_chart_code,
             to_char(updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at,
+            to_char(created_at, 'DD.MM.YYYY HH24:MI') AS created_at,
             EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id AND v.active) AS has_variants
      FROM products ${where} ORDER BY ${col} ${dir} NULLS LAST, id DESC LIMIT ${perPage} OFFSET ${offset}`,
     bind,

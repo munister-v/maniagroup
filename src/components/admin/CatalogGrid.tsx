@@ -34,6 +34,18 @@ type Row = {
   /** Per-product override of the site-wide "hide products with no photo"
    *  setting — see lib/productSource.ts hasImg. */
   show_without_photo: boolean;
+  /** «Мова Українська» — see lib/pg.ts (Intertop 2.1). */
+  name_uk?: string;
+  description?: string;
+  description_uk?: string;
+  country?: string;
+  /** "Матеріал верху" / "Підвид" — see lib/classifierTree.ts. */
+  material?: string;
+  subtype?: string;
+  moderation_status?: string;
+  /** Intertop 2.10 guide binding — see lib/sizeCharts.ts. */
+  size_chart_code?: string;
+  created_at?: string;
 };
 
 type Field = keyof Row;
@@ -1029,11 +1041,50 @@ function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "g
   );
 }
 
+/** Extra product-level columns beyond the always-shown core (ID товару ·
+ *  Назва (рос.) · Зображення · Категорія · Код товару · Заводський артикул ·
+ *  SKU · Статус · Публікувався · Востаннє змінено), exposed via a «Колонки»
+ *  chooser — same pattern as AdminVariants' OPT_COLS. Sourced from the real
+ *  odezda.xlsx template's fill-rate audit (2026-07-10): every field here is
+ *  100%-or-near-100% populated in a real Intertop export and already stored
+ *  on `products` (name_uk/description/description_uk since the 2.1 guide,
+ *  material/subtype since the odezda structure adoption, size_chart_code
+ *  since the 2.10 guide) — genuinely missing was just exposing them as
+ *  optional list columns, not new schema. brand/gender/price were already
+ *  filterable but not visible as columns either. */
+type OptCol = "nameUk" | "brand" | "gender" | "price" | "salePrice" | "material" | "subtype"
+  | "color" | "season" | "country" | "composition" | "sizeChartCode" | "moderation" | "description" | "descriptionUk" | "createdAt";
+
+const money = (n: number | null) => (n == null ? "—" : `${Math.round(n).toLocaleString("uk-UA")} ₴`);
+const MODERATION_LABEL: Record<string, string> = {
+  draft: "Чернетка", pending: "На модерації", approved: "Підтверджено", rejected: "Не підтверджено", archived: "В архіві",
+};
+
+const OPT_COLS: { id: OptCol; label: string; hideDefault?: boolean; align?: "right"; render: (r: Row) => ReactNode }[] = [
+  { id: "nameUk",        label: "Назва (укр.)",  hideDefault: true, render: (r) => r.name_uk || "—" },
+  { id: "brand",         label: "Бренд",         hideDefault: true, render: (r) => r.brand || "—" },
+  { id: "gender",        label: "Стать",         hideDefault: true, render: (r) => r.gender || "—" },
+  { id: "price",         label: "Ціна",          hideDefault: true, align: "right", render: (r) => money(r.regular_price) },
+  { id: "salePrice",     label: "Акційна ціна",  hideDefault: true, align: "right", render: (r) => money(r.sale_price) },
+  { id: "material",      label: "Матеріал верху", hideDefault: true, render: (r) => r.material || "—" },
+  { id: "subtype",       label: "Підвид",        hideDefault: true, render: (r) => r.subtype || "—" },
+  { id: "color",         label: "Колір",         hideDefault: true, render: (r) => r.color || "—" },
+  { id: "season",        label: "Сезон",         hideDefault: true, render: (r) => r.season || "—" },
+  { id: "country",       label: "Країна",        hideDefault: true, render: (r) => r.country || "—" },
+  { id: "composition",   label: "Склад",         hideDefault: true, render: (r) => r.composition || "—" },
+  { id: "sizeChartCode", label: "Розмірна сітка", hideDefault: true, render: (r) => r.size_chart_code || "—" },
+  { id: "moderation",    label: "Модерація",     hideDefault: true, render: (r) => MODERATION_LABEL[r.moderation_status ?? ""] ?? "—" },
+  { id: "description",   label: "Опис (рос.)",   hideDefault: true, render: (r) => r.description || "—" },
+  { id: "descriptionUk", label: "Опис (укр.)",   hideDefault: true, render: (r) => r.description_uk || "—" },
+  { id: "createdAt",     label: "Створено",      hideDefault: true, render: (r) => r.created_at || "—" },
+];
+
 /* ── Read-only product list — a faithful 1:1 clone of the Intertop partner
-      catalog list, exact column order: ID товару · Назва (рос.) · Зображення ·
+      catalog list, core column order: ID товару · Назва (рос.) · Зображення ·
       Категорія · Код товару (mp+id) · Заводський артикул · Артикул (sku) ·
-      Статус · Публікувався · Востаннє змінено. Shares the grid's filters,
-      selection and paging; row-click opens the full card for editing. ──────── */
+      Статус · Публікувався · Востаннє змінено, plus a «Колонки» chooser for
+      the rest (OPT_COLS above). Shares the grid's filters, selection and
+      paging; row-click opens the full card for editing. ──────── */
 function ProductListView({
   rows, loading, total, page, perPage, setPage, setPerPage, totalPages,
   selected, toggleRow, toggleAll, onOpen,
@@ -1047,6 +1098,9 @@ function ProductListView({
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const [colsOpen, setColsOpen] = useState(false);
+  const [hidden, setHidden] = useState<Set<OptCol>>(() => new Set(OPT_COLS.filter((c) => c.hideDefault).map((c) => c.id)));
+  const visibleCols = OPT_COLS.filter((c) => !hidden.has(c.id));
 
   // Compact page window: 1 … p-1 p p+1 … last
   const pages: (number | "…")[] = [];
@@ -1062,6 +1116,30 @@ function ProductListView({
 
   return (
     <div>
+      <div className="mb-2 flex justify-end">
+        <div className="relative">
+          <button onClick={() => setColsOpen((v) => !v)}
+            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#e6eaec] px-3 text-[11px] uppercase tracking-[0.1em] text-[#5a6472] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 5h16M4 12h16M4 19h16M9 5v14" strokeLinecap="round" /></svg>
+            Колонки
+          </button>
+          {colsOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setColsOpen(false)} />
+              <div className="absolute right-0 z-30 mt-1 max-h-[60vh] w-56 overflow-y-auto rounded-[5px] border border-[#e6eaec] bg-white p-2 shadow-lg">
+                {OPT_COLS.map((c) => (
+                  <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[13px] text-[#2b2d42] hover:bg-[#f7f9fa]">
+                    <input type="checkbox" checked={!hidden.has(c.id)}
+                      onChange={() => setHidden((h) => { const n = new Set(h); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })}
+                      className="h-3.5 w-3.5 accent-[#2f9488]" />
+                    {c.label}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
       <div className="overflow-x-auto rounded-[6px] border border-[#e6eaec] bg-white">
         <table className="w-full border-collapse text-[13px]">
           <thead>
@@ -1078,15 +1156,18 @@ function ProductListView({
               <th className={thCls}>Заводський артикул</th>
               <th className={thCls}>SKU</th>
               <th className={thCls}>Статус</th>
+              {visibleCols.map((c) => (
+                <th key={c.id} className={c.align === "right" ? `${thCls} text-right` : thCls}>{c.label}</th>
+              ))}
               <th className={`${thCls} text-center`}>Публікувався</th>
               <th className={thCls}>Востаннє змінено</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
+              <tr><td colSpan={11 + visibleCols.length} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={11} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
+              <tr><td colSpan={11 + visibleCols.length} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
             ) : rows.map((row) => {
               const st = siteStatus(row);
               const isSel = selected.has(row.id);
@@ -1116,6 +1197,11 @@ function ProductListView({
                       <span className="text-[12px] text-[#3a4250]">{st.label}</span>
                     </span>
                   </td>
+                  {visibleCols.map((c) => (
+                    <td key={c.id} className={`max-w-[220px] truncate px-3 py-2.5 text-[#5a6472] ${c.align === "right" ? "text-right tabular-nums" : ""}`}>
+                      {c.render(row)}
+                    </td>
+                  ))}
                   <td className="px-3 py-2.5 text-center">
                     <span className={`text-[12px] font-medium ${row.status === "publish" ? "text-[#2f9488]" : "text-[#aab4bf]"}`}>
                       {row.status === "publish" ? "Так" : "Ні"}
