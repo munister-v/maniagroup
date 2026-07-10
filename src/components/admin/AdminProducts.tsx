@@ -912,10 +912,14 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
  * (per-row patches) for writes. */
 type OfferRow = {
   id: string; size: string; sku: string; product_id: string;
-  factory_article: string; stock_qty: number; price: number | null;
+  factory_article: string; barcode: string; stock_qty: number; price: number | null;
   sale_price: number | null; base_price: number | null; active: boolean;
+  weight_pack: number | null; height_pack: number | null; width_pack: number | null; length_pack: number | null;
 };
-type OfferDraft = { stock_qty: string; price: string; sale_price: string; active: boolean };
+type OfferDraft = {
+  stock_qty: string; price: string; sale_price: string; active: boolean; barcode: string;
+  weight_pack: string; height_pack: string; width_pack: string; length_pack: string;
+};
 
 function ProductOffersTab({ productId, onToast }: { productId: string; onToast?: (m: string) => void }) {
   const [rows, setRows] = useState<OfferRow[]>([]);
@@ -944,6 +948,11 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
         price: r.price != null ? String(r.price) : "",
         sale_price: r.sale_price != null ? String(r.sale_price) : "",
         active: r.active,
+        barcode: r.barcode || "",
+        weight_pack: r.weight_pack != null ? String(r.weight_pack) : "",
+        height_pack: r.height_pack != null ? String(r.height_pack) : "",
+        width_pack: r.width_pack != null ? String(r.width_pack) : "",
+        length_pack: r.length_pack != null ? String(r.length_pack) : "",
       };
     }
     setDrafts(next);
@@ -961,6 +970,11 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
           price: d.price ? Number(d.price) : null,
           sale_price: d.sale_price ? Number(d.sale_price) : null,
           active: d.active,
+          barcode: d.barcode.trim(),
+          weight_pack: d.weight_pack ? Number(d.weight_pack) : null,
+          height_pack: d.height_pack ? Number(d.height_pack) : null,
+          width_pack: d.width_pack ? Number(d.width_pack) : null,
+          length_pack: d.length_pack ? Number(d.length_pack) : null,
         },
       };
     });
@@ -1009,10 +1023,15 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
               <th className={thCls}>Внутр. номер</th>
               <th className={thCls}>SKU</th>
               <th className={thCls}>Заводський артикул</th>
+              <th className={thCls}>Штрихкод</th>
               <th className={thCls}>Розмір</th>
               <th className={thCls}>Ціна</th>
               <th className={thCls}>Акційна ціна</th>
               <th className={thCls}>Залишок</th>
+              <th className={thCls}>Вага, кг</th>
+              <th className={thCls}>Висота, см</th>
+              <th className={thCls}>Ширина, см</th>
+              <th className={thCls}>Довжина, см</th>
             </tr>
           </thead>
           <tbody>
@@ -1035,6 +1054,11 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-[#2b2d42]">{innerNo}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-[#2b2d42]">{skuCode}</td>
                   <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-[#5a6472]">{r.factory_article || "—"}</td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input className={cellInp} value={d.barcode} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], barcode: e.target.value } }))} />
+                      : <span className="font-mono text-[12px] text-[#5a6472]">{r.barcode || "—"}</span>}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-[#5a6472]">{r.size || "—"}</td>
                   <td className="px-3 py-2">
                     {editing
@@ -1050,6 +1074,26 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
                     {editing
                       ? <input type="number" className={cellInp} value={d.stock_qty} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], stock_qty: e.target.value } }))} />
                       : <span className="text-[#5a6472]">{r.stock_qty}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.weight_pack} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], weight_pack: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.weight_pack ?? "—"}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.height_pack} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], height_pack: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.height_pack ?? "—"}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.width_pack} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], width_pack: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.width_pack ?? "—"}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.length_pack} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], length_pack: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.length_pack ?? "—"}</span>}
                   </td>
                 </tr>
               );

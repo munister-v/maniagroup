@@ -34,6 +34,12 @@ export type AdminVariant = {
   is_in_stock: boolean;        // parent stock mirror
   base_price: number | null;   // parent regular_price (fallback for price)
   image_src: string;
+  // Parent's Intertop 2.1 moderation state + 2.2 classifier fields — surfaced
+  // here so the offers screens (AdminVariants/ProductOffersTab) can show them
+  // instead of only ever seeing the collapsed publish/draft `status`.
+  moderation_status: string;
+  subtype: string;
+  material: string;
 };
 
 export type VariantFilter = { q?: string; active?: string; inStock?: string; category?: string; siteStatus?: string; productId?: string };
@@ -77,7 +83,8 @@ export async function listAdminVariants(
             v.width_pack::float AS width_pack, v.length_pack::float AS length_pack,
             p.sku, p.name, p.brand, p.category, p.category_slug, p.gender,
             p.factory_article, p.status, p.is_in_stock,
-            p.regular_price::float AS base_price, p.image_src
+            p.regular_price::float AS base_price, p.image_src,
+            p.moderation_status, p.subtype, p.material
        FROM product_variants v
        JOIN products p ON p.id = v.product_id
        ${whereSql}
@@ -101,6 +108,11 @@ export type VariantPatch = {
   height_pack?: number | null;
   width_pack?: number | null;
   length_pack?: number | null;
+  /** Per-offer only — see updateVariantsIndividually. Deliberately NOT wired
+   *  into bulkUpdateVariants: setting the same barcode across many selected
+   *  rows would create real-world duplicates, unlike price/stock which are
+   *  legitimately shared. */
+  barcode?: string;
 };
 
 /**
@@ -159,6 +171,11 @@ export async function updateVariantsIndividually(updates: { id: string; patch: V
     if (u.patch.price !== undefined) { bind.push(u.patch.price); sets.push(`price = $${bind.length}`); }
     if (u.patch.sale_price !== undefined) { bind.push(u.patch.sale_price); sets.push(`sale_price = $${bind.length}`); }
     if (u.patch.active !== undefined) { bind.push(u.patch.active); sets.push(`active = $${bind.length}`); }
+    if (u.patch.barcode !== undefined) { bind.push(u.patch.barcode); sets.push(`barcode = $${bind.length}`); }
+    if (u.patch.weight_pack !== undefined) { bind.push(u.patch.weight_pack); sets.push(`weight_pack = $${bind.length}`); }
+    if (u.patch.height_pack !== undefined) { bind.push(u.patch.height_pack); sets.push(`height_pack = $${bind.length}`); }
+    if (u.patch.width_pack !== undefined) { bind.push(u.patch.width_pack); sets.push(`width_pack = $${bind.length}`); }
+    if (u.patch.length_pack !== undefined) { bind.push(u.patch.length_pack); sets.push(`length_pack = $${bind.length}`); }
     if (sets.length === 0) continue;
     sets.push(`updated_at = now()`, `updated_by = 'admin'`);
     bind.push(id);

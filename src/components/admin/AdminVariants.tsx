@@ -16,6 +16,10 @@ type Variant = {
   sale_price: number | null;
   active: boolean;
   updated_at?: string;
+  weight_pack: number | null;
+  height_pack: number | null;
+  width_pack: number | null;
+  length_pack: number | null;
   sku: string;
   name: string;
   brand: string;
@@ -27,6 +31,9 @@ type Variant = {
   is_in_stock: boolean;
   base_price: number | null;
   image_src: string;
+  moderation_status: string;
+  subtype: string;
+  material: string;
 };
 
 const PER_PAGE_OPTS = [20, 50, 100, 200];
@@ -34,23 +41,33 @@ const PER_PAGE_OPTS = [20, 50, 100, 200];
 const money = (n: number | null | undefined) =>
   n == null ? "—" : `${Math.round(Number(n)).toLocaleString("uk-UA")} ₴`;
 
-/** We store a flat category (+ gender), not Intertop's 4-level tree — present it
- *  Intertop-style as a short «{стать} / {категорія}» path rather than fake it. */
+/** We store a flat category (+ gender) plus the newer `subtype` field, not
+ *  Intertop's 4-level tree — present it Intertop-style as a short «{стать} /
+ *  {категорія} / {підвид}» path rather than fake the missing levels. */
 function classifierPath(v: Variant): string {
   const g = v.gender === "women" ? "Жінкам" : v.gender === "men" ? "Чоловікам" : "";
-  return [g, v.category].filter(Boolean).join(" / ") || "—";
+  return [g, v.category, v.subtype].filter(Boolean).join(" / ") || "—";
 }
+
+const dims = (n: number | null) => (n == null ? "—" : `${n} см`);
+const kg = (n: number | null) => (n == null ? "—" : `${n} кг`);
 
 /**
  * Full Intertop «Торгові пропозиції» column set, exposed via the «Колонки»
- * chooser (core columns — checkbox, Штрихкод, Активність, Код товару, Статус —
- * are always shown). Columns we have real data for render it; the logistics /
- * packaging dimensions Intertop carries but we don't store render «—», so the
- * chooser still offers 1:1 parity. `hideDefault` keeps the default view close
- * to Intertop's leftmost columns instead of a wall of empty dimensions.
+ * chooser (core columns — checkbox, Внутр. номер, SKU, Заводський артикул,
+ * Штрихкод, Розмір, Активність, Статус — are always shown, see the table
+ * head below). Columns we have real data for render it; weightPack/
+ * heightPack/widthPack/lengthPack come from the same product_variants
+ * columns the «Створити торгову пропозицію» panel writes (see
+ * lib/variants.ts) — kept in sync so a value entered there is actually
+ * visible here, not silently dropped. Dimensions we never modeled (net
+ * weight/volume, pillow size, diameter, bonus program, margin — see
+ * lib/classifierTree.ts's fill-rate audit, ~0% used even by Intertop for
+ * clothing) still render «—», so the chooser keeps 1:1 column parity
+ * without pretending we store data we don't.
  */
 type OptCol =
-  | "category" | "classifier" | "factoryArticle" | "size" | "sizeClothing"
+  | "category" | "classifier" | "material" | "factoryArticle" | "size" | "sizeClothing"
   | "price" | "salePrice" | "stock" | "nameUk" | "nameRu"
   | "heightNet" | "widthNet" | "lengthNet" | "diameterNet" | "volumeNet" | "weightNet"
   | "pillowSize" | "weightPack" | "heightPack" | "lengthPack" | "widthPack" | "diameterPack"
@@ -62,6 +79,7 @@ const OPT_COLS: {
 }[] = [
   { id: "category",       label: "Категорія",              render: (v) => v.category || "—" },
   { id: "classifier",     label: "Класифікатор",           render: (v) => classifierPath(v) },
+  { id: "material",       label: "Матеріал верху", hideDefault: true, render: (v) => v.material || "—" },
   { id: "sizeClothing",   label: "Розмір одягу", hideDefault: true, render: (v) => v.size || "—" },
   { id: "price",          label: "Ціна",           align: "right", render: (v) => money(v.price ?? v.base_price) },
   { id: "salePrice",      label: "Акційна ціна",   align: "right", render: (v) => (v.sale_price ? money(v.sale_price) : "—") },
@@ -75,10 +93,10 @@ const OPT_COLS: {
   { id: "volumeNet",      label: "Об'єм нетто",        hideDefault: true, render: () => "—" },
   { id: "weightNet",      label: "Вага нетто",         hideDefault: true, render: () => "—" },
   { id: "pillowSize",     label: "Розмір наволочки",   hideDefault: true, render: () => "—" },
-  { id: "weightPack",     label: "Вага в упаковці",    hideDefault: true, render: () => "—" },
-  { id: "heightPack",     label: "Висота в упаковці",  hideDefault: true, render: () => "—" },
-  { id: "lengthPack",     label: "Довжина в упаковці", hideDefault: true, render: () => "—" },
-  { id: "widthPack",      label: "Ширина в упаковці",  hideDefault: true, render: () => "—" },
+  { id: "weightPack",     label: "Вага в упаковці",    hideDefault: true, render: (v) => kg(v.weight_pack) },
+  { id: "heightPack",     label: "Висота в упаковці",  hideDefault: true, render: (v) => dims(v.height_pack) },
+  { id: "lengthPack",     label: "Довжина в упаковці", hideDefault: true, render: (v) => dims(v.length_pack) },
+  { id: "widthPack",      label: "Ширина в упаковці",  hideDefault: true, render: (v) => dims(v.width_pack) },
   { id: "diameterPack",   label: "Діаметр в упаковці", hideDefault: true, render: () => "—" },
   { id: "bonusProgramId", label: "ID бонусної програми", hideDefault: true, render: () => "—" },
   { id: "margin",         label: "Маржинальність",     hideDefault: true, render: () => "—" },
@@ -208,8 +226,8 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const show = (c: OptCol) => !hidden.has(c);
   const visibleCols = OPT_COLS.filter((c) => !hidden.has(c.id));
-  // checkbox + Внутр. номер + SKU + Заводський артикул + Розмір + Активність + Статус
-  const colSpan = 7 + visibleCols.length;
+  // checkbox + Внутр. номер + SKU + Заводський артикул + Штрихкод + Розмір + Активність + Статус
+  const colSpan = 8 + visibleCols.length;
 
   const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
   const selCls = "h-9 rounded-[4px] border border-[#e6eaec] bg-white px-2.5 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
@@ -217,9 +235,18 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
   const editLbl = "text-[11px] uppercase tracking-wider text-[#8a94a0]";
   const editInp = "mt-1 h-10 w-full rounded-[4px] border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
 
+  // Matches AdminProducts.tsx's moderationLabel() vocabulary — a variant's
+  // parent product goes through the same Intertop 2.1/2.2 moderation state
+  // machine, so a variant of a product still «На модерації» should read that
+  // way here too, not get collapsed into a generic «Чернетка» like it used
+  // to be (that made every unmoderated product's offers look identical to a
+  // plain, never-submitted draft).
   function siteStatus(v: Variant): { label: string; color: string } {
+    if (v.moderation_status === "pending") return { label: "На модерації", color: "#d97706" };
+    if (v.moderation_status === "rejected") return { label: "Не підтверджено", color: "#e5484d" };
+    if (v.moderation_status !== "approved") return { label: "Чернетка", color: "#8a94a0" };
     if (v.status === "publish" && v.active && v.is_in_stock) return { label: "На сайті", color: "#2f9488" };
-    if (v.status !== "publish") return { label: "Чернетка", color: "#8a94a0" };
+    if (v.status !== "publish") return { label: "Підтверджено", color: "#2f9488" };
     if (!v.active) return { label: "Неактивна", color: "#c3ccd4" };
     return { label: "Без залишку", color: "#b6c0ca" };
   }
@@ -340,6 +367,7 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
               <th className={thCls}>Внутр. номер</th>
               <th className={thCls}>SKU</th>
               <th className={thCls}>Заводський артикул</th>
+              <th className={thCls}>Штрихкод</th>
               <th className={thCls}>Розмір</th>
               <th className={thCls}>Активність</th>
               <th className={thCls}>Статус</th>
@@ -359,7 +387,7 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
               // Наша структура ідентифікаторів (не Intertop-mp): внутрішній номер =
               // тільки цифри (v.sku), SKU = номер + розмір (45678-M). v.sku буває
               // порожнім у старих товарів — падаємо на product_id, щоб не показати
-              // голий "-M". Штрихкод нам не потрібен.
+              // голий "-M".
               const innerNo = v.sku || v.product_id;
               const skuCode = `${innerNo}-${v.size}`;
               return (
@@ -373,6 +401,7 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{skuCode}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{v.factory_article || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{v.barcode || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.size || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.active ? "Так" : "Ні"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
