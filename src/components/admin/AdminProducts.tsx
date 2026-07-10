@@ -34,7 +34,25 @@ type FullProduct = Row & {
   season: string;
   collection: string;
   composition: string;
+  /** Intertop 2.1 moderation workflow — draft | pending | approved | rejected. */
+  moderation_status: string;
+  created_at: string;
+  updated_at: string;
 };
+
+/** «Загальні дані» status pill — composes moderation_status with the real
+ *  publish/stock state, matching Intertop's Чернетка/На модерації/
+ *  Не підтверджено/Підтверджено/На сайті vocabulary. */
+function moderationLabel(p: { moderation_status: string; status: string; is_in_stock: boolean }): { label: string; color: string } {
+  switch (p.moderation_status) {
+    case "pending": return { label: "На модерації", color: "#d97706" };
+    case "rejected": return { label: "Не підтверджено", color: "#e5484d" };
+    case "approved": return p.status === "publish" && p.is_in_stock
+      ? { label: "На сайті", color: "#2f9488" }
+      : { label: "Підтверджено", color: "#2f9488" };
+    default: return { label: "Чернетка", color: "#8a94a0" };
+  }
+}
 
 type SizeRow = { size: string; qty: string };
 
@@ -60,9 +78,12 @@ type Draft = {
   description: string;
 };
 
+// New products start life as Чернетка (Intertop 2.1: every product goes
+// through На модерацію → Підтверджено before it can reach the site) —
+// status defaults to "draft" here, not "publish".
 const EMPTY_DRAFT: Draft = {
   name: "", brand: "", sku: "", factory_article: "", category: "", category_slug: "", gender: "",
-  regular_price: "", sale_price: "", is_in_stock: true, status: "publish",
+  regular_price: "", sale_price: "", is_in_stock: true, status: "draft",
   images: [], sizes: [], color: "", composition: "", season: "", country: "",
   short_description: "", description: "",
 };
@@ -131,6 +152,10 @@ export function AdminProducts({ onToast, initialOpen }: {
   const [editorId, setEditorId] = useState<string | "new" | null>(null);
   const [productTab, setProductTab] = useState<"product" | "offers" | "history">("product");
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  // Full loaded product — carries moderation_status/created_at/updated_at for
+  // the «Загальні дані» header card, which the editable `draft` doesn't need.
+  const [current, setCurrent] = useState<FullProduct | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [showRule, setShowRule] = useState(false);
@@ -193,6 +218,7 @@ export function AdminProducts({ onToast, initialOpen }: {
     if (!res.ok) return;
     const p = (await res.json()) as FullProduct;
     setDraft(draftFromProduct(p));
+    setCurrent(p);
     setProductTab("product");
     setEditorId(id);
   }
@@ -200,8 +226,62 @@ export function AdminProducts({ onToast, initialOpen }: {
   function openNew() {
     setError("");
     setDraft(EMPTY_DRAFT);
+    setCurrent(null);
     setProductTab("product");
     setEditorId("new");
+  }
+
+  /** Moderation-workflow transition (Intertop 2.1: Чернетка/На модерації/
+   *  Підтверджено/Не підтверджено). `label` becomes the «Історія статусів»
+   *  entry text, e.g. "Чернетка → На модерації". */
+  async function transition(patch: { moderation_status: string; status?: string }, label: string) {
+    if (!current) return;
+    setTransitioning(true);
+    try {
+      const res = await fetch(`/api/admin/products/${current.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...patch, statusTransitionLabel: label }),
+      });
+      if (res.ok) {
+        onToast?.(label);
+        await openEdit(current.id);
+        load(page, search, stock);
+      } else {
+        const data = await res.json();
+        onToast?.(data.error ?? "Помилка");
+      }
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
+  async function duplicateCurrent() {
+    if (!current) return;
+    setTransitioning(true);
+    try {
+      const res = await fetch(`/api/admin/products/${current.id}/duplicate`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        onToast?.(`Товар скопійовано → #${data.id}`);
+        load(page, search, stock);
+        await openEdit(data.id);
+      } else {
+        onToast?.(data.error ?? "Помилка копіювання");
+      }
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
+  async function removeCurrent() {
+    if (!current) return;
+    if (!confirm(`Видалити «${current.name}»? Цю дію не можна скасувати.`)) return;
+    const res = await fetch(`/api/admin/products/${current.id}`, { method: "DELETE" });
+    if (res.ok) {
+      onToast?.("Товар видалено");
+      setEditorId(null);
+      load(page, search, stock);
+    }
   }
 
   // Open a product (or the new-product form) immediately when asked to by a parent
@@ -383,9 +463,23 @@ export function AdminProducts({ onToast, initialOpen }: {
           <div onClick={() => setEditorId(null)} className="absolute inset-0 bg-black/40" />
           <div className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-white shadow-2xl">
             <div className="sticky top-0 z-10 border-b border-[#eef2f3] bg-white">
-              <div className="flex items-center justify-between px-6 py-4">
-                <h3 className="text-[15px] font-medium text-[#2b2d42]">{editorId === "new" ? "Новий товар" : "Редагування товару"}</h3>
-                <button onClick={() => setEditorId(null)} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
+              <div className="flex items-center gap-2 px-6 py-4">
+                {editorId !== "new" && (
+                  <button onClick={() => setEditorId(null)} aria-label="Закрити" className="text-[#8a94a0] hover:text-[#2b2d42]">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                )}
+                <h3 className="text-[15px] font-medium text-[#2b2d42]">
+                  {editorId === "new" ? "Новий товар" : `Товар ${editorId}`}
+                </h3>
+                {editorId !== "new" && (
+                  <button onClick={() => openEdit(String(editorId))} title="Оновити" className="text-[#8a94a0] hover:text-[#2b2d42]">
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4v5h5M20 20v-5h-5M20 9a8 8 0 00-14.9-3M4 15a8 8 0 0014.9 3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </button>
+                )}
+                {editorId === "new" && (
+                  <button onClick={() => setEditorId(null)} className="ml-auto text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
+                )}
               </div>
               {editorId !== "new" && (
                 <div className="px-6">
@@ -401,6 +495,63 @@ export function AdminProducts({ onToast, initialOpen }: {
                 </div>
               )}
             </div>
+
+            {productTab === "product" && current && editorId !== "new" && (
+              <div className="border-b border-[#eef2f3] bg-white px-6 py-5">
+                <p className="mb-3 text-[13px] font-semibold text-[#2b2d42]">Загальні дані</p>
+                <div className="mb-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Категорія</p>
+                    <p className="mt-0.5 text-[13px] text-[#2b2d42]">{current.category || "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Статус</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[13px] text-[#2b2d42]">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: moderationLabel(current).color }} />
+                      {moderationLabel(current).label}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Код товару</p>
+                    <p className="mt-0.5 font-mono text-[13px] text-[#2b2d42]">{current.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Створено</p>
+                    <p className="mt-0.5 text-[13px] text-[#2b2d42]">{new Date(current.created_at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Оновлено</p>
+                    <p className="mt-0.5 text-[13px] text-[#2b2d42]">{new Date(current.updated_at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                </div>
+                {/* Moderation actions — the visible set depends on current status,
+                    exactly as in Intertop (a Чернетка offers «На модерацію»; a
+                    На модерації item offers Підтвердити/На доопрацювання/В чернетку). */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {current.moderation_status === "draft" && (
+                    <ActionBtn primary busy={transitioning} onClick={() => transition({ moderation_status: "pending" }, "Чернетка → На модерації")}>На модерацію</ActionBtn>
+                  )}
+                  {current.moderation_status === "pending" && (
+                    <>
+                      <ActionBtn primary busy={transitioning} onClick={() => transition({ moderation_status: "approved", status: "publish" }, "На модерації → Підтверджено")}>Підтвердити</ActionBtn>
+                      <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "rejected" }, "На модерації → Не підтверджено")}>На доопрацювання</ActionBtn>
+                      <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "draft", status: "draft" }, "На модерації → Чернетка")}>В чернетку</ActionBtn>
+                    </>
+                  )}
+                  {current.moderation_status === "rejected" && (
+                    <>
+                      <ActionBtn primary busy={transitioning} onClick={() => transition({ moderation_status: "approved", status: "publish" }, "Не підтверджено → Підтверджено")}>Підтвердити</ActionBtn>
+                      <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "draft", status: "draft" }, "Не підтверджено → Чернетка")}>В чернетку</ActionBtn>
+                    </>
+                  )}
+                  {current.moderation_status === "approved" && (
+                    <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "draft", status: "draft" }, "Підтверджено → Чернетка")}>В чернетку</ActionBtn>
+                  )}
+                  <ActionBtn danger onClick={removeCurrent}>Видалити</ActionBtn>
+                  <ActionBtn busy={transitioning} onClick={duplicateCurrent}>Копіювати</ActionBtn>
+                </div>
+              </div>
+            )}
 
             {productTab === "offers" && editorId !== "new" && (
               <div className="px-5 py-5">
@@ -489,6 +640,11 @@ export function AdminProducts({ onToast, initialOpen }: {
                     <input type="checkbox" checked={draft.status === "publish"} onChange={(e) => setDraft({ ...draft, status: e.target.checked ? "publish" : "draft" })} /> Опубліковано
                   </label>
                 </div>
+                {editorId !== "new" && (
+                  <p className="mt-2 text-[11px] text-[#8a94a0]">
+                    Ручний перемикач для швидкого правлення — офіційний робочий процес модерації вище («Загальні дані») теж керує цим полем.
+                  </p>
+                )}
               </DetailCard>
 
               {error && <p className="text-[13px] text-[#e5484d]">{error}</p>}
@@ -515,6 +671,24 @@ export function AdminProducts({ onToast, initialOpen }: {
 function BulkBtn({ onClick, children, danger }: { onClick: () => void; children: React.ReactNode; danger?: boolean }) {
   return (
     <button onClick={onClick} className={`rounded-[3px] px-2.5 py-1 text-[11px] uppercase tracking-wider transition-colors ${danger ? "text-[#ff8b7e] hover:bg-white/10" : "text-white/85 hover:bg-white/10"}`}>
+      {children}
+    </button>
+  );
+}
+
+/** Product-header moderation action (ПІДТВЕРДИТИ/НА ДООПРАЦЮВАННЯ/etc) —
+ *  primary = filled teal (main forward action), danger = red text (delete),
+ *  default = outlined neutral. */
+function ActionBtn({ onClick, children, primary, danger, busy }: {
+  onClick: () => void; children: React.ReactNode; primary?: boolean; danger?: boolean; busy?: boolean;
+}) {
+  const cls = primary
+    ? "border-[#2f9488] bg-[#2f9488] text-white hover:bg-[#26766c]"
+    : danger
+    ? "border-[#e6eaec] bg-white text-[#e5484d] hover:border-[#e5484d]"
+    : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#2b2d42]";
+  return (
+    <button onClick={onClick} disabled={busy} className={`h-9 rounded-[4px] border px-4 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors disabled:opacity-50 ${cls}`}>
       {children}
     </button>
   );
@@ -853,7 +1027,7 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
 type HistoryEntry = { id: string; action: string; summary: string; count: number | null; author: string; created_at: string };
 const HISTORY_LABEL: Record<string, string> = {
   save: "Збереження", delete: "Видалення", import: "Імпорт", export: "Експорт",
-  photos: "Фото", settings: "Налаштування",
+  photos: "Фото", settings: "Налаштування", status: "Статус",
 };
 
 function ProductHistoryTab({ productId }: { productId: string }) {

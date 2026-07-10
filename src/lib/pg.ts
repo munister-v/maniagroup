@@ -640,6 +640,15 @@ CREATE TABLE IF NOT EXISTS value_list_items (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_value_list_items_list ON value_list_items(list_id, sort_order);
+
+-- ── Intertop-style moderation workflow (2.1 guide) — layered ON TOP of the
+-- existing products.status (publish/draft), which still gates real storefront
+-- visibility. moderation_status is the admin-facing review state a product
+-- moves through before an admin flips it live: draft → pending → approved
+-- (sets status='publish') | rejected (sent back for edits). Existing rows
+-- default to 'approved' since they're already live, properly-configured
+-- products that never needed this review step.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DEFAULT 'approved';
 `;
 
 /**

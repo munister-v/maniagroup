@@ -11,7 +11,7 @@ import { q } from "./pg";
 
 export type ActivityAction =
   | "import" | "export" | "save" | "delete" | "backup"
-  | "login" | "login_fail" | "photos" | "settings";
+  | "login" | "login_fail" | "photos" | "settings" | "status";
 
 export type ActivityRow = {
   id: string;

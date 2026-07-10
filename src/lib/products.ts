@@ -31,6 +31,10 @@ export type AdminProductInput = {
   sale_price?: number | null;
   is_in_stock?: boolean;
   status?: string;
+  /** Admin review workflow (Intertop 2.1 guide): draft → pending → approved
+   *  (auto-publishes) | rejected. Separate from `status`, which still gates
+   *  real storefront visibility — see lib/pg.ts schema comment. */
+  moderation_status?: string;
   /** Publish this product even without a photo (per-product override of the
    *  site-wide "require_product_photo" setting) — see lib/productSource.ts. */
   show_without_photo?: boolean;
@@ -281,15 +285,15 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
   await q(
     `INSERT INTO products
       (id, sku, factory_article, name, slug, brand, category, category_slug, gender,
-       price, regular_price, sale_price, is_in_stock, status,
+       price, regular_price, sale_price, is_in_stock, status, moderation_status,
        image_src, images, attributes, description, short_description,
        color, country, season, collection, composition)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
     [
       id, input.sku ?? "", input.factory_article ?? "", input.name, slug, input.brand ?? "Mania Group",
       input.category ?? "Одяг", input.category_slug || slugify(input.category ?? "tovar") || "tovar",
       input.gender ?? "", price, input.regular_price, input.sale_price ?? null,
-      input.is_in_stock ?? true, input.status ?? "publish",
+      input.is_in_stock ?? true, input.status ?? "draft", input.moderation_status ?? "draft",
       input.image_src ?? input.images?.[0]?.src ?? "",
       JSON.stringify(input.images ?? (input.image_src ? [{ src: input.image_src }] : [])),
       sizeAttributes(input.sizes), input.description ?? "", input.short_description ?? "",
@@ -298,6 +302,46 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
   );
   if (input.sizes && input.sizes.length > 0) await syncManualVariants(id, input.sizes);
   return { id: String(id) };
+}
+
+/**
+ * «Копіювати» (Intertop 2.1 guide, §4): clone a product so the admin can
+ * spin off a color/size variant without retyping everything. Per the guide,
+ * only "фото, артикул/код товару продавця, колір, ціну тощо" need changing
+ * afterwards — so SKU is cleared (must be unique) and the copy restarts at
+ * Чернетка, but everything else (name, images, description, size grid with
+ * stock zeroed) carries over as a starting point.
+ */
+export async function duplicateAdminProduct(id: string): Promise<{ id: string }> {
+  const src = await q1<Record<string, unknown>>(`SELECT * FROM products WHERE id = $1`, [Number(id)]);
+  if (!src) throw new Error("Товар не знайдено");
+  const sizes = await q<{ size: string }>(
+    `SELECT DISTINCT size FROM product_variants WHERE product_id = $1 AND active ORDER BY size`,
+    [Number(id)],
+  );
+  return createAdminProduct({
+    name: `${src.name} (копія)`,
+    brand: String(src.brand ?? ""),
+    factory_article: String(src.factory_article ?? ""),
+    category: String(src.category ?? ""),
+    category_slug: String(src.category_slug ?? ""),
+    gender: String(src.gender ?? ""),
+    regular_price: Number(src.regular_price) || 0,
+    sale_price: src.sale_price != null ? Number(src.sale_price) : null,
+    is_in_stock: false,
+    status: "draft",
+    moderation_status: "draft",
+    image_src: String(src.image_src ?? ""),
+    images: (() => { try { return JSON.parse(String(src.images ?? "[]")); } catch { return []; } })(),
+    sizes: sizes.map((s) => ({ size: s.size, qty: 0 })),
+    description: String(src.description ?? ""),
+    short_description: String(src.short_description ?? ""),
+    color: String(src.color ?? ""),
+    country: String(src.country ?? ""),
+    season: String(src.season ?? ""),
+    collection: String(src.collection ?? ""),
+    composition: String(src.composition ?? ""),
+  });
 }
 
 export async function updateAdminProduct(id: string, input: Partial<AdminProductInput>): Promise<void> {
@@ -317,6 +361,7 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   if (input.sale_price !== undefined) add("sale_price", input.sale_price);
   if (input.is_in_stock !== undefined) add("is_in_stock", input.is_in_stock);
   if (input.status !== undefined) add("status", input.status);
+  if (input.moderation_status !== undefined) add("moderation_status", input.moderation_status);
   if (input.show_without_photo !== undefined) add("show_without_photo", input.show_without_photo);
   if (input.image_src !== undefined) add("image_src", input.image_src);
   if (input.images !== undefined) add("images", JSON.stringify(input.images));
