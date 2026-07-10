@@ -157,12 +157,15 @@ function buildProductFilters(opts: ProductFilterOpts) {
     bind.push(`%${opts.q}%`);
     const i = bind.length;
     // Extended search: name / brand / sku (+ normalized) / factory_article,
-    // plus variant barcode & offer_code via EXISTS (find a product by a size code).
+    // plus variant barcode, offer_code & size via EXISTS (find a product by a
+    // size code — kept in sync with lib/variants.ts's Торгові пропозиції
+    // search, which matches v.size, so the two screens agree on what a
+    // number like "30" finds instead of silently disagreeing).
     conds.push(`(name ILIKE $${i} OR brand ILIKE $${i} OR sku ILIKE $${i}
       OR replace(replace(replace(replace(sku,' ',''),'-',''),'.',''),'_','') ILIKE $${i}
       OR factory_article ILIKE $${i}
       OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id
-                 AND (v.barcode ILIKE $${i} OR v.offer_code ILIKE $${i})))`);
+                 AND (v.barcode ILIKE $${i} OR v.offer_code ILIKE $${i} OR v.size ILIKE $${i})))`);
   }
   if (opts.stock === "in") conds.push("is_in_stock = TRUE");
   if (opts.stock === "out") conds.push("is_in_stock = FALSE");

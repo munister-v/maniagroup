@@ -45,7 +45,13 @@ export async function listAdminVariants(
   if (opts.q?.trim()) {
     bind.push(`%${opts.q.trim()}%`);
     const i = bind.length;
-    where.push(`(v.barcode ILIKE $${i} OR p.sku ILIKE $${i} OR p.name ILIKE $${i} OR v.size ILIKE $${i})`);
+    // Kept in sync with lib/products.ts's Список товарів search (same field
+    // set: name/brand/sku+normalized/factory_article/barcode/offer_code/size)
+    // so the two screens never disagree on what a given number finds.
+    where.push(`(v.barcode ILIKE $${i} OR v.offer_code ILIKE $${i} OR v.size ILIKE $${i}
+      OR p.sku ILIKE $${i}
+      OR replace(replace(replace(replace(p.sku,' ',''),'-',''),'.',''),'_','') ILIKE $${i}
+      OR p.name ILIKE $${i} OR p.brand ILIKE $${i} OR p.factory_article ILIKE $${i})`);
   }
   if (opts.active === "1") where.push(`v.active = TRUE`);
   else if (opts.active === "0") where.push(`v.active = FALSE`);
