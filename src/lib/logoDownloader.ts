@@ -65,6 +65,12 @@ export async function downloadLogoForBrand(brand: string, domain: string): Promi
 
   sources.push(`https://${domain}/apple-touch-icon.png`);
   sources.push(`https://www.${domain}/apple-touch-icon.png`);
+  sources.push(`https://${domain}/apple-touch-icon-precomposed.png`);
+  sources.push(`https://${domain}/favicon.ico`);
+  sources.push(`https://www.${domain}/favicon.ico`);
+  // No-token fallback: Google's public favicon proxy, low-res but reliably
+  // available for almost any domain — better than a bare text wordmark.
+  sources.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`);
 
   for (const src of sources) {
     const buf = await tryFetch(src);

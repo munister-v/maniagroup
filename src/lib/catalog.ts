@@ -277,3 +277,31 @@ export const MEGA_MENU: MegaMenu[] = [
   },
 ];
 
+/** The real, site-navigation-defined category taxonomy (category_slug + label
+ *  + which genders it applies to), derived straight from MEGA_MENU so the
+ *  admin product editor's category picker can never drift out of sync with
+ *  what the storefront nav actually links to. */
+export type CategoryOption = { slug: string; label: string; genders: ("men" | "women")[] };
+
+export const PRODUCT_CATEGORIES: CategoryOption[] = (() => {
+  const map = new Map<string, { label: string; genders: Set<"men" | "women"> }>();
+  for (const menu of MEGA_MENU) {
+    const menuGender = menu.label === "Жінкам" ? "women" : menu.label === "Чоловікам" ? "men" : null;
+    if (!menuGender) continue;
+    for (const col of menu.columns) {
+      for (const link of col.links) {
+        const qs = new URLSearchParams(link.href?.split("?")[1] ?? "");
+        const slug = qs.get("category");
+        if (!slug) continue;
+        const gender = (qs.get("gender") as "men" | "women" | null) ?? menuGender;
+        const entry = map.get(slug) ?? { label: link.label, genders: new Set<"men" | "women">() };
+        entry.genders.add(gender);
+        map.set(slug, entry);
+      }
+    }
+  }
+  return [...map.entries()]
+    .map(([slug, v]) => ({ slug, label: v.label, genders: [...v.genders] }))
+    .sort((a, b) => a.label.localeCompare(b.label, "uk"));
+})();
+

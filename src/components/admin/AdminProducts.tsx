@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatPrice } from "@/lib/catalog";
+import { formatPrice, PRODUCT_CATEGORIES } from "@/lib/catalog";
 import { DetailCard } from "./intertop/primitives";
 
 type Row = {
@@ -44,6 +44,7 @@ type Draft = {
   sku: string;
   factory_article: string;
   category: string;
+  category_slug: string;
   gender: string;
   regular_price: string;
   sale_price: string;
@@ -60,7 +61,7 @@ type Draft = {
 };
 
 const EMPTY_DRAFT: Draft = {
-  name: "", brand: "", sku: "", factory_article: "", category: "", gender: "",
+  name: "", brand: "", sku: "", factory_article: "", category: "", category_slug: "", gender: "",
   regular_price: "", sale_price: "", is_in_stock: true, status: "publish",
   images: [], sizes: [], color: "", composition: "", season: "", country: "",
   short_description: "", description: "",
@@ -83,7 +84,7 @@ function draftFromProduct(p: FullProduct): Draft {
   const images = (p.images ?? []).map((i) => i.src).filter(Boolean);
   if (images.length === 0 && p.image_src) images.push(p.image_src);
   return {
-    name: p.name, brand: p.brand, sku: p.sku, factory_article: p.factory_article ?? "", category: p.category, gender: p.gender,
+    name: p.name, brand: p.brand, sku: p.sku, factory_article: p.factory_article ?? "", category: p.category, category_slug: p.category_slug ?? "", gender: p.gender,
     regular_price: String(p.regular_price ?? ""), sale_price: p.sale_price ? String(p.sale_price) : "",
     is_in_stock: p.is_in_stock, status: p.status, images,
     sizes, color: p.color ?? "", composition: p.composition ?? "", season: p.season ?? "",
@@ -98,6 +99,7 @@ function draftToPayload(d: Draft) {
     sku: d.sku.trim(),
     factory_article: d.factory_article.trim(),
     category: d.category.trim() || "Одяг",
+    category_slug: d.category_slug,
     gender: d.gender,
     regular_price: Number(d.regular_price) || 0,
     sale_price: d.sale_price ? Number(d.sale_price) : null,
@@ -397,12 +399,26 @@ export function AdminProducts({ onToast, initialOpen }: {
                     <span className="mt-1 block text-[10px] text-[#aab4bf]">Саме за цим кодом залишки/ціни з файлу ОСТАТКИ автоматично підтягнуться до цього товару — без нього доведеться оновлювати вручну.</span>
                   </label>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block"><span className={lbl}>Категорія</span><input className={inp} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} /></label>
                     <label className="block"><span className={lbl}>Стать</span>
-                      <select className={inp} value={draft.gender} onChange={(e) => setDraft({ ...draft, gender: e.target.value })}>
+                      <select className={inp} value={draft.gender} onChange={(e) => {
+                        const gender = e.target.value;
+                        const stillValid = PRODUCT_CATEGORIES.find((c) => c.slug === draft.category_slug)?.genders.includes(gender as "men" | "women");
+                        setDraft(stillValid ? { ...draft, gender } : { ...draft, gender, category: "", category_slug: "" });
+                      }}>
                         <option value="">—</option>
                         <option value="women">Жінкам</option>
                         <option value="men">Чоловікам</option>
+                      </select>
+                    </label>
+                    <label className="block"><span className={lbl}>Категорія</span>
+                      <select className={inp} value={draft.category_slug} onChange={(e) => {
+                        const opt = PRODUCT_CATEGORIES.find((c) => c.slug === e.target.value);
+                        setDraft({ ...draft, category_slug: opt?.slug ?? "", category: opt?.label ?? "" });
+                      }}>
+                        <option value="">— оберіть категорію —</option>
+                        {PRODUCT_CATEGORIES.filter((c) => !draft.gender || c.genders.includes(draft.gender as "men" | "women")).map((c) => (
+                          <option key={c.slug} value={c.slug}>{c.label}</option>
+                        ))}
                       </select>
                     </label>
                   </div>
