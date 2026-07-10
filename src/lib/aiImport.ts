@@ -17,15 +17,21 @@ export type AiMapping = {
 
 const SCHEMA_HINT = `Target schema:
 
-"offers" — price/stock list, ONE ROW PER SIZE VARIANT. Fields (use the most likely column):
+"offers" — price/stock list, usually one row per size variant, but some
+categories (e.g. beauty/cosmetics) have no size at all — one row IS the whole
+product. Fields (use the most likely column):
   external_id   → product id / код товару / external_code / ID
   factory_article → заводський артикул / factory article / артикул виробника
+  article       → артикул / article (the SELLER's own internal product number —
+                  distinct from factory_article, which is the SUPPLIER's code)
   barcode       → штрихкод / EAN / barcode
-  size          → розмір / размер / size / clother_size — REQUIRED
+  size          → розмір / размер / size / clother_size — omit if the file has
+                  no size column at all (e.g. beauty/cosmetics feeds)
   offer_code    → код оферу / mp-code / offer_id / SKU
   quantity      → кількість / наявність / qty / stock / залишок (integer stock count)
   base_price    → базова ціна / ціна / regular price (numeric)
-  discount_price → акційна ціна / sale price / знижка (numeric, optional)`;
+  discount_price → акційна ціна / sale price / знижка (numeric, optional)
+  active        → активність / active (yes/no — whether the offer is enabled)`;
 
 function renderRows(grid: unknown[][], maxRows = 12, maxCols = 28): string {
   // Find first non-empty row to use as anchor
@@ -68,7 +74,7 @@ export async function aiDetectImport(grid: unknown[][]): Promise<AiMapping | nul
         `Return JSON exactly:\n` +
         `{"kind":"offers","headerRow":<0-based row index>,"columns":{"<field>":<colIndex>,...}}\n` +
         `Rules:\n` +
-        `- "size" column MUST be mapped.\n` +
+        `- Map "size" if the file has one; if not (e.g. beauty/cosmetics — no per-size rows), skip it — that's fine.\n` +
         `- Only include fields you are confident about (skip unsure ones).\n` +
         `- If the file doesn't match, return {"kind":"unknown"}.\n` +
         `- No prose, no markdown — pure JSON only.`,

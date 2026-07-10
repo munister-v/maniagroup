@@ -5,8 +5,20 @@
  *   • OFFERS — Intertop prices.csv (8 cols, one row per trade offer / size):
  *              external_Id, factory_article, barcode, size, offer_code,
  *              quantity, base_price, discount_price.
- *              Also accepts the odezda.xlsx template (Ukrainian labels), and
- *              a WooCommerce variable/variation export.
+ *              Also accepts the odezda.xlsx template (Ukrainian labels), the
+ *              full Intertop agora Marketplace export template (any vertical
+ *              — verified against the real beauty/cosmetics one, which adds
+ *              `article`/`active` columns and has NO size column at all —
+ *              see below), and a WooCommerce variable/variation export.
+ *
+ * Not every vertical is per-size: beauty/cosmetics rows have no "Розмір" at
+ * all (one row = one product), so `size` is optional at the detection level
+ * — a row with no size column falls back to a single "ОД" (one-unit) variant
+ * rather than getting rejected. `article` ("Артикул") is a genuinely distinct
+ * identifier from `factory_article` in the full template — Intertop's own
+ * internal product number vs the supplier's code — and is what we prefer for
+ * OUR internal sku when auto-creating a product, over the more generic
+ * external_id. `active` ("Активність") maps straight to product_variants.active.
  *
  * Rows that resolve to no existing product but carry enough descriptive data
  * (odezda-style rich columns) auto-create the product — see
@@ -48,6 +60,7 @@ export type OfferProductInfo = {
 export type OfferRow = {
   external_id: string; factory_article: string; barcode: string; size: string;
   offer_code: string; quantity: number | null; base_price: number; discount_price: number;
+  article: string; active?: boolean;
   product?: OfferProductInfo;
 };
 export type Parsed =
@@ -102,20 +115,25 @@ export function readGrid(buf: Buffer, filename: string): unknown[][] {
 }
 
 // Column synonyms for the OFFERS format's required fields (machine keys +
-// Ukrainian labels). Deliberately drops "артикул" as an offer_code synonym —
-// in the odezda template that column is identical to "Заводський артикул"
-// (factory_article), so treating it as a distinct offer-level code just
-// duplicated data under the wrong field; barcode is the real per-offer key.
+// Ukrainian labels). "Артикул"/article is deliberately kept separate from
+// "Заводський артикул"/factory_article — in the odezda (fashion) template
+// those two happened to be identical so we dropped article as redundant, but
+// the full Intertop agora export (e.g. the beauty-category template) carries
+// them as genuinely distinct columns: article is Intertop's own internal
+// product number, factory_article is the supplier's code. See offer_code
+// (mp-code) vs barcode (real per-offer key) — four separate identifiers.
 type OfferReqKey = Exclude<keyof OfferRow, "product">;
 const OFFER_SYN: Record<OfferReqKey, string[]> = {
   external_id:     ["external_id", "код товару", "external_code"],
   factory_article: ["factory_article", "заводський артикул"],
+  article:         ["article", "артикул"],
   barcode:         ["barcode", "штрихкод"],
   size:            ["size", "розмір", "розмір одягу", "clother_size"],
   offer_code:      ["offer_code", "код оффера"],
   quantity:        ["quantity", "кількість", "наявність", "qty"],
   base_price:      ["base_price", "базова ціна", "ціна"],
   discount_price:  ["discount_price", "акційна ціна"],
+  active:          ["active", "активність", "активность"],
 };
 
 // Descriptive columns odezda-style rich OFFERS files carry — optional, only
@@ -139,8 +157,14 @@ function offerColumns(cells: string[]): Record<OfferReqKey, number> | null {
   (Object.keys(OFFER_SYN) as OfferReqKey[]).forEach((k) => {
     idx[k] = cells.findIndex((c) => OFFER_SYN[k].includes(c));
   });
-  // A price/stock file must have a size and at least one of price/quantity.
-  if (idx.size < 0) return null;
+  // Most real feeds are per-size (fashion), but some categories genuinely have
+  // no size (e.g. beauty/cosmetics — Intertop's own agora template for that
+  // vertical has no "Розмір" column at all, just article/barcode + qty/price).
+  // Accept either: a size column, or at least one other identifying code
+  // column alongside price/quantity — size then falls back to a single
+  // default "unit" variant (see parseOffers).
+  const hasIdentifier = idx.size >= 0 || idx.article >= 0 || idx.external_id >= 0 || idx.factory_article >= 0 || idx.barcode >= 0;
+  if (!hasIdentifier) return null;
   if (idx.base_price < 0 && idx.quantity < 0) return null;
   return idx;
 }
@@ -265,6 +289,7 @@ function parseWp(grid: unknown[][], headerRow: number): OfferRow[] {
     rows.push({
       external_id: extId,
       factory_article: fa || lastParentSku,
+      article: "",
       barcode: "",
       size,
       offer_code: sku,
@@ -292,10 +317,12 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
   const c = mapping.columns;
   const idx: Record<OfferReqKey, number> = {
     external_id: c.external_id ?? -1, factory_article: c.factory_article ?? -1,
-    barcode: c.barcode ?? -1, size: c.size ?? -1, offer_code: c.offer_code ?? -1,
+    article: c.article ?? -1, barcode: c.barcode ?? -1, size: c.size ?? -1, offer_code: c.offer_code ?? -1,
     quantity: c.quantity ?? -1, base_price: c.base_price ?? -1, discount_price: c.discount_price ?? -1,
+    active: c.active ?? -1,
   };
-  if (idx.size < 0) return fast;
+  const hasIdentifier = idx.size >= 0 || idx.article >= 0 || idx.external_id >= 0 || idx.factory_article >= 0 || idx.barcode >= 0;
+  if (!hasIdentifier) return fast;
   return { kind: "offers", filename, rows: parseOffers(grid, mapping.headerRow + 1, idx), ai: true };
 }
 
@@ -307,14 +334,20 @@ function parseOffers(
   const rows: OfferRow[] = [];
   for (let i = from; i < grid.length; i++) {
     const r = grid[i] ?? [];
-    const size = at(r, idx.size);
+    const rawSize = at(r, idx.size);
     const ext = at(r, idx.external_id);
     const fa = at(r, idx.factory_article);
+    const art = at(r, idx.article);
     const offer = at(r, idx.offer_code);
     const bc = at(r, idx.barcode);
-    if (!size && !ext && !fa && !offer && !bc) continue; // blank line
+    if (!rawSize && !ext && !fa && !art && !offer && !bc) continue; // blank line
     // Skip a possible second machine-key header row (e.g. odezda template).
-    if (norm(size) === "size" || norm(size) === "clother_size") continue;
+    if (norm(rawSize) === "size" || norm(rawSize) === "clother_size") continue;
+    // No size column at all (e.g. beauty/cosmetics — no per-size variants) ⇒
+    // one row is the whole product, filed as a single "unit" variant.
+    const size = rawSize || (idx.size < 0 ? "ОД" : rawSize);
+    const activeRaw = idx.active >= 0 ? norm(at(r, idx.active)) : "";
+    const active = activeRaw ? /^(1|так|yes|true|\+|активн)/i.test(activeRaw) : undefined;
 
     let product: OfferProductInfo | undefined;
     if (prodIdx) {
@@ -337,8 +370,8 @@ function parseOffers(
     }
 
     rows.push({
-      external_id: ext, factory_article: fa, barcode: bc, size,
-      offer_code: offer,
+      external_id: ext, factory_article: fa, article: art, barcode: bc, size,
+      offer_code: offer, active,
       quantity: idx.quantity >= 0 && String(r[idx.quantity] ?? "") !== "" ? Math.max(0, Math.round(num(r[idx.quantity]))) : null,
       base_price: idx.base_price >= 0 ? num(r[idx.base_price]) : 0,
       discount_price: idx.discount_price >= 0 ? num(r[idx.discount_price]) : 0,
@@ -405,7 +438,9 @@ async function loadProducts(ids: number[]) {
 /** Resolve every offer row → product id, using the matching chain. */
 export async function resolveOfferTargets(rows: OfferRow[]) {
   const factoryArticles = [...new Set(rows.map((r) => r.factory_article).filter(Boolean))];
-  const externalIds = [...new Set(rows.map((r) => r.external_id).filter(Boolean))];
+  // article ("Артикул" — Intertop's own internal product number) matches the
+  // same products.sku column external_id does; merged into one lookup.
+  const externalIds = [...new Set(rows.flatMap((r) => [r.external_id, r.article]).filter(Boolean))];
   const offerCodes = [...new Set(rows.map((r) => r.offer_code).filter(Boolean))];
   const barcodes = [...new Set(rows.map((r) => r.barcode).filter(Boolean))];
 
@@ -437,6 +472,7 @@ export async function resolveOfferTargets(rows: OfferRow[]) {
   const target = (r: OfferRow): number | null =>
     (r.offer_code && offerMap.get(r.offer_code)) ||
     (r.barcode && barcodeMap.get(r.barcode)) ||
+    (r.article && skuMap.get(r.article)) ||
     (r.factory_article && faMap.get(r.factory_article)) ||
     (r.external_id && skuMap.get(r.external_id)) || null;
   return target;
@@ -446,7 +482,7 @@ export async function resolveOfferTargets(rows: OfferRow[]) {
  *  (shared across every size of one product in the odezda template), fall
  *  back to external_id, then offer_code. Empty string ⇒ ungroupable. */
 function offerGroupKey(r: OfferRow): string {
-  return r.factory_article || r.external_id || r.offer_code || "";
+  return r.article || r.factory_article || r.external_id || r.offer_code || "";
 }
 
 /**
@@ -503,7 +539,7 @@ async function createProductFromOffer(
      ON CONFLICT (id) DO NOTHING
      RETURNING id::text`,
     [
-      id, sample.external_id || "", sample.factory_article || key, name, slug,
+      id, sample.article || sample.external_id || "", sample.factory_article || key, name, slug,
       product.brand || "Mania Group", category, categorySlug, product.gender || "",
       price, sample.base_price || 0, sample.discount_price > 0 && sample.discount_price < sample.base_price ? sample.discount_price : null,
       false, product.description_uk || product.description_ru || "",
@@ -632,7 +668,7 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
       const sale = r.discount_price > 0 && (!r.base_price || r.discount_price < r.base_price) ? r.discount_price : null;
       res.stockMovements += await upsertVariantStock(
         client, pid, r.size, r.quantity, r.base_price > 0 ? r.base_price : null, sale,
-        { barcode: r.barcode || undefined, offer_code: r.offer_code || undefined },
+        { barcode: r.barcode || undefined, offer_code: r.offer_code || undefined, active: r.active },
         importNote,
       );
       res.variantsUpserted++;
@@ -680,7 +716,7 @@ async function upsertVariantStock(
   client: import("pg").PoolClient,
   productId: number, size: string, qty: number | null,
   price: number | null, sale?: number | null,
-  meta?: { barcode?: string; offer_code?: string },
+  meta?: { barcode?: string; offer_code?: string; active?: boolean },
   importNote = "Імпорт цін/залишків",
 ): Promise<number> {
   if (!size.trim()) return 0;
@@ -705,6 +741,7 @@ async function upsertVariantStock(
   if (sale !== undefined) add("sale_price", sale, "::numeric");
   if (meta?.barcode) add("barcode", meta.barcode);
   if (meta?.offer_code) add("offer_code", meta.offer_code);
+  if (meta?.active !== undefined) add("active", meta.active);
   let movement = 0;
   if (qty != null) {
     const after = Math.max(0, Math.round(qty));
