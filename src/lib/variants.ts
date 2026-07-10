@@ -31,7 +31,7 @@ export type AdminVariant = {
   image_src: string;
 };
 
-export type VariantFilter = { q?: string; active?: string; inStock?: string; category?: string; siteStatus?: string };
+export type VariantFilter = { q?: string; active?: string; inStock?: string; category?: string; siteStatus?: string; productId?: string };
 
 export async function listAdminVariants(
   opts: VariantFilter & { page?: number; perPage?: number },
@@ -52,6 +52,7 @@ export async function listAdminVariants(
   if (opts.inStock === "in") where.push(`v.stock_qty > 0`);
   else if (opts.inStock === "out") where.push(`v.stock_qty = 0`);
   if (opts.category?.trim()) { bind.push(opts.category.trim()); where.push(`p.category = $${bind.length}`); }
+  if (opts.productId) { bind.push(Number(opts.productId)); where.push(`v.product_id = $${bind.length}`); }
   // «На сайті» = parent published, offer active, stock mirror on; «hidden» = not.
   if (opts.siteStatus === "live") where.push(`(p.status = 'publish' AND v.active AND p.is_in_stock)`);
   else if (opts.siteStatus === "hidden") where.push(`NOT (p.status = 'publish' AND v.active AND p.is_in_stock)`);
@@ -118,4 +119,42 @@ export async function bulkUpdateVariants(ids: string[], patch: VariantPatch): Pr
     [idNums],
   );
   return idNums.length;
+}
+
+/**
+ * Per-row bulk save — each variant gets its own patch (Intertop's inline
+ * «Торгові пропозиції» edit-row: every offer's price/stock differs). Mirrors
+ * lib/products.ts bulkUpdateProducts's {id, fields}[] shape.
+ */
+export async function updateVariantsIndividually(updates: { id: string; patch: VariantPatch }[]): Promise<number> {
+  let n = 0;
+  const touchedProducts = new Set<number>();
+  for (const u of updates) {
+    const id = Number(u.id);
+    if (!Number.isFinite(id) || !u.patch || Object.keys(u.patch).length === 0) continue;
+    const sets: string[] = [];
+    const bind: unknown[] = [];
+    if (u.patch.stock_qty !== undefined) { bind.push(u.patch.stock_qty); sets.push(`stock_qty = $${bind.length}`); }
+    if (u.patch.price !== undefined) { bind.push(u.patch.price); sets.push(`price = $${bind.length}`); }
+    if (u.patch.sale_price !== undefined) { bind.push(u.patch.sale_price); sets.push(`sale_price = $${bind.length}`); }
+    if (u.patch.active !== undefined) { bind.push(u.patch.active); sets.push(`active = $${bind.length}`); }
+    if (sets.length === 0) continue;
+    sets.push(`updated_at = now()`, `updated_by = 'admin'`);
+    bind.push(id);
+    const res = await q<{ product_id: string }>(
+      `UPDATE product_variants SET ${sets.join(", ")} WHERE id = $${bind.length} RETURNING product_id::text`, bind,
+    );
+    if (res.length) { n++; touchedProducts.add(Number(res[0].product_id)); }
+  }
+  if (touchedProducts.size) {
+    await q(
+      `UPDATE products p
+          SET is_in_stock = (sub.total > 0), updated_at = now()
+         FROM (SELECT product_id, COALESCE(SUM(stock_qty), 0) AS total
+                 FROM product_variants WHERE active GROUP BY product_id) sub
+        WHERE p.id = sub.product_id AND p.id = ANY($1)`,
+      [[...touchedProducts]],
+    );
+  }
+  return n;
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatPrice, PRODUCT_CATEGORIES } from "@/lib/catalog";
-import { DetailCard } from "./intertop/primitives";
+import { DetailCard, SubTabs } from "./intertop/primitives";
 
 type Row = {
   id: string;
@@ -129,6 +129,7 @@ export function AdminProducts({ onToast, initialOpen }: {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editorId, setEditorId] = useState<string | "new" | null>(null);
+  const [productTab, setProductTab] = useState<"product" | "offers" | "history">("product");
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -192,12 +193,14 @@ export function AdminProducts({ onToast, initialOpen }: {
     if (!res.ok) return;
     const p = (await res.json()) as FullProduct;
     setDraft(draftFromProduct(p));
+    setProductTab("product");
     setEditorId(id);
   }
 
   function openNew() {
     setError("");
     setDraft(EMPTY_DRAFT);
+    setProductTab("product");
     setEditorId("new");
   }
 
@@ -379,11 +382,38 @@ export function AdminProducts({ onToast, initialOpen }: {
         <div className="fixed inset-0 z-[80] flex justify-end">
           <div onClick={() => setEditorId(null)} className="absolute inset-0 bg-black/40" />
           <div className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eef2f3] bg-white px-6 py-4">
-              <h3 className="text-[15px] font-medium text-[#2b2d42]">{editorId === "new" ? "Новий товар" : "Редагування товару"}</h3>
-              <button onClick={() => setEditorId(null)} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
+            <div className="sticky top-0 z-10 border-b border-[#eef2f3] bg-white">
+              <div className="flex items-center justify-between px-6 py-4">
+                <h3 className="text-[15px] font-medium text-[#2b2d42]">{editorId === "new" ? "Новий товар" : "Редагування товару"}</h3>
+                <button onClick={() => setEditorId(null)} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
+              </div>
+              {editorId !== "new" && (
+                <div className="px-6">
+                  <SubTabs
+                    tabs={[
+                      { id: "product", label: "Товар" },
+                      { id: "offers", label: "Торгові пропозиції" },
+                      { id: "history", label: "Історія статусів" },
+                    ]}
+                    active={productTab}
+                    onChange={setProductTab}
+                  />
+                </div>
+              )}
             </div>
 
+            {productTab === "offers" && editorId !== "new" && (
+              <div className="px-5 py-5">
+                <ProductOffersTab productId={editorId} onToast={onToast} />
+              </div>
+            )}
+            {productTab === "history" && editorId !== "new" && (
+              <div className="px-5 py-5">
+                <ProductHistoryTab productId={editorId} />
+              </div>
+            )}
+
+            {productTab === "product" && (
             <div className="bg-[#f4f6f7] px-5 py-5">
               <DetailCard title="Дані про товар">
                 <div className="space-y-4">
@@ -463,7 +493,9 @@ export function AdminProducts({ onToast, initialOpen }: {
 
               {error && <p className="text-[13px] text-[#e5484d]">{error}</p>}
             </div>
+            )}
 
+            {productTab === "product" && (
             <div className="sticky bottom-0 flex gap-3 border-t border-[#eef2f3] bg-white px-6 py-4">
               <button onClick={save} disabled={saving} className="h-11 flex-1 border border-[#2f9488] text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
                 {saving ? "Зберігаємо…" : editorId === "new" ? "Створити товар" : "Зберегти зміни"}
@@ -472,6 +504,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                 Скасувати
               </button>
             </div>
+            )}
           </div>
         </div>
       )}
@@ -651,6 +684,210 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
           placeholder="або вставте URL фото" className="h-9 flex-1 border border-[#e6eaec] bg-white px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none" />
         <button type="button" onClick={addUrl} className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] hover:border-[#2b2d42]">Додати</button>
       </div>
+    </div>
+  );
+}
+
+/* ── «Торгові пропозиції» tab (per-product) ──────────────────────────────
+ * Intertop's per-product offers screen: one row per size, edited inline
+ * (toggle + number inputs directly in the table), «Зберегти»/«Скасувати»
+ * at the bottom — not a slide-over. Reuses /api/admin/variants (filtered to
+ * this product) for reads and the new PATCH /api/admin/variants/bulk
+ * (per-row patches) for writes. */
+type OfferRow = {
+  id: string; size: string; sku: string; product_id: string;
+  factory_article: string; stock_qty: number; price: number | null;
+  sale_price: number | null; base_price: number | null; active: boolean;
+};
+type OfferDraft = { stock_qty: string; price: string; sale_price: string; active: boolean };
+
+function ProductOffersTab({ productId, onToast }: { productId: string; onToast?: (m: string) => void }) {
+  const [rows, setRows] = useState<OfferRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [drafts, setDrafts] = useState<Record<string, OfferDraft>>({});
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/admin/variants?productId=${productId}&perPage=200`)
+      .then((r) => r.json())
+      .then((d) => setRows((d.variants ?? []) as OfferRow[]))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [productId]);
+
+  useEffect(load, [load]);
+
+  function startEdit() {
+    const next: Record<string, OfferDraft> = {};
+    for (const r of rows) {
+      next[r.id] = {
+        stock_qty: String(r.stock_qty),
+        price: r.price != null ? String(r.price) : "",
+        sale_price: r.sale_price != null ? String(r.sale_price) : "",
+        active: r.active,
+      };
+    }
+    setDrafts(next);
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    const updates = rows.map((r) => {
+      const d = drafts[r.id];
+      return {
+        id: r.id,
+        patch: {
+          stock_qty: Number(d.stock_qty) || 0,
+          price: d.price ? Number(d.price) : null,
+          sale_price: d.sale_price ? Number(d.sale_price) : null,
+          active: d.active,
+        },
+      };
+    });
+    try {
+      const res = await fetch("/api/admin/variants/bulk", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates, productId }),
+      });
+      const data = await res.json();
+      if (res.ok) { onToast?.(`Оновлено пропозицій: ${data.count}`); setEditing(false); load(); }
+      else onToast?.(data.error ?? "Помилка збереження");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const thCls = "whitespace-nowrap border-b border-[#eef2f3] bg-[#f7f9fa] px-3 py-2 text-left text-[10px] uppercase tracking-wider text-[#8a94a0]";
+  const cellInp = "h-8 w-24 border border-[#e6eaec] bg-white px-2 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none";
+
+  if (loading) return <div className="space-y-2">{[1, 2].map((i) => <div key={i} className="h-10 animate-pulse bg-[#f7f9fa]" />)}</div>;
+  if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-[#8a94a0]">У товару ще немає розмірів/пропозицій — додайте їх на вкладці «Товар».</p>;
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-[12px] text-[#8a94a0]">{rows.length} {rows.length === 1 ? "пропозиція" : "пропозицій"}</p>
+        {!editing && (
+          <button onClick={startEdit} className="h-8 border border-[#2f9488] px-3 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
+            Змінити залишки та ціни
+          </button>
+        )}
+      </div>
+      <div className="overflow-x-auto border border-[#eef2f3]">
+        <table className="w-full border-collapse text-[13px]">
+          <thead>
+            <tr>
+              <th className={thCls}>Активність</th>
+              <th className={thCls}>Внутр. номер</th>
+              <th className={thCls}>SKU</th>
+              <th className={thCls}>Заводський артикул</th>
+              <th className={thCls}>Розмір</th>
+              <th className={thCls}>Ціна</th>
+              <th className={thCls}>Акційна ціна</th>
+              <th className={thCls}>Залишок</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const innerNo = r.sku || r.product_id;
+              const skuCode = `${innerNo}-${r.size}`;
+              const d = drafts[r.id];
+              return (
+                <tr key={r.id} className="border-b border-[#eef2f3]">
+                  <td className="px-3 py-2">
+                    {editing ? (
+                      <button onClick={() => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], active: !p[r.id].active } }))}
+                        className={`relative h-5 w-9 rounded-full transition-colors ${d.active ? "bg-[#2f9488]" : "bg-[#d5dbe0]"}`}>
+                        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${d.active ? "left-[18px]" : "left-0.5"}`} />
+                      </button>
+                    ) : (
+                      <span className="text-[#5a6472]">{r.active ? "Так" : "Ні"}</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-[#2b2d42]">{innerNo}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-[#2b2d42]">{skuCode}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-mono text-[12px] text-[#5a6472]">{r.factory_article || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-[#5a6472]">{r.size || "—"}</td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.price} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], price: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.price != null ? formatPrice(r.price) : r.base_price != null ? formatPrice(r.base_price) : "—"}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.sale_price} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], sale_price: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.sale_price != null ? formatPrice(r.sale_price) : "—"}</span>}
+                  </td>
+                  <td className="px-3 py-2">
+                    {editing
+                      ? <input type="number" className={cellInp} value={d.stock_qty} onChange={(e) => setDrafts((p) => ({ ...p, [r.id]: { ...p[r.id], stock_qty: e.target.value } }))} />
+                      : <span className="text-[#5a6472]">{r.stock_qty}</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {editing && (
+        <div className="mt-3 flex gap-3">
+          <button onClick={save} disabled={saving} className="h-9 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
+            {saving ? "Зберігаємо…" : "Зберегти"}
+          </button>
+          <button onClick={() => setEditing(false)} className="h-9 border border-[#e6eaec] px-5 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
+            Скасувати
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── «Історія статусів» tab (per-product) ────────────────────────────────
+ * Reads /api/admin/products/[id]/activity — admin_activity rows scoped by
+ * product_id. Only entries logged after that column existed show up; older
+ * history simply isn't there (honest empty state, not fabricated). */
+type HistoryEntry = { id: string; action: string; summary: string; count: number | null; author: string; created_at: string };
+const HISTORY_LABEL: Record<string, string> = {
+  save: "Збереження", delete: "Видалення", import: "Імпорт", export: "Експорт",
+  photos: "Фото", settings: "Налаштування",
+};
+
+function ProductHistoryTab({ productId }: { productId: string }) {
+  const [rows, setRows] = useState<HistoryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/admin/products/${productId}/activity`)
+      .then((r) => r.json())
+      .then((d) => setRows((d.activity ?? []) as HistoryEntry[]))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [productId]);
+
+  if (loading) return <div className="space-y-2">{[1, 2, 3].map((i) => <div key={i} className="h-10 animate-pulse bg-[#f7f9fa]" />)}</div>;
+  if (rows.length === 0) {
+    return (
+      <p className="py-8 text-center text-[13px] text-[#8a94a0]">
+        Ще немає записів історії для цього товару — зʼявляться після наступного збереження.
+      </p>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-[#eef2f3] border border-[#eef2f3]">
+      {rows.map((h) => (
+        <div key={h.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-[13px]">
+          <span className="rounded border border-[#e6eaec] bg-[#f7f9fa] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[#5a6472]">
+            {HISTORY_LABEL[h.action] ?? h.action}
+          </span>
+          <span className="min-w-0 flex-1 text-[#2b2d42]">{h.summary}</span>
+          <span className="shrink-0 text-[11px] text-[#8a94a0]">{new Date(h.created_at).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+      ))}
     </div>
   );
 }

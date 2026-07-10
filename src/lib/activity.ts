@@ -24,11 +24,13 @@ export type ActivityRow = {
 
 const KEEP_ROWS = 500;
 
-export async function logActivity(action: ActivityAction, summary: string, count?: number, author = "admin"): Promise<void> {
+export async function logActivity(
+  action: ActivityAction, summary: string, count?: number, author = "admin", productId?: number | string,
+): Promise<void> {
   try {
     await q(
-      "INSERT INTO admin_activity (action, summary, count, author) VALUES ($1, $2, $3, $4)",
-      [action, summary.slice(0, 500), count ?? null, author],
+      "INSERT INTO admin_activity (action, summary, count, author, product_id) VALUES ($1, $2, $3, $4, $5)",
+      [action, summary.slice(0, 500), count ?? null, author, productId ?? null],
     );
     // Cheap bounded retention: prune only occasionally (~1 in 20 writes) so the
     // table can't grow unbounded but we don't run a DELETE on every log call.
@@ -51,5 +53,14 @@ export async function recentActivity(limit = 40): Promise<ActivityRow[]> {
   return q<ActivityRow>(
     "SELECT id::text, action, summary, count, author, created_at::text FROM admin_activity ORDER BY id DESC LIMIT $1",
     [Math.min(200, Math.max(1, limit))],
+  );
+}
+
+/** «Історія статусів» tab — activity scoped to one product. Only covers
+ *  entries logged since the product_id column was added (see pg.ts). */
+export async function productActivity(productId: number | string, limit = 100): Promise<ActivityRow[]> {
+  return q<ActivityRow>(
+    "SELECT id::text, action, summary, count, author, created_at::text FROM admin_activity WHERE product_id = $1 ORDER BY id DESC LIMIT $2",
+    [productId, Math.min(200, Math.max(1, limit))],
   );
 }

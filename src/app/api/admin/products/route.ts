@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   }
   try {
     const { id } = await createAdminProduct(body);
-    logActivity("save", `Створено товар «${body.name}»`, 1);
+    logActivity("save", `Створено товар «${body.name}»`, 1, "admin", id);
     return NextResponse.json({ ok: true, id });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 500 });

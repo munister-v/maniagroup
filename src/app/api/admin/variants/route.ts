@@ -11,6 +11,7 @@ export async function GET(req: Request) {
     inStock: searchParams.get("inStock") ?? undefined,
     category: searchParams.get("category") ?? undefined,
     siteStatus: searchParams.get("siteStatus") ?? undefined,
+    productId: searchParams.get("productId") ?? undefined,
     page: Number(searchParams.get("page") ?? "1"),
     perPage: searchParams.get("perPage") ? Number(searchParams.get("perPage")) : undefined,
   });

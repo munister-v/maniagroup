@@ -17,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = (await req.json()) as Partial<AdminProductInput>;
   try {
     await updateAdminProduct(id, body);
-    logActivity("save", `Оновлено картку товару${body.name ? ` «${body.name}»` : ` #${id}`}`, 1);
+    logActivity("save", `Оновлено картку товару${body.name ? ` «${body.name}»` : ` #${id}`}`, 1, "admin", id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 500 });
@@ -29,7 +29,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   try {
     await deleteAdminProduct(id);
-    logActivity("delete", `Видалено товар #${id}`, 1);
+    logActivity("delete", `Видалено товар #${id}`, 1, "admin", id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 500 });

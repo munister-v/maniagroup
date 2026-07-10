@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type Reac
 import { AdminProducts } from "./AdminProducts";
 import { SocialPostButton } from "./AiAssistant";
 import { BulkPhotoMatcher } from "./BulkPhotoMatcher";
+import { SubTabs } from "./intertop/primitives";
 
 type Row = {
   id: string;
@@ -493,6 +494,18 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           </div>
         );
       })()}
+
+      {mode === "list" && (
+        <SubTabs
+          tabs={[
+            { id: "", label: "Всі товари" },
+            { id: "publish", label: "На сайті" },
+            { id: "draft", label: "Чернетки" },
+          ]}
+          active={statusF}
+          onChange={(v) => { setStatusF(v); setPage(1); }}
+        />
+      )}
 
       {mode === "grid" && (<>
       {/* Intro / how-to — one compact line, expands on demand */}

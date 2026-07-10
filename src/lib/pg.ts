@@ -109,6 +109,12 @@ CREATE TABLE IF NOT EXISTS admin_activity (
 );
 CREATE INDEX IF NOT EXISTS idx_admin_activity_created ON admin_activity(created_at DESC);
 
+-- Per-product activity feed ("Історія статусів" tab, Intertop-style). Nullable —
+-- only entries logged after this column existed can be attributed to a product;
+-- older rows just don't show up in that product's history, which is honest.
+ALTER TABLE admin_activity ADD COLUMN IF NOT EXISTS product_id BIGINT;
+CREATE INDEX IF NOT EXISTS idx_admin_activity_product ON admin_activity(product_id, created_at DESC) WHERE product_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS store_settings (
   key TEXT PRIMARY KEY,
   val TEXT NOT NULL DEFAULT ''
