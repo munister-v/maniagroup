@@ -22,6 +22,9 @@ export type AdminVariant = {
   name: string;
   brand: string;
   category: string;
+  category_slug: string;
+  gender: string;
+  factory_article: string;     // Intertop «Заводський артикул»
   status: string;              // parent product status (publish/draft)
   is_in_stock: boolean;        // parent stock mirror
   base_price: number | null;   // parent regular_price (fallback for price)
@@ -58,7 +61,8 @@ export async function listAdminVariants(
     `SELECT v.id::text AS id, v.product_id::text AS product_id, v.size, v.barcode,
             v.offer_code, v.stock_qty, v.price::float AS price, v.sale_price::float AS sale_price, v.active,
             to_char(v.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at,
-            p.sku, p.name, p.brand, p.category, p.status, p.is_in_stock,
+            p.sku, p.name, p.brand, p.category, p.category_slug, p.gender,
+            p.factory_article, p.status, p.is_in_stock,
             p.regular_price::float AS base_price, p.image_src
        FROM product_variants v
        JOIN products p ON p.id = v.product_id

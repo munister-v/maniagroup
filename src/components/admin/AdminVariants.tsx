@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { SlideOver } from "./intertop/primitives";
 
 /** One product_variants row joined with its parent product. Mirror of
@@ -20,6 +20,9 @@ type Variant = {
   name: string;
   brand: string;
   category: string;
+  category_slug: string;
+  gender: string;
+  factory_article: string;
   status: string;
   is_in_stock: boolean;
   base_price: number | null;
@@ -28,14 +31,59 @@ type Variant = {
 
 const PER_PAGE_OPTS = [20, 50, 100, 200];
 
-// Optional columns the «Колонки» chooser can hide. Core columns (checkbox,
-// Штрихкод, Код товару, Статус, Активність) are always shown.
-type OptCol = "category" | "classifier" | "nameUk" | "nameRu";
-const OPT_COLS: { id: OptCol; label: string }[] = [
-  { id: "category", label: "Категорія" },
-  { id: "classifier", label: "Класифікатор" },
-  { id: "nameUk", label: "Назва (укр.)" },
-  { id: "nameRu", label: "Назва (рос.)" },
+const money = (n: number | null | undefined) =>
+  n == null ? "—" : `${Math.round(Number(n)).toLocaleString("uk-UA")} ₴`;
+
+/** We store a flat category (+ gender), not Intertop's 4-level tree — present it
+ *  Intertop-style as a short «{стать} / {категорія}» path rather than fake it. */
+function classifierPath(v: Variant): string {
+  const g = v.gender === "women" ? "Жінкам" : v.gender === "men" ? "Чоловікам" : "";
+  return [g, v.category].filter(Boolean).join(" / ") || "—";
+}
+
+/**
+ * Full Intertop «Торгові пропозиції» column set, exposed via the «Колонки»
+ * chooser (core columns — checkbox, Штрихкод, Активність, Код товару, Статус —
+ * are always shown). Columns we have real data for render it; the logistics /
+ * packaging dimensions Intertop carries but we don't store render «—», so the
+ * chooser still offers 1:1 parity. `hideDefault` keeps the default view close
+ * to Intertop's leftmost columns instead of a wall of empty dimensions.
+ */
+type OptCol =
+  | "category" | "classifier" | "factoryArticle" | "size" | "sizeClothing"
+  | "price" | "salePrice" | "stock" | "nameUk" | "nameRu"
+  | "heightNet" | "widthNet" | "lengthNet" | "diameterNet" | "volumeNet" | "weightNet"
+  | "pillowSize" | "weightPack" | "heightPack" | "lengthPack" | "widthPack" | "diameterPack"
+  | "bonusProgramId" | "margin";
+
+const OPT_COLS: {
+  id: OptCol; label: string; hideDefault?: boolean; align?: "right";
+  render: (v: Variant) => ReactNode;
+}[] = [
+  { id: "category",       label: "Категорія",              render: (v) => v.category || "—" },
+  { id: "classifier",     label: "Класифікатор",           render: (v) => classifierPath(v) },
+  { id: "factoryArticle", label: "Заводський артикул",      render: (v) => v.factory_article || "—" },
+  { id: "size",           label: "Розмір",                 render: (v) => v.size || "—" },
+  { id: "sizeClothing",   label: "Розмір одягу", hideDefault: true, render: (v) => v.size || "—" },
+  { id: "price",          label: "Ціна",           align: "right", render: (v) => money(v.price ?? v.base_price) },
+  { id: "salePrice",      label: "Акційна ціна",   align: "right", render: (v) => (v.sale_price ? money(v.sale_price) : "—") },
+  { id: "stock",          label: "Залишок на гол. складі", align: "right", render: (v) => v.stock_qty.toLocaleString("uk-UA") },
+  { id: "nameUk",         label: "Назва (укр.)", hideDefault: true, render: () => "—" },
+  { id: "nameRu",         label: "Назва (рос.)",           render: (v) => v.name },
+  { id: "heightNet",      label: "Висота нетто",       hideDefault: true, render: () => "—" },
+  { id: "widthNet",       label: "Ширина нетто",       hideDefault: true, render: () => "—" },
+  { id: "lengthNet",      label: "Довжина нетто",      hideDefault: true, render: () => "—" },
+  { id: "diameterNet",    label: "Діаметр нетто",      hideDefault: true, render: () => "—" },
+  { id: "volumeNet",      label: "Об'єм нетто",        hideDefault: true, render: () => "—" },
+  { id: "weightNet",      label: "Вага нетто",         hideDefault: true, render: () => "—" },
+  { id: "pillowSize",     label: "Розмір наволочки",   hideDefault: true, render: () => "—" },
+  { id: "weightPack",     label: "Вага в упаковці",    hideDefault: true, render: () => "—" },
+  { id: "heightPack",     label: "Висота в упаковці",  hideDefault: true, render: () => "—" },
+  { id: "lengthPack",     label: "Довжина в упаковці", hideDefault: true, render: () => "—" },
+  { id: "widthPack",      label: "Ширина в упаковці",  hideDefault: true, render: () => "—" },
+  { id: "diameterPack",   label: "Діаметр в упаковці", hideDefault: true, render: () => "—" },
+  { id: "bonusProgramId", label: "ID бонусної програми", hideDefault: true, render: () => "—" },
+  { id: "margin",         label: "Маржинальність",     hideDefault: true, render: () => "—" },
 ];
 
 /** Faithful 1:1 clone of Intertop partner «Торгові пропозиції». */
@@ -57,7 +105,7 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [kebabOpen, setKebabOpen] = useState(false);
   const [colsOpen, setColsOpen] = useState(false);
-  const [hidden, setHidden] = useState<Set<OptCol>>(new Set());
+  const [hidden, setHidden] = useState<Set<OptCol>>(() => new Set(OPT_COLS.filter((c) => c.hideDefault).map((c) => c.id)));
   const [editOpen, setEditOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -161,6 +209,8 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const show = (c: OptCol) => !hidden.has(c);
+  const visibleCols = OPT_COLS.filter((c) => !hidden.has(c.id));
+  const colSpan = 5 + visibleCols.length; // checkbox + Штрихкод + Активність + Код товару + Статус
 
   const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
   const selCls = "h-9 rounded-[4px] border border-[#e6eaec] bg-white px-2.5 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
@@ -245,7 +295,7 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
             {colsOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setColsOpen(false)} />
-                <div className="absolute right-0 z-30 mt-1 w-52 rounded-[5px] border border-[#e6eaec] bg-white p-2 shadow-lg">
+                <div className="absolute right-0 z-30 mt-1 max-h-[60vh] w-56 overflow-y-auto rounded-[5px] border border-[#e6eaec] bg-white p-2 shadow-lg">
                   {OPT_COLS.map((c) => (
                     <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[13px] text-[#2b2d42] hover:bg-[#f7f9fa]">
                       <input type="checkbox" checked={show(c.id)} onChange={() => setHidden((h) => { const n = new Set(h); n.has(c.id) ? n.delete(c.id) : n.add(c.id); return n; })} className="h-3.5 w-3.5 accent-[#2f9488]" />
@@ -289,35 +339,33 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
                 <input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
               </th>
               <th className={thCls}>Штрихкод</th>
-              {show("category") && <th className={thCls}>Категорія</th>}
-              {show("classifier") && <th className={thCls}>Класифікатор</th>}
               <th className={thCls}>Активність</th>
               <th className={thCls}>Код товару</th>
               <th className={thCls}>Статус</th>
-              {show("nameUk") && <th className={thCls}>Назва (укр.)</th>}
-              {show("nameRu") && <th className={thCls}>Назва (рос.)</th>}
+              {visibleCols.map((c) => (
+                <th key={c.id} className={c.align === "right" ? `${thCls} text-right` : thCls}>{c.label}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
+              <tr><td colSpan={colSpan} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
+              <tr><td colSpan={colSpan} className="px-3 py-12 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
             ) : rows.map((v) => {
               const isSel = selected.has(v.id);
               const st = siteStatus(v);
-              const code = v.offer_code || `mp${v.id}`;
-              // SKU · розмір (напр. 23456-М) — v.sku буває порожнім у старих товарів,
-              // тоді падаємо на product_id, щоб ніколи не показати голий "-L" без номера.
+              // Наш SKU-код = внутрішній номер + розмір (напр. 45678-M). v.sku буває
+              // порожнім у старих товарів, тоді падаємо на product_id, щоб ніколи не
+              // показати голий "-M". Ніяких фейкових mp-кодів — цей код усюди.
               const sku = v.barcode || `${v.sku || v.product_id}-${v.size}`;
+              const code = v.offer_code || sku;
               return (
                 <tr key={v.id} className={`border-b border-[#eef2f3] transition-colors ${isSel ? "bg-[#eef7f6]" : "hover:bg-[#f7f9fa]"}`}>
                   <td className="px-3 py-2.5">
                     <input type="checkbox" checked={isSel} onChange={() => toggleRow(v.id)} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{sku}</td>
-                  {show("category") && <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.category || "—"}</td>}
-                  {show("classifier") && <td className="max-w-[240px] truncate px-3 py-2.5 text-[#5a6472]" title={v.category}>{v.category || "—"}</td>}
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.active ? "Так" : "Ні"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     <button onClick={() => { setSelected(new Set([v.id])); setEditOpen(true); }}
@@ -329,8 +377,11 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
                       <span className="text-[12px] text-[#3a4250]">{st.label}</span>
                     </span>
                   </td>
-                  {show("nameUk") && <td className="max-w-[260px] truncate px-3 py-2.5 text-[#8a94a0]">—</td>}
-                  {show("nameRu") && <td className="max-w-[280px] truncate px-3 py-2.5 text-[#2b2d42]" title={v.name}>{v.name}</td>}
+                  {visibleCols.map((c) => (
+                    <td key={c.id} className={`whitespace-nowrap px-3 py-2.5 text-[#5a6472] ${c.align === "right" ? "text-right tabular-nums" : ""}`}>
+                      {c.render(v)}
+                    </td>
+                  ))}
                 </tr>
               );
             })}
