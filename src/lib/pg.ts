@@ -680,6 +680,17 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS description_uk TEXT NOT NULL DEFAU
 -- subtype="Прямі джинси"). See AdminClassifier.tsx for the reference tree.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS material TEXT NOT NULL DEFAULT '';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS subtype  TEXT NOT NULL DEFAULT '';
+
+-- Intertop 2.7 guide: full deletion ("Видалити") is only allowed for a
+-- product that has NEVER been live ("ще не були вивантажені на сайт") — once
+-- it's gone live even once, only archiving is available, forever, even if
+-- it's later sent back to Чернетка (which would otherwise look identical to
+-- a fresh, never-published draft — moderation_status alone can't tell them
+-- apart). DEFAULT TRUE grandfathers all pre-existing rows as already-live
+-- real inventory; createAdminProduct explicitly inserts FALSE for new ones,
+-- and updateAdminProduct flips it to TRUE the moment moderation_status ever
+-- becomes 'approved' — see lib/products.ts.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS ever_published BOOLEAN NOT NULL DEFAULT TRUE;
 `;
 
 /**

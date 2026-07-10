@@ -58,6 +58,12 @@ export type AdminProductInput = {
   /** "Підвид" — the classifier level one step more specific than `category`
    *  (which plays the role of Intertop's "Вид товара"). See AdminClassifier.tsx. */
   subtype?: string;
+  /** Historical "has this product ever gone live" flag (Intertop 2.7 guide)
+   *  — see lib/pg.ts schema comment. Normally set automatically by
+   *  updateAdminProduct when moderation_status becomes 'approved'; exposed
+   *  here mainly for createAdminProduct/duplicateAdminProduct to explicitly
+   *  start new products at false. */
+  ever_published?: boolean;
 };
 
 function slugify(s: string): string {
@@ -301,8 +307,8 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
       (id, sku, factory_article, name, name_uk, slug, brand, category, category_slug, gender,
        price, regular_price, sale_price, is_in_stock, status, moderation_status,
        image_src, images, attributes, description, description_uk, short_description,
-       color, country, season, collection, composition, material, subtype)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
+       color, country, season, collection, composition, material, subtype, ever_published)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
     [
       id, input.sku ?? "", input.factory_article ?? "", input.name, input.name_uk ?? "", slug, input.brand ?? "Mania Group",
       input.category ?? "Одяг", input.category_slug || slugify(input.category ?? "tovar") || "tovar",
@@ -312,7 +318,7 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
       JSON.stringify(input.images ?? (input.image_src ? [{ src: input.image_src }] : [])),
       sizeAttributes(input.sizes), input.description ?? "", input.description_uk ?? "", input.short_description ?? "",
       input.color ?? "", input.country ?? "", input.season ?? "", input.collection ?? "", input.composition ?? "",
-      input.material ?? "", input.subtype ?? "",
+      input.material ?? "", input.subtype ?? "", input.ever_published ?? false,
     ],
   );
   if (input.sizes && input.sizes.length > 0) await syncManualVariants(id, input.sizes);
@@ -396,6 +402,11 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   if (input.composition !== undefined) add("composition", input.composition);
   if (input.material !== undefined) add("material", input.material);
   if (input.subtype !== undefined) add("subtype", input.subtype);
+  // Going live even once is a one-way historical fact (Intertop 2.7 guide) —
+  // force it here rather than trusting every transition() call site to
+  // remember to pass ever_published:true alongside moderation_status:'approved'.
+  if (input.moderation_status === "approved") add("ever_published", true);
+  else if (input.ever_published !== undefined) add("ever_published", input.ever_published);
 
   add("updated_at", new Date().toISOString());
 
@@ -421,7 +432,18 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   if (input.sizes !== undefined) await syncManualVariants(Number(id), input.sizes);
 }
 
+/**
+ * Intertop 2.7 guide: full deletion is only allowed for a product that has
+ * never gone live ("ще не були вивантажені на сайт"). Enforced here (not
+ * just hidden in the UI) so a stale drawer or a direct API call can't bypass
+ * it — see ever_published's schema comment in lib/pg.ts.
+ */
 export async function deleteAdminProduct(id: string): Promise<void> {
+  const row = await q1<{ ever_published: boolean }>("SELECT ever_published FROM products WHERE id = $1", [Number(id)]);
+  if (!row) return; // already gone — nothing to do
+  if (row.ever_published) {
+    throw new Error("Товар вже був на сайті — видалення недоступне, скористайтесь архівацією");
+  }
   await q("DELETE FROM products WHERE id = $1", [Number(id)]);
 }
 
@@ -438,7 +460,10 @@ export async function wipeAllProducts(): Promise<number> {
   return rows.length;
 }
 
-export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "show_without_photo" | "hide_without_photo" | "delete";
+export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "show_without_photo" | "hide_without_photo" | "delete" | "archive";
+
+/** Guide 2.7: bulk archiving is capped at 100 cards per call. */
+const BULK_ARCHIVE_LIMIT = 100;
 
 export async function bulkProducts(ids: string[], action: BulkAction): Promise<{ count: number; skipped: number }> {
   const nums = ids.map(Number).filter(Number.isFinite);
@@ -470,8 +495,26 @@ export async function bulkProducts(ids: string[], action: BulkAction): Promise<{
       await q("UPDATE products SET show_without_photo = TRUE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
     case "hide_without_photo":
       await q("UPDATE products SET show_without_photo = FALSE, updated_at = now() WHERE id = ANY($1)", [nums]); break;
-    case "delete":
-      await q("DELETE FROM products WHERE id = ANY($1)", [nums]); break;
+    case "archive": {
+      // Guide 2.7 §2: only rows currently «На сайті» (approved + published)
+      // get archived; anything else in the selection is silently skipped,
+      // and a batch over 100 is rejected outright rather than partially run.
+      if (nums.length > BULK_ARCHIVE_LIMIT) {
+        throw new Error(`За раз можна архівувати максимум ${BULK_ARCHIVE_LIMIT} товарів (обрано ${nums.length})`);
+      }
+      const r = await q(
+        `UPDATE products SET moderation_status = 'archived', status = 'draft', updated_at = now()
+          WHERE id = ANY($1) AND status = 'publish' AND moderation_status = 'approved' RETURNING id`,
+        [nums],
+      );
+      return { count: r.length, skipped: nums.length - r.length };
+    }
+    case "delete": {
+      // Guide 2.7 §1: hard delete only for products that never went live —
+      // matches the single-product deleteAdminProduct guard.
+      const r = await q("DELETE FROM products WHERE id = ANY($1) AND ever_published = FALSE RETURNING id", [nums]);
+      return { count: r.length, skipped: nums.length - r.length };
+    }
     default:
       throw new Error("Невідома дія");
   }

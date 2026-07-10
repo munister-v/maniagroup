@@ -324,9 +324,20 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     } finally { setFixingId(null); }
   }
 
+  const SKIP_HINT: Record<string, string> = {
+    in_stock: "керуються розмірами (див. «Картка»)", out_of_stock: "керуються розмірами (див. «Картка»)",
+    archive: "не в статусі «На сайті»", delete: "вже були на сайті — див. архівацію",
+  };
+
   // ── Bulk row actions ─────────────────────────────────────────────────────
   async function bulk(action: string) {
     if (selected.size === 0) return;
+    // Guide 2.7 §2: bulk archiving caps at 100 cards per call — check up
+    // front instead of round-tripping to the server just to be rejected.
+    if (action === "archive" && selected.size > 100) {
+      onToast?.(`За раз можна архівувати максимум 100 товарів (обрано ${selected.size})`);
+      return;
+    }
     const res = await fetch("/api/admin/products/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -334,8 +345,11 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     });
     if (res.ok) {
       const d = await res.json().catch(() => null);
-      onToast?.(d?.skipped ? `Готово · ${d.skipped} пропущено — керуються розмірами (див. «Картка»)` : "Готово");
+      onToast?.(d?.skipped ? `Готово · ${d.skipped} пропущено — ${SKIP_HINT[action] ?? "не підходять"}` : "Готово");
       await load();
+    } else {
+      const d = await res.json().catch(() => null);
+      onToast?.(d?.error ?? "Помилка");
     }
   }
 
@@ -479,6 +493,10 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
               <button disabled={!selected.size} onClick={() => bulk("unpublish")} className={gated}>
                 В чернетку
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M14 3v4a1 1 0 001 1h4M9 13h6M9 17h6M8 21h8a2 2 0 002-2V7l-5-4H8a2 2 0 00-2 2v14a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              <button disabled={!selected.size} onClick={() => bulk("archive")} title="Архівувати (тільки товари в статусі «На сайті», макс. 100)" className={gated}>
+                В архів
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8M10 13h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
               <a href="/" target="_blank" rel="noreferrer" title="Переглянути на сайті" className={icon}>
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -726,6 +744,8 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           ].map((b) => (
             <button key={b.a} onClick={() => bulk(b.a)} className="text-[#2b2d42] underline-offset-2 hover:underline">{b.l}</button>
           ))}
+          <button onClick={() => bulk("archive")} title="Тільки товари в статусі «На сайті», макс. 100"
+            className="text-[#2b2d42] underline-offset-2 hover:underline">В архів</button>
           <button onClick={() => { if (confirm(`Видалити ${selected.size} товарів?`)) bulk("delete"); }}
             className="text-red-600 underline-offset-2 hover:underline">Видалити</button>
         </div>

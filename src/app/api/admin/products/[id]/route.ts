@@ -40,6 +40,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     logActivity("delete", `Видалено товар #${id}`, 1, "admin", id);
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 500 });
+    // Guide 2.7's ever_published guard is a validation rejection, not a
+    // server fault — 400 so the client's toast reads it as expected input.
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 400 });
   }
 }

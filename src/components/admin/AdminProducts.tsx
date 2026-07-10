@@ -41,19 +41,25 @@ type FullProduct = Row & {
   /** "Матеріал верху" / "Підвид" — see products.ts / lib/classifierTree.ts. */
   material: string;
   subtype: string;
-  /** Intertop 2.1 moderation workflow — draft | pending | approved | rejected. */
+  /** Intertop 2.1 moderation workflow — draft | pending | approved | rejected
+   *  | archived (2.7 guide — a live product taken down, not deleted). */
   moderation_status: string;
+  /** Has this product ever gone live (moderation_status ever 'approved')?
+   *  One-way historical flag, distinct from the current moderation_status —
+   *  see lib/pg.ts. Gates whether «Видалити» can show at all (2.7 guide). */
+  ever_published: boolean;
   created_at: string;
   updated_at: string;
 };
 
 /** «Загальні дані» status pill — composes moderation_status with the real
  *  publish/stock state, matching Intertop's Чернетка/На модерації/
- *  Не підтверджено/Підтверджено/На сайті vocabulary. */
+ *  Не підтверджено/Підтверджено/На сайті/В архіві vocabulary. */
 function moderationLabel(p: { moderation_status: string; status: string; is_in_stock: boolean }): { label: string; color: string } {
   switch (p.moderation_status) {
     case "pending": return { label: "На модерації", color: "#d97706" };
     case "rejected": return { label: "Не підтверджено", color: "#e5484d" };
+    case "archived": return { label: "В архіві", color: "#5a6472" };
     case "approved": return p.status === "publish" && p.is_in_stock
       ? { label: "На сайті", color: "#2f9488" }
       : { label: "Підтверджено", color: "#2f9488" };
@@ -299,6 +305,9 @@ export function AdminProducts({ onToast, initialOpen }: {
       onToast?.("Товар видалено");
       setEditorId(null);
       load(page, search, stock);
+    } else {
+      const data = await res.json().catch(() => null);
+      onToast?.(data?.error ?? "Помилка видалення");
     }
   }
 
@@ -331,6 +340,7 @@ export function AdminProducts({ onToast, initialOpen }: {
     if (!confirm(`Видалити «${name}»? Цю дію не можна скасувати.`)) return;
     const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
     if (res.ok) { onToast?.("Товар видалено"); load(page, search, stock); }
+    else { const data = await res.json().catch(() => null); onToast?.(data?.error ?? "Помилка видалення"); }
   }
 
   async function bulk(action: string, label: string) {
@@ -563,9 +573,19 @@ export function AdminProducts({ onToast, initialOpen }: {
                     </>
                   )}
                   {current.moderation_status === "approved" && (
-                    <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "draft", status: "draft" }, "Підтверджено → Чернетка")}>В чернетку</ActionBtn>
+                    <>
+                      <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "draft", status: "draft" }, "Підтверджено → Чернетка")}>В чернетку</ActionBtn>
+                      <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "archived", status: "draft" }, "Підтверджено → В архіві")}>В архів</ActionBtn>
+                    </>
                   )}
-                  <ActionBtn danger onClick={removeCurrent}>Видалити</ActionBtn>
+                  {current.moderation_status === "archived" && (
+                    <ActionBtn busy={transitioning} onClick={() => transition({ moderation_status: "draft", status: "draft" }, "В архіві → Чернетка")}>В чернетку</ActionBtn>
+                  )}
+                  {/* Guide 2.7: full deletion only for a product that has never
+                      gone live — once ever_published, only archiving is offered. */}
+                  {!current.ever_published && (
+                    <ActionBtn danger onClick={removeCurrent}>Видалити</ActionBtn>
+                  )}
                   <ActionBtn busy={transitioning} onClick={duplicateCurrent}>Копіювати</ActionBtn>
                 </div>
               </div>
