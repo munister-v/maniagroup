@@ -667,6 +667,19 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DE
 -- switcher there is separate, future work.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS name_uk        TEXT NOT NULL DEFAULT '';
 ALTER TABLE products ADD COLUMN IF NOT EXISTS description_uk TEXT NOT NULL DEFAULT '';
+
+-- Real Intertop odezda export (2026-07-10, ~4100 rows) confirmed the exact
+-- product-attribute column set their partners fill in for clothing: of the
+-- 55 template columns, only a handful are ever actually populated for this
+-- vertical (everything else — style, technology, print, filler, cup_size,
+-- packaging dims, etc. — is 0% filled even in Intertop's own real file, so
+-- NOT modeled here; adding empty columns nobody fills isn't worth it). The
+-- two genuinely-used fields we didn't have yet: "Матеріал верху" (100%
+-- filled) and "Підвид" (94% filled — the classifier level one step more
+-- specific than our existing category column, e.g. category="Джинси" →
+-- subtype="Прямі джинси"). See AdminClassifier.tsx for the reference tree.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS material TEXT NOT NULL DEFAULT '';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS subtype  TEXT NOT NULL DEFAULT '';
 `;
 
 /**

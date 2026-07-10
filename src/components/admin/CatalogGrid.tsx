@@ -124,7 +124,7 @@ const PER_PAGE_OPTIONS = [50, 100, 200, 500];
 const EXPORT_COLUMNS = [
   "ID", "SKU", "Назва", "Бренд", "Категорія", "Стать", "Ціна", "Акційна",
   "Підсумкова", "В наявності", "Статус", "Колір", "Сезон", "Склад", "Країна",
-  "Розміри", "Slug", "Фото",
+  "Матеріал", "Підвид", "Розміри", "Slug", "Фото",
 ];
 
 type CatalogFocus = { stock?: string; siteStatus?: string; token: number } | null;

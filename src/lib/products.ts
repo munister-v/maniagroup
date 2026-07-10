@@ -52,6 +52,12 @@ export type AdminProductInput = {
   season?: string;
   collection?: string;
   composition?: string;
+  /** "Матеріал верху" — Intertop's real odezda template, distinct from the
+   *  free-text `composition` (%-breakdown) field. */
+  material?: string;
+  /** "Підвид" — the classifier level one step more specific than `category`
+   *  (which plays the role of Intertop's "Вид товара"). See AdminClassifier.tsx. */
+  subtype?: string;
 };
 
 function slugify(s: string): string {
@@ -231,6 +237,7 @@ export type ExportRow = {
   regular_price: number; sale_price: number | null; price: number;
   is_in_stock: boolean; status: string; color: string; season: string;
   composition: string; country: string; slug: string; image_src: string; sizes: string;
+  material: string; subtype: string;
 };
 
 /** All matching rows (no pagination) for export — flattened, export-ready. */
@@ -245,7 +252,7 @@ export async function exportAdminProducts(opts: ProductFilterOpts & { ids?: stri
     `SELECT id::text AS id, sku, name, brand, category, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
             price::float AS price, is_in_stock, status, color, season, composition,
-            country, slug, image_src, attributes
+            country, slug, image_src, attributes, material, subtype
      FROM products ${finalWhere} ORDER BY id DESC`,
     bind,
   );
@@ -294,8 +301,8 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
       (id, sku, factory_article, name, name_uk, slug, brand, category, category_slug, gender,
        price, regular_price, sale_price, is_in_stock, status, moderation_status,
        image_src, images, attributes, description, description_uk, short_description,
-       color, country, season, collection, composition)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)`,
+       color, country, season, collection, composition, material, subtype)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
     [
       id, input.sku ?? "", input.factory_article ?? "", input.name, input.name_uk ?? "", slug, input.brand ?? "Mania Group",
       input.category ?? "Одяг", input.category_slug || slugify(input.category ?? "tovar") || "tovar",
@@ -305,6 +312,7 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
       JSON.stringify(input.images ?? (input.image_src ? [{ src: input.image_src }] : [])),
       sizeAttributes(input.sizes), input.description ?? "", input.description_uk ?? "", input.short_description ?? "",
       input.color ?? "", input.country ?? "", input.season ?? "", input.collection ?? "", input.composition ?? "",
+      input.material ?? "", input.subtype ?? "",
     ],
   );
   if (input.sizes && input.sizes.length > 0) await syncManualVariants(id, input.sizes);
@@ -350,6 +358,8 @@ export async function duplicateAdminProduct(id: string): Promise<{ id: string }>
     season: String(src.season ?? ""),
     collection: String(src.collection ?? ""),
     composition: String(src.composition ?? ""),
+    material: String(src.material ?? ""),
+    subtype: String(src.subtype ?? ""),
   });
 }
 
@@ -384,6 +394,8 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   if (input.season !== undefined) add("season", input.season);
   if (input.collection !== undefined) add("collection", input.collection);
   if (input.composition !== undefined) add("composition", input.composition);
+  if (input.material !== undefined) add("material", input.material);
+  if (input.subtype !== undefined) add("subtype", input.subtype);
 
   add("updated_at", new Date().toISOString());
 

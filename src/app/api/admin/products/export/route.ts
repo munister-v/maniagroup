@@ -39,6 +39,8 @@ export async function GET(req: Request) {
     "Сезон": (r) => r.season ?? "",
     "Склад": (r) => r.composition ?? "",
     "Країна": (r) => r.country ?? "",
+    "Матеріал": (r) => r.material ?? "",
+    "Підвид": (r) => r.subtype ?? "",
     "Розміри": (r) => r.sizes ?? "",
     "Slug": (r) => r.slug ?? "",
     "Фото": (r) => r.image_src ?? "",

@@ -55,6 +55,7 @@ export type OfferProductInfo = {
   description_uk?: string; description_ru?: string;
   brand?: string; category?: string; color?: string; country?: string;
   gender?: string; composition_uk?: string; composition_ru?: string;
+  material?: string; subtype?: string;
 };
 
 export type OfferRow = {
@@ -141,18 +142,29 @@ const OFFER_SYN: Record<OfferReqKey, string[]> = {
 
 // Descriptive columns odezda-style rich OFFERS files carry — optional, only
 // used to auto-create a product when a row's target doesn't resolve to one.
+//
+// Verified against a real Intertop odezda export (2026-07-10, ~4100 rows,
+// ~1600 products): "group"/Тип товару is CONSTANT ("Одяг" on every single
+// row for this vertical) — it's the template's top-level classifier rung,
+// not a per-product value. "good_type"/Вид товара is what actually varies
+// (18 real values: Джинси, Штани, Сукні…) and is the true equivalent of our
+// `category` field. An earlier version of this map pointed `category` at
+// "group" by mistake, which would have silently written the constant "Одяг"
+// into every auto-created product's category instead of its real one.
 const PRODUCT_SYN: Record<keyof OfferProductInfo, string[]> = {
   name_uk:          ["product_name[uk]", "назва (укр)", "назва (укр.)"],
   name_ru:          ["product_name[ru]", "назва (рос)", "назва (рос.)"],
   description_uk:   ["product_description[uk]", "опис (укр)", "опис (укр.)"],
   description_ru:   ["product_description[ru]", "опис (рос)", "опис (рос.)"],
   brand:            ["brand", "бренд"],
-  category:         ["group", "тип товару"],
+  category:         ["good_type", "вид товара"],
   color:            ["color", "колір"],
   country:          ["country", "країна"],
   gender:           ["gender_sap", "гендер sap"],
   composition_uk:   ["composition[uk]", "склад(укр.)", "склад (укр.)"],
   composition_ru:   ["composition[ru]", "склад(рос.)", "склад (рос.)"],
+  material:         ["material", "матеріал верху"],
+  subtype:          ["podvid", "підвид"],
 };
 
 function offerColumns(cells: string[]): Record<OfferReqKey, number> | null {
@@ -410,6 +422,8 @@ function parseOffers(
           gender: genderFromType(at(r, prodIdx.gender)) || undefined,
           composition_uk: at(r, prodIdx.composition_uk) || undefined,
           composition_ru: at(r, prodIdx.composition_ru) || undefined,
+          material: at(r, prodIdx.material) || undefined,
+          subtype: at(r, prodIdx.subtype) || undefined,
         };
       }
     }
@@ -554,18 +568,28 @@ function groupNewProductRows(unmatchedRows: OfferRow[]): {
 }
 
 /**
- * Guide 2.2 §4 "Статус": a file row with every required field filled goes
- * straight to На модерації (moderation_status='pending') for an admin to
- * confirm; anything short of that (missing name/brand/category/gender/price)
- * lands in Чернетка instead — same required-field set as the manual "Новий
- * товар" form (AdminProducts.tsx). Either way the product is never published
- * by the import itself — only an admin confirming moderation does that (see
- * AdminProducts.tsx's transition() buttons).
+ * Guide 2.2 §4 "Статус": a file row with every required (red) field filled
+ * goes straight to На модерації (moderation_status='pending') for an admin
+ * to confirm; missing even one lands in Чернетка instead. The red/yellow
+ * split here is taken verbatim from a real odezda.xlsx cell-fill audit
+ * (2026-07-10): red = Артикул, Заводський артикул, Штрихкод, Активність,
+ * Кількість, Категорія, Базова/Акційна ціна, Назва(укр/рос), Опис(укр/рос),
+ * Розмір, Тип товару, Вид товара, Бренд, Гендер SAP, Матеріал верху, Колір,
+ * Країна — everything else (Модель, Стиль, Технологія, packaging dims…) is
+ * yellow/optional, and in fact 0% filled even in Intertop's own real file
+ * for this vertical, so it's not required here either. The offer-row-level
+ * red fields (article/factory_article/barcode/active/quantity/size/price)
+ * are already enforced structurally by offerColumns()'s parse gate before a
+ * row ever reaches this function — only the PRODUCT-level red fields need
+ * checking here.
  */
 function isCompleteForModeration(product: OfferProductInfo, sample: OfferRow): boolean {
-  const hasName = !!(product.name_uk?.trim() || product.name_ru?.trim());
   const hasPrice = sample.base_price > 0 || sample.discount_price > 0;
-  return hasName && !!product.brand?.trim() && !!product.category?.trim() && !!product.gender?.trim() && hasPrice;
+  return !!product.name_uk?.trim() && !!product.name_ru?.trim()
+    && !!product.description_uk?.trim() && !!product.description_ru?.trim()
+    && !!product.brand?.trim() && !!product.category?.trim() && !!product.gender?.trim()
+    && !!product.material?.trim() && !!product.color?.trim() && !!product.country?.trim()
+    && hasPrice;
 }
 
 /**
@@ -579,7 +603,11 @@ function isCompleteForModeration(product: OfferProductInfo, sample: OfferRow): b
 async function createProductFromOffer(
   client: import("pg").PoolClient, key: string, product: OfferProductInfo, sample: OfferRow,
 ): Promise<number> {
-  const name = product.name_uk || product.name_ru || key;
+  // Our `name`/`description` columns are Russian-language content (see
+  // pg.ts's name_uk/description_uk comment) — a real odezda row has both
+  // languages, so this now actually populates the uk columns too instead of
+  // discarding whichever language wasn't picked for the single `name` field.
+  const name = product.name_ru || product.name_uk || key;
   const idRow = await client.query<{ next: string }>(
     "SELECT (GREATEST(COALESCE(MAX(id),0), 900000000) + 1)::text AS next FROM products",
   );
@@ -593,18 +621,19 @@ async function createProductFromOffer(
 
   const ins = await client.query<{ id: string }>(
     `INSERT INTO products
-       (id, sku, factory_article, name, slug, brand, category, category_slug, gender,
+       (id, sku, factory_article, name, name_uk, slug, brand, category, category_slug, gender,
         price, regular_price, sale_price, is_in_stock, status, moderation_status,
-        description, composition, color, country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16,$17,$18)
+        description, description_uk, composition, color, country, material, subtype)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'draft',$15,$16,$17,$18,$19,$20,$21,$22)
      ON CONFLICT (id) DO NOTHING
      RETURNING id::text`,
     [
-      id, sample.article || sample.external_id || "", sample.factory_article || key, name, slug,
+      id, sample.article || sample.external_id || "", sample.factory_article || key, name, product.name_uk || "", slug,
       product.brand || "Mania Group", category, categorySlug, product.gender || "",
       price, sample.base_price || 0, sample.discount_price > 0 && sample.discount_price < sample.base_price ? sample.discount_price : null,
-      false, moderationStatus, product.description_uk || product.description_ru || "",
+      false, moderationStatus, product.description_ru || "", product.description_uk || "",
       product.composition_uk || product.composition_ru || "", product.color || "", product.country || "",
+      product.material || "", product.subtype || "",
     ],
   );
   return ins.rows.length ? Number(ins.rows[0].id) : id;

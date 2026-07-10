@@ -38,6 +38,9 @@ type FullProduct = Row & {
   season: string;
   collection: string;
   composition: string;
+  /** "Матеріал верху" / "Підвид" — see products.ts / lib/classifierTree.ts. */
+  material: string;
+  subtype: string;
   /** Intertop 2.1 moderation workflow — draft | pending | approved | rejected. */
   moderation_status: string;
   created_at: string;
@@ -80,6 +83,8 @@ type Draft = {
   composition: string;
   season: string;
   country: string;
+  material: string;
+  subtype: string;
   short_description: string;
   description: string;
 };
@@ -91,6 +96,7 @@ const EMPTY_DRAFT: Draft = {
   name: "", name_uk: "", description_uk: "", brand: "", sku: "", factory_article: "", category: "", category_slug: "", gender: "",
   regular_price: "", sale_price: "", is_in_stock: true, status: "draft",
   images: [], sizes: [], color: "", composition: "", season: "", country: "",
+  material: "", subtype: "",
   short_description: "", description: "",
 };
 
@@ -116,7 +122,8 @@ function draftFromProduct(p: FullProduct): Draft {
     regular_price: String(p.regular_price ?? ""), sale_price: p.sale_price ? String(p.sale_price) : "",
     is_in_stock: p.is_in_stock, status: p.status, images,
     sizes, color: p.color ?? "", composition: p.composition ?? "", season: p.season ?? "",
-    country: p.country ?? "", short_description: p.short_description ?? "", description: p.description ?? "",
+    country: p.country ?? "", material: p.material ?? "", subtype: p.subtype ?? "",
+    short_description: p.short_description ?? "", description: p.description ?? "",
   };
 }
 
@@ -142,6 +149,8 @@ function draftToPayload(d: Draft) {
     composition: d.composition.trim(),
     season: d.season.trim(),
     country: d.country.trim(),
+    material: d.material.trim(),
+    subtype: d.subtype.trim(),
     short_description: d.short_description,
     description: d.description,
   };
@@ -657,6 +666,8 @@ export function AdminProducts({ onToast, initialOpen }: {
                     <label className="block"><span className={lbl}>Склад</span><input className={inp} value={draft.composition} onChange={(e) => setDraft({ ...draft, composition: e.target.value })} /></label>
                     <label className="block"><span className={lbl}>Сезон</span><input className={inp} value={draft.season} onChange={(e) => setDraft({ ...draft, season: e.target.value })} /></label>
                     <label className="block"><span className={lbl}>Країна</span><input className={inp} value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Матеріал верху</span><input className={inp} value={draft.material} onChange={(e) => setDraft({ ...draft, material: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Підвид</span><input className={inp} value={draft.subtype} onChange={(e) => setDraft({ ...draft, subtype: e.target.value })} placeholder="напр. Прямі джинси — див. «Класифікатор товарів»" /></label>
                   </div>
                   <label className="block"><span className={lbl}>Короткий опис (внутрішній)</span><textarea rows={2} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.short_description} onChange={(e) => setDraft({ ...draft, short_description: e.target.value })} /></label>
                 </div>
