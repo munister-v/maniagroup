@@ -17,7 +17,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const detail = await dbProductById(slug);
+  const detail = await dbProductById(decodeURIComponent(slug));
   if (!detail) return {};
   // Prefer ERP-managed SEO fields, fallback to auto-generated
   const t = detail.metaTitle || `${detail.product.name} — ${detail.product.brand} | Mania Group`;
@@ -41,7 +41,7 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const detail = await dbProductById(slug);
+  const detail = await dbProductById(decodeURIComponent(slug));
   if (!detail) notFound();
 
   let related: DbProductDetail["product"][] = [];

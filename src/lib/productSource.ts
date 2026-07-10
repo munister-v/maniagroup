@@ -284,17 +284,20 @@ export type DbProductDetail = {
   metaDescription?: string;
 };
 
-export async function dbProductById(id: string): Promise<DbProductDetail | null> {
-  if (!/^\d+$/.test(id)) return null;
+export async function dbProductById(idOrSlug: string): Promise<DbProductDetail | null> {
+  // The [slug] route always passes products.slug (readable, e.g. "платье-16162"
+  // for imported rows; admin-created products default to the bare numeric id
+  // when no slug was set) — match on slug first, numeric id as a legacy fallback.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const row = await q1<any>("SELECT * FROM products WHERE id = $1", [Number(id)]);
+  const row = await q1<any>("SELECT * FROM products WHERE slug = $1", [idOrSlug])
+    ?? (/^\d+$/.test(idOrSlug) ? await q1<any>("SELECT * FROM products WHERE id = $1", [Number(idOrSlug)]) : null);
   if (!row) return null;
   if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null;
 
   // Load ERP variants — authoritative per-size stock
   const variantRows = await q<{ size: string; stock_qty: string }>(
     `SELECT size, stock_qty FROM product_variants WHERE product_id = $1 AND active = TRUE ORDER BY size`,
-    [Number(id)]
+    [Number(row.id)]
   );
   const sizeVariants: SizeVariant[] = variantRows.map((v) => ({
     size: v.size,
