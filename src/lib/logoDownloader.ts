@@ -29,7 +29,7 @@ export function hasLocalLogo(brand: string): boolean {
   return fs.existsSync(path.join(BRANDS_DIR, `${brandToSlug(brand)}.png`));
 }
 
-async function tryFetch(url: string): Promise<Buffer | null> {
+async function tryFetch(url: string, minBytes = 300): Promise<Buffer | null> {
   try {
     const resp = await fetch(url, {
       signal: AbortSignal.timeout(7000),
@@ -39,7 +39,7 @@ async function tryFetch(url: string): Promise<Buffer | null> {
     const ct = resp.headers.get("content-type") ?? "";
     if (!ct.startsWith("image/") && !ct.includes("octet")) return null;
     const buf = Buffer.from(await resp.arrayBuffer());
-    if (buf.length < 300) return null; // reject 1px blanks / empty responses
+    if (buf.length < minBytes) return null; // reject 1px blanks / empty responses
     return buf;
   } catch {
     return null;
@@ -58,22 +58,23 @@ export async function downloadLogoForBrand(brand: string, domain: string): Promi
 
   if (fs.existsSync(filePath)) return localLogoUrl(brand);
 
-  const sources: string[] = [];
+  const sources: { url: string; minBytes?: number }[] = [];
 
   const token = process.env.LOGO_DEV_TOKEN;
-  if (token) sources.push(`https://img.logo.dev/${domain}?token=${token}&size=200`);
+  if (token) sources.push({ url: `https://img.logo.dev/${domain}?token=${token}&size=200` });
 
-  sources.push(`https://${domain}/apple-touch-icon.png`);
-  sources.push(`https://www.${domain}/apple-touch-icon.png`);
-  sources.push(`https://${domain}/apple-touch-icon-precomposed.png`);
-  sources.push(`https://${domain}/favicon.ico`);
-  sources.push(`https://www.${domain}/favicon.ico`);
-  // No-token fallback: Google's public favicon proxy, low-res but reliably
-  // available for almost any domain — better than a bare text wordmark.
-  sources.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`);
+  sources.push({ url: `https://${domain}/apple-touch-icon.png` });
+  sources.push({ url: `https://www.${domain}/apple-touch-icon.png` });
+  sources.push({ url: `https://${domain}/apple-touch-icon-precomposed.png` });
+  sources.push({ url: `https://${domain}/favicon.ico` });
+  sources.push({ url: `https://www.${domain}/favicon.ico` });
+  // No-token fallback: Google's public favicon proxy. Reliable for almost any
+  // domain, but genuinely tiny (~250-300B for a 16px icon) — the default
+  // anti-blank floor would reject legitimate results, so it gets a lower one.
+  sources.push({ url: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`, minBytes: 100 });
 
-  for (const src of sources) {
-    const buf = await tryFetch(src);
+  for (const { url: src, minBytes } of sources) {
+    const buf = await tryFetch(src, minBytes);
     if (buf) {
       fs.writeFileSync(filePath, buf);
       return localLogoUrl(brand);
