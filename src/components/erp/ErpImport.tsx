@@ -8,6 +8,7 @@ type PreviewItem = {
   oldQty: number | null; newQty: number | null;
   oldPrice: number | null; newPrice: number | null; discountPrice: number | null;
   isNew: boolean;
+  moderationNote?: "pending" | "draft";
 };
 type UnmatchedItem = {
   key: string; size?: string;
@@ -304,7 +305,15 @@ function DiffTable({ preview, onProductCreated }: { preview: ImportPreview; onPr
                   {/* badge */}
                   <td className="px-3 py-2 text-center">
                     {it.isNew ? (
-                      <span className="rounded-[3px] bg-green-100 px-1.5 py-0.5 text-[10px] text-green-700">новий</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="rounded-[3px] bg-green-100 px-1.5 py-0.5 text-[10px] text-green-700">новий</span>
+                        {it.moderationNote === "pending" && (
+                          <span className="rounded-[3px] bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">На модерації</span>
+                        )}
+                        {it.moderationNote === "draft" && (
+                          <span className="rounded-[3px] bg-[#F0F0F0] px-1.5 py-0.5 text-[10px] text-[#757575]">Чернетка</span>
+                        )}
+                      </span>
                     ) : qtyChanged && priceChanged ? (
                       <span className="rounded-[3px] bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">зал+ціна</span>
                     ) : qtyChanged ? (

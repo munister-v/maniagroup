@@ -77,6 +77,9 @@ export type PreviewItem = {
   newPrice: number | null;
   discountPrice: number | null;
   isNew: boolean;
+  // Only set for isNew rows — lets the admin see, before applying, whether a
+  // new product will land На модерації or Чернетка (guide 2.2 §4 "Статус").
+  moderationNote?: "pending" | "draft";
 };
 /**
  * An OFFERS row with no matching product. Carries the raw row fields (not
@@ -551,6 +554,21 @@ function groupNewProductRows(unmatchedRows: OfferRow[]): {
 }
 
 /**
+ * Guide 2.2 §4 "Статус": a file row with every required field filled goes
+ * straight to На модерації (moderation_status='pending') for an admin to
+ * confirm; anything short of that (missing name/brand/category/gender/price)
+ * lands in Чернетка instead — same required-field set as the manual "Новий
+ * товар" form (AdminProducts.tsx). Either way the product is never published
+ * by the import itself — only an admin confirming moderation does that (see
+ * AdminProducts.tsx's transition() buttons).
+ */
+function isCompleteForModeration(product: OfferProductInfo, sample: OfferRow): boolean {
+  const hasName = !!(product.name_uk?.trim() || product.name_ru?.trim());
+  const hasPrice = sample.base_price > 0 || sample.discount_price > 0;
+  return hasName && !!product.brand?.trim() && !!product.category?.trim() && !!product.gender?.trim() && hasPrice;
+}
+
+/**
  * Create a new product from a rich OFFERS row group (odezda-style file) whose
  * factory_article/external_id/offer_code matched nothing in the catalogue.
  * Uses the high-range id convention (see lib/products.ts ADMIN_ID_FLOOR) so
@@ -571,20 +589,21 @@ async function createProductFromOffer(
   const category = product.category || "";
   const categorySlug = category ? slugifyText(category) : "";
   const price = sample.discount_price > 0 && sample.discount_price < sample.base_price ? sample.discount_price : sample.base_price;
+  const moderationStatus = isCompleteForModeration(product, sample) ? "pending" : "draft";
 
   const ins = await client.query<{ id: string }>(
     `INSERT INTO products
        (id, sku, factory_article, name, slug, brand, category, category_slug, gender,
-        price, regular_price, sale_price, is_in_stock, status,
+        price, regular_price, sale_price, is_in_stock, status, moderation_status,
         description, composition, color, country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'publish',$14,$15,$16,$17)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft',$14,$15,$16,$17,$18)
      ON CONFLICT (id) DO NOTHING
      RETURNING id::text`,
     [
       id, sample.article || sample.external_id || "", sample.factory_article || key, name, slug,
       product.brand || "Mania Group", category, categorySlug, product.gender || "",
       price, sample.base_price || 0, sample.discount_price > 0 && sample.discount_price < sample.base_price ? sample.discount_price : null,
-      false, product.description_uk || product.description_ru || "",
+      false, moderationStatus, product.description_uk || product.description_ru || "",
       product.composition_uk || product.composition_ru || "", product.color || "", product.country || "",
     ],
   );
@@ -613,16 +632,17 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   base.newProducts = toCreate.size;
   for (const [key, g] of toCreate) {
     const name = g.product.name_uk || g.product.name_ru || key;
+    const willModerate = isCompleteForModeration(g.product, g.rows[0]);
     base.matchedRows += g.rows.length;
     base.newVariants += g.rows.length;
     if (base.items.length < 120) base.items.push({
       name, sku: g.rows[0].external_id || undefined, size: g.rows.map((r) => r.size).join(", "),
       oldQty: null, newQty: g.rows.reduce((s, r) => s + (r.quantity ?? 0), 0),
       oldPrice: null, newPrice: g.rows[0].base_price || null, discountPrice: g.rows[0].discount_price || null,
-      isNew: true,
+      isNew: true, moderationNote: willModerate ? "pending" : "draft",
     });
     if (base.sample.length < 12) base.sample.push({
-      name, detail: `новий товар · ${g.rows.length} розм. · ${g.product.brand || "—"}`,
+      name, detail: `новий товар · ${g.rows.length} розм. · ${g.product.brand || "—"} · ${willModerate ? "На модерації" : "Чернетка (не вистачає полів)"}`,
     });
   }
   for (const r of stillUnmatched) {
