@@ -25,8 +25,12 @@ product. Fields (use the most likely column):
   article       → артикул / article (the SELLER's own internal product number —
                   distinct from factory_article, which is the SUPPLIER's code)
   barcode       → штрихкод / EAN / barcode
-  size          → розмір / размер / size / clother_size — omit if the file has
-                  no size column at all (e.g. beauty/cosmetics feeds)
+  size          → розмір / size (the generic size property) — omit if the
+                  file has no size column at all (e.g. beauty/cosmetics feeds)
+  clother_size  → розмір одягу / clother_size — Intertop's DISTINCT
+                  clothing-specific size property, separate from "size";
+                  map it here if the column literally says "Розмір одягу" or
+                  "clother_size", not to "size"
   offer_code    → код оферу / mp-code / offer_id / SKU
   quantity      → кількість / наявність / qty / stock / залишок (integer stock count)
   base_price    → базова ціна / ціна / regular price (numeric)

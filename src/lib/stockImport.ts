@@ -63,6 +63,10 @@ export type OfferRow = {
   external_id: string; factory_article: string; barcode: string; size: string;
   offer_code: string; quantity: number | null; base_price: number; discount_price: number;
   article: string; active?: boolean;
+  /** Raw "Розмір одягу"/clother_size column value, kept separate from the
+   *  resolved `size` used for the actual variant — see OFFER_SYN comment.
+   *  Currently informational only; product_variants has one `size` column. */
+  clother_size?: string;
   product?: OfferProductInfo;
 };
 export type Parsed =
@@ -127,13 +131,25 @@ export function readGrid(buf: Buffer, filename: string): unknown[][] {
 // them as genuinely distinct columns: article is Intertop's own internal
 // product number, factory_article is the supplier's code. See offer_code
 // (mp-code) vs barcode (real per-offer key) — four separate identifiers.
+// "Розмір"/size and "Розмір одягу"/clother_size are ALSO genuinely distinct
+// properties in Intertop's real system (confirmed via real template
+// screenshots — separate raw column labels, separate property IDs in their
+// Зіставлення властивостей screen), not synonyms as this map used to treat
+// them. Kept as two separate keys so a file carrying BOTH columns doesn't
+// have one silently shadow the other via findIndex column-order luck, and
+// so an explicit import template (see importTemplates.ts PROPERTY_LIST) can
+// map+translate them independently (e.g. via different value lists). They
+// still resolve to the SAME product_variants.size column at write time —
+// see parseOffers's `size` resolution below — since that's the only column
+// we actually store it in.
 type OfferReqKey = Exclude<keyof OfferRow, "product">;
 const OFFER_SYN: Record<OfferReqKey, string[]> = {
   external_id:     ["external_id", "код товару", "external_code"],
   factory_article: ["factory_article", "заводський артикул"],
   article:         ["article", "артикул"],
   barcode:         ["barcode", "штрихкод"],
-  size:            ["size", "розмір", "розмір одягу", "clother_size"],
+  size:            ["size", "розмір"],
+  clother_size:    ["clother_size", "розмір одягу"],
   offer_code:      ["offer_code", "код оффера"],
   quantity:        ["quantity", "кількість", "наявність", "qty"],
   base_price:      ["base_price", "базова ціна", "ціна"],
@@ -179,7 +195,7 @@ function offerColumns(cells: string[]): Record<OfferReqKey, number> | null {
   // Accept either: a size column, or at least one other identifying code
   // column alongside price/quantity — size then falls back to a single
   // default "unit" variant (see parseOffers).
-  const hasIdentifier = idx.size >= 0 || idx.article >= 0 || idx.external_id >= 0 || idx.factory_article >= 0 || idx.barcode >= 0;
+  const hasIdentifier = idx.size >= 0 || idx.clother_size >= 0 || idx.article >= 0 || idx.external_id >= 0 || idx.factory_article >= 0 || idx.barcode >= 0;
   if (!hasIdentifier) return null;
   if (idx.base_price < 0 && idx.quantity < 0) return null;
   return idx;
@@ -402,11 +418,12 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
   const c = mapping.columns;
   const idx: Record<OfferReqKey, number> = {
     external_id: c.external_id ?? -1, factory_article: c.factory_article ?? -1,
-    article: c.article ?? -1, barcode: c.barcode ?? -1, size: c.size ?? -1, offer_code: c.offer_code ?? -1,
+    article: c.article ?? -1, barcode: c.barcode ?? -1, size: c.size ?? -1, clother_size: c.clother_size ?? -1,
+    offer_code: c.offer_code ?? -1,
     quantity: c.quantity ?? -1, base_price: c.base_price ?? -1, discount_price: c.discount_price ?? -1,
     active: c.active ?? -1,
   };
-  const hasIdentifier = idx.size >= 0 || idx.article >= 0 || idx.external_id >= 0 || idx.factory_article >= 0 || idx.barcode >= 0;
+  const hasIdentifier = idx.size >= 0 || idx.clother_size >= 0 || idx.article >= 0 || idx.external_id >= 0 || idx.factory_article >= 0 || idx.barcode >= 0;
   if (!hasIdentifier) return fast;
   return { kind: "offers", filename, rows: parseOffers(grid, mapping.headerRow + 1, idx), ai: true };
 }
@@ -483,17 +500,22 @@ function parseOffers(
   for (let i = from; i < grid.length; i++) {
     const r = grid[i] ?? [];
     const rawSize = at(r, idx.size);
+    const rawClotherSize = at(r, idx.clother_size);
     const ext = at(r, idx.external_id);
     const fa = at(r, idx.factory_article);
     const art = at(r, idx.article);
     const offer = at(r, idx.offer_code);
     const bc = at(r, idx.barcode);
-    if (!rawSize && !ext && !fa && !art && !offer && !bc) continue; // blank line
+    if (!rawSize && !rawClotherSize && !ext && !fa && !art && !offer && !bc) continue; // blank line
     // Skip a possible second machine-key header row (e.g. odezda template).
-    if (norm(rawSize) === "size" || norm(rawSize) === "clother_size") continue;
+    if (norm(rawSize) === "size" || norm(rawSize) === "clother_size" || norm(rawClotherSize) === "clother_size") continue;
     // No size column at all (e.g. beauty/cosmetics — no per-size variants) ⇒
-    // one row is the whole product, filed as a single "unit" variant.
-    const size = rawSize || (idx.size < 0 ? "ОД" : rawSize);
+    // one row is the whole product, filed as a single "unit" variant. Both
+    // size and clother_size write to the same product_variants.size column
+    // — prefer the generic "Розмір" when a file genuinely has both (rare;
+    // no real file seen so far carries both at once), else whichever is
+    // present, else the "ОД" unit fallback.
+    const size = rawSize || rawClotherSize || (idx.size < 0 && idx.clother_size < 0 ? "ОД" : "");
     const activeRaw = idx.active >= 0 ? norm(at(r, idx.active)) : "";
     const active = activeRaw ? /^(1|так|yes|true|\+|активн)/i.test(activeRaw) : undefined;
 
@@ -521,7 +543,7 @@ function parseOffers(
 
     rows.push({
       external_id: ext, factory_article: fa, article: art, barcode: bc, size,
-      offer_code: offer, active,
+      offer_code: offer, active, clother_size: rawClotherSize || undefined,
       quantity: idx.quantity >= 0 && String(r[idx.quantity] ?? "") !== "" ? Math.max(0, Math.round(num(r[idx.quantity]))) : null,
       base_price: idx.base_price >= 0 ? num(r[idx.base_price]) : 0,
       discount_price: idx.discount_price >= 0 ? num(r[idx.discount_price]) : 0,

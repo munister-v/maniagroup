@@ -27,6 +27,7 @@ export const PROPERTY_LIST: { key: string; label: string; group: "offer" | "prod
   { key: "barcode",         label: "Штрихкод",                       group: "offer" },
   { key: "offer_code",      label: "Код оферу (mp-код)",              group: "offer" },
   { key: "size",            label: "Розмір",                         group: "offer" },
+  { key: "clother_size",    label: "Розмір одягу",                   group: "offer" },
   { key: "quantity",        label: "Кількість",                      group: "offer" },
   { key: "base_price",      label: "Базова ціна",                    group: "offer" },
   { key: "discount_price",  label: "Акційна ціна",                   group: "offer" },
