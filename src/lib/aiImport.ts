@@ -10,12 +10,12 @@
 import { orChat } from "./openRouter";
 
 export type AiMapping = {
-  kind: "offers" | "master";
+  kind: "offers";
   headerRow: number;
   columns: Record<string, number>;
 };
 
-const SCHEMA_HINT = `Two target schemas:
+const SCHEMA_HINT = `Target schema:
 
 "offers" — price/stock list, ONE ROW PER SIZE VARIANT. Fields (use the most likely column):
   external_id   → product id / код товару / external_code / ID
@@ -25,21 +25,7 @@ const SCHEMA_HINT = `Two target schemas:
   offer_code    → код оферу / mp-code / offer_id / SKU
   quantity      → кількість / наявність / qty / stock / залишок (integer stock count)
   base_price    → базова ціна / ціна / regular price (numeric)
-  discount_price → акційна ціна / sale price / знижка (numeric, optional)
-
-"master" — product master list, ONE ROW PER PRODUCT. Fields:
-  kod           → КОД / ID (internal numeric code) — REQUIRED
-  factory_article → АРТИКУЛ / артикул / art
-  brand         → БРЕНД / brand
-  name          → НАИМЕНОВАНИЕ / НАЙМЕНУВАННЯ / назва
-  sizes         → a cell containing multiple sizes (e.g. "XS M L XL" or "L| M| S")
-  base_price    → базова ціна / ціна (numeric)
-  sale_price    → ціна продажу / sale price (numeric)
-  composition   → склад / состав / composition
-  collection    → колекція / коллекция
-  color         → колір / цвет / color
-
-Key rule: if rows contain one size per row with product key → "offers"; if one row per product with sizes in one cell → "master".`;
+  discount_price → акційна ціна / sale price / знижка (numeric, optional)`;
 
 function renderRows(grid: unknown[][], maxRows = 12, maxCols = 28): string {
   // Find first non-empty row to use as anchor
@@ -77,14 +63,14 @@ export async function aiDetectImport(grid: unknown[][]): Promise<AiMapping | nul
       role: "user" as const,
       content:
         `${SCHEMA_HINT}\n\nSpreadsheet sample (columns are 0-based indices):\n${renderRows(grid)}\n\n` +
-        `Task: identify which schema ("offers" or "master") matches this file, ` +
+        `Task: check whether this file matches the "offers" schema, ` +
         `find the header row (first row with column labels), and map field names to column indices.\n` +
         `Return JSON exactly:\n` +
-        `{"kind":"offers"|"master","headerRow":<0-based row index>,"columns":{"<field>":<colIndex>,...}}\n` +
+        `{"kind":"offers","headerRow":<0-based row index>,"columns":{"<field>":<colIndex>,...}}\n` +
         `Rules:\n` +
-        `- "size" column MUST be mapped for "offers"; "kod" MUST be mapped for "master".\n` +
+        `- "size" column MUST be mapped.\n` +
         `- Only include fields you are confident about (skip unsure ones).\n` +
-        `- If the file matches neither schema, return {"kind":"unknown"}.\n` +
+        `- If the file doesn't match, return {"kind":"unknown"}.\n` +
         `- No prose, no markdown — pure JSON only.`,
     },
   ];
@@ -98,7 +84,7 @@ export async function aiDetectImport(grid: unknown[][]): Promise<AiMapping | nul
 
   try {
     const obj = extractJson(raw) as { kind?: string; headerRow?: number; columns?: Record<string, number> };
-    if (obj.kind !== "offers" && obj.kind !== "master") return null;
+    if (obj.kind !== "offers") return null;
     const columns: Record<string, number> = {};
     for (const [k, v] of Object.entries(obj.columns ?? {})) {
       const n = Number(v);

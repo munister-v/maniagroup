@@ -1,8 +1,8 @@
 /**
  * D3 — Receipt from file (прихід з файлу).
  *
- * Parse a supplier invoice (the same OFFERS / MASTER formats the price/stock
- * importer already understands) and turn it into a DRAFT receipt: one line per
+ * Parse a supplier invoice (the same OFFERS format the price/stock importer
+ * already understands) and turn it into a DRAFT receipt: one line per
  * matched (product, size) with qty + unit purchase cost. The user then reviews
  * the draft in ERP → Прихід and posts it — posting runs the proven receiving
  * engine (stock + weighted-average cost). We never auto-post.
@@ -40,21 +40,7 @@ export type ReceiptFilePreview = {
 
 /** Flatten any parsed file into offer-like rows (size + qty + price chain). */
 function toOfferRows(parsed: Awaited<ReturnType<typeof parseImportSmart>>): OfferRow[] {
-  if (parsed.kind === "offers") return parsed.rows;
-  if (parsed.kind === "master") {
-    const out: OfferRow[] = [];
-    for (const r of parsed.rows) {
-      for (const [size, qty] of Object.entries(r.sizes)) {
-        out.push({
-          external_id: r.kod, factory_article: r.factory_article, barcode: "",
-          size, offer_code: "", quantity: qty,
-          base_price: r.base_price, discount_price: r.sale_price,
-        });
-      }
-    }
-    return out;
-  }
-  return [];
+  return parsed.kind === "offers" ? parsed.rows : [];
 }
 
 function lineCost(r: OfferRow, costCol: ReceiptCostCol): number {

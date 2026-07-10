@@ -15,7 +15,7 @@ type UnmatchedItem = {
   quantity?: number | null; base_price?: number; discount_price?: number;
 };
 type ImportPreview = {
-  kind: "offers" | "master" | "unknown";
+  kind: "offers" | "unknown";
   filename: string; totalRows: number;
   matchedRows: number; unmatchedRows: number;
   affectedProducts: number; newProducts: number; newVariants: number; stockChanges: number; priceChanges: number;
@@ -28,15 +28,11 @@ type ApplyResult = {
   productsCreated: number; productsUpdated: number; variantsUpserted: number; stockMovements: number;
 };
 type HistoryEntry = {
-  filename: string; kind: "offers" | "master" | "unknown"; at: string;
+  filename: string; kind: "offers" | "unknown"; at: string;
   productsCreated: number; productsUpdated: number; variantsUpserted: number;
   stockMovements: number; matchedRows: number; unmatchedRows: number;
 };
 type FileStatus = "idle" | "previewing" | "ready" | "error" | "applying" | "done";
-/** Which upload path the admin picked upfront — purely a front-end focusing
- *  aid (narrows the hint/accept-attribute); the server still auto-detects
- *  the real kind of every file regardless of this choice. */
-type ImportMode = "master" | "offers" | "both";
 type FileItem = {
   id: string; file: File; status: FileStatus;
   preview: ImportPreview | null; result: ApplyResult | null; error: string;
@@ -45,12 +41,10 @@ type FileItem = {
 /* ── constants ────────────────────────────────────────────────────────────── */
 const KIND_LABEL: Record<string, string> = {
   offers: "Таблиця ОСТАТКИ (.csv)",
-  master: "Таблиця товарів (MG / WP)",
   unknown: "Невідомий",
 };
 const KIND_COLOR: Record<string, string> = {
   offers: "bg-blue-50 text-blue-700 border-blue-200",
-  master: "bg-amber-50 text-amber-700 border-amber-200",
   unknown: "bg-red-50 text-red-600 border-red-200",
 };
 
@@ -97,15 +91,6 @@ function downloadUnmatchedCsv(preview: ImportPreview) {
   URL.revokeObjectURL(url);
 }
 
-/** Master files should be applied before offers files. */
-function sortedByPriority(items: FileItem[]): FileItem[] {
-  return [...items].sort((a, b) => {
-    const pa = a.preview?.kind === "master" ? 0 : 1;
-    const pb = b.preview?.kind === "master" ? 0 : 1;
-    return pa - pb;
-  });
-}
-
 /* ── StatChip ─────────────────────────────────────────────────────────────── */
 function StatChip({ label, value, accent }: { label: string; value: number | string; accent?: string }) {
   return (
@@ -124,8 +109,8 @@ const fieldCls = "h-8 w-full rounded-[3px] border border-[#E0E0E0] bg-white px-2
 /**
  * Turns one unmatched OFFERS row into a real product on the spot — the whole
  * point being that a supplier's ОСТАТКИ file can introduce a genuinely new
- * item without the admin ever having to build/upload an MG master file just
- * to cover one or two rows. Prefills everything the row already carries
+ * item without the admin ever having to build a separate table just to cover
+ * one or two rows. Prefills everything the row already carries
  * (code, size, qty, price); the admin only has to type the name (brand/
  * category default server-side if left blank, same as "Каталог → Новий товар").
  */
@@ -375,18 +360,17 @@ function DiffTable({ preview, onProductCreated }: { preview: ImportPreview; onPr
 /* ── FileCard ─────────────────────────────────────────────────────────────── */
 /**
  * Design goal: the admin never has to click "expand" to find the one button
- * that matters. Every meaningful state (ready to apply, done, waiting on a
- * sibling, error) is fully visible in the collapsed header row. Expanding is
- * strictly optional — only for the row-by-row diff table.
+ * that matters. Every meaningful state (ready to apply, done, error) is fully
+ * visible in the collapsed header row. Expanding is strictly optional — only
+ * for the row-by-row diff table.
  */
 function FileCard({
-  item, expanded, siblingMasterPending, onExpand, onRemove, onApply, onRetry, onProductCreated,
+  item, expanded, onExpand, onRemove, onApply, onRetry, onProductCreated,
 }: {
-  item: FileItem; expanded: boolean; siblingMasterPending: boolean;
+  item: FileItem; expanded: boolean;
   onExpand: () => void; onRemove: () => void; onApply: () => void; onRetry: () => void; onProductCreated: () => void;
 }) {
   const kind = item.preview?.kind ?? "unknown";
-  const waitingOnMaster = item.status === "ready" && item.preview?.kind === "offers" && item.preview.matchedRows === 0 && siblingMasterPending;
   const showPreview = item.preview && (item.status === "ready" || item.status === "done" || item.status === "applying");
   const canApply = item.status === "ready" && (item.preview?.matchedRows ?? 0) > 0;
 
@@ -395,7 +379,6 @@ function FileCard({
       item.status === "error" ? "border-red-300" :
       item.status === "done" ? "border-green-300" :
       canApply ? "border-[#2f9488]" :
-      waitingOnMaster ? "border-[#E0E0E0] opacity-70" :
       "border-[#E0E0E0]"
     }`}>
       {/* header row — always shows the full verdict, no expand needed */}
@@ -427,8 +410,7 @@ function FileCard({
             {item.result.stockMovements} рухів
           </span>
         )}
-        {waitingOnMaster && <span className="shrink-0 text-[12px] text-[#9E9E9E]">⏳ Очікує застосування MG</span>}
-        {item.status === "ready" && !waitingOnMaster && item.preview && (
+        {item.status === "ready" && item.preview && (
           <span className="shrink-0 text-[12px] text-[#5a6472]">
             {item.preview.newProducts > 0 ? `${item.preview.newProducts} нових товарів` : `${item.preview.matchedRows.toLocaleString("uk-UA")} знайдено`}
           </span>
@@ -467,12 +449,6 @@ function FileCard({
       {item.status === "error" && item.error && (
         <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-[12px] text-red-700">{item.error}</p>
       )}
-      {waitingOnMaster && (
-        <p className="border-t border-[#F0F0F0] bg-[#FAFAFA] px-4 py-2 text-[12px] text-[#9E9E9E]">
-          Це нормально — товарів ще немає в каталозі. Натисніть «Застосувати» на MG вище, і ця таблиця сама покаже реальні збіги.
-        </p>
-      )}
-
       {/* expanded body — optional detail, never required to apply */}
       {expanded && (
         <div className="border-t border-[#F5F5F5] px-4 py-4 space-y-4">
@@ -489,9 +465,10 @@ function FileCard({
                 <StatChip label="Зміни ціни"   value={item.preview.priceChanges} />
               </div>
 
-              {item.preview.matchedRows === 0 && !siblingMasterPending && (
+              {item.preview.matchedRows === 0 && item.preview.newProducts === 0 && (
                 <p className="rounded-[4px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                  Жоден рядок не зіставлено з каталогом. Для таблиці ОСТАТКИ спершу завантажте таблицю MG — вона створює товари й заповнює «Заводський артикул», по якому потім зіставляються залишки.
+                  Жоден рядок не зіставлено з каталогом і немає даних для авто-створення. Перевірте «Заводський артикул» у файлі — рядки без нього
+                  або без назви товару потрапляють у «Не знайдено» нижче, де їх можна створити вручну кнопкою «+ Створити товар».
                 </p>
               )}
 
@@ -564,9 +541,9 @@ function GuideInfoCard({ icon, iconBg, title, children }: { icon: ReactNode; ico
   );
 }
 
-function DownloadExample({ kind, label }: { kind: "master" | "offers"; label: string }) {
+function DownloadExample({ label }: { label: string }) {
   return (
-    <a href={`/api/erp/import/template?kind=${kind}`} download
+    <a href="/api/erp/import/template?kind=offers" download
       className="mt-3 inline-flex items-center gap-1.5 rounded-[3px] border border-[#BDBDBD] bg-white px-3 py-1.5 text-[11px] font-medium text-[#3a4250] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]">
       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeLinecap="round" strokeLinejoin="round" /></svg>
       {label}
@@ -574,134 +551,45 @@ function DownloadExample({ kind, label }: { kind: "master" | "offers"; label: st
   );
 }
 
-/** Upfront choice of what the admin is doing — the single biggest simplification:
- *  instead of one generic dropzone + a wall of "both file types" explanation,
- *  the admin picks their actual intent first and gets a focused, minimal path. */
-const MODE_CARDS: { mode: ImportMode; iconBg: string; icon: ReactNode; title: string; sub: string; desc: string }[] = [
-  {
-    mode: "master", iconBg: "bg-amber-100 text-amber-700", title: "Тільки нові товари",
-    sub: "Таблиця MG (.xls / .xlsx)", desc: "Створює картки товарів: назви, бренди, ціни, розміри.",
-    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 9v6M9 12h6" strokeLinecap="round" /></svg>,
-  },
-  {
-    mode: "offers", iconBg: "bg-blue-100 text-blue-700", title: "Тільки оновити залишки",
-    sub: "Таблиця ОСТАТКИ (.csv)", desc: "Оновлює наявність і ціни у вже створених товарах.",
-    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M20 11A8 8 0 006 5.3L3 8m0 0V3m0 5h5m-5 5a8 8 0 0014 5.7l3-2.7m0 0v5m0-5h-5" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-  },
-  {
-    mode: "both", iconBg: "bg-emerald-100 text-emerald-700", title: "MG + ОСТАТКИ разом",
-    sub: "Повне оновлення", desc: "Спочатку створює товари, одразу за ними оновлює залишки.",
-    icon: <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3l8 4-8 4-8-4 8-4z" strokeLinejoin="round" /><path d="M4 12l8 4 8-4M4 16l8 4 8-4" strokeLinecap="round" strokeLinejoin="round" /></svg>,
-  },
-];
-
-function ModePicker({ onPick, onGoToCatalog }: { onPick: (m: ImportMode) => void; onGoToCatalog?: () => void }) {
-  return (
-    <div className="mb-4">
-      <p className="mb-3 text-[13px] text-[#5a6472]">Що завантажуємо?</p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {MODE_CARDS.map((c) => (
-          <button key={c.mode} onClick={() => onPick(c.mode)}
-            className="rounded-[6px] border-2 border-[#E0E0E0] bg-white p-4 text-left transition-colors hover:border-[#2f9488] hover:bg-[#FAFAFA]">
-            <span className={`flex h-9 w-9 items-center justify-center rounded-full ${c.iconBg}`}>{c.icon}</span>
-            <p className="mt-2.5 text-[14px] font-medium text-[#1f2733]">{c.title}</p>
-            <p className="mt-0.5 text-[11px] text-[#9E9E9E]">{c.sub}</p>
-            <p className="mt-1.5 text-[12px] leading-relaxed text-[#5a6472]">{c.desc}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* File upload is for batches from the supplier — a one-off addition
-          shouldn't require building a whole MG/ОСТАТКИ file at all. */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#E0E0E0] bg-[#FAFAFA] px-3.5 py-2.5 text-[12px] text-[#5a6472]">
-        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-[#9E9E9E]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
-        <span className="flex-1">Файл потрібен лише для <b>пакетного</b> завантаження від постачальника. Додати всього 1–2 товари? Вручну — швидше.</span>
-        {onGoToCatalog && (
-          <button onClick={() => onGoToCatalog()}
-            className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] hover:underline">
-            Каталог → Новий товар →
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: () => void }) {
+/** Static "з чого почати" panel — shown until the first file is added.
+ *  Only one supported format (Intertop ОСТАТКИ), so there's nothing to pick. */
+function StartGuide() {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const card = MODE_CARDS.find((c) => c.mode === mode)!;
   return (
     <div className="mb-4 rounded-[6px] border border-[#E0E0E0] bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${card.iconBg}`}>
-            {card.icon}
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M20 11A8 8 0 006 5.3L3 8m0 0V3m0 5h5m-5 5a8 8 0 0014 5.7l3-2.7m0 0v5m0-5h-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </span>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-[#9E9E9E]">Режим</p>
-            <h2 className="mt-0.5 text-[15px] font-medium text-[#1f2733]">{card.title} <span className="text-[#9E9E9E] font-normal">— {card.sub}</span></h2>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-[#9E9E9E]">Формат</p>
+            <h2 className="mt-0.5 text-[15px] font-medium text-[#1f2733]">Таблиця ОСТАТКИ <span className="text-[#9E9E9E] font-normal">(.csv)</span></h2>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button onClick={onChangeMode}
-            className="rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
-            Змінити
-          </button>
-          <button onClick={() => setDetailsOpen((v) => !v)}
-            className="rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
-            {detailsOpen ? "Згорнути деталі" : "Як саме працює перевірка? →"}
-          </button>
-        </div>
+        <button onClick={() => setDetailsOpen((v) => !v)}
+          className="shrink-0 rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
+          {detailsOpen ? "Згорнути деталі" : "Як саме працює перевірка? →"}
+        </button>
       </div>
 
-      {mode === "both" && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="rounded-[3px] bg-amber-100 px-2.5 py-1 font-medium text-amber-800">1 · MG створює товари</span>
-          <span className="text-[#BDBDBD]">→</span>
-          <span className="rounded-[3px] bg-blue-100 px-2.5 py-1 font-medium text-blue-800">2 · ОСТАТКИ оновлює наявність і ціни</span>
-          <span className="text-[#BDBDBD]">→</span>
-          <span className="rounded-[3px] bg-green-100 px-2.5 py-1 font-medium text-green-800">✓ товар на сайті</span>
-        </div>
-      )}
-
-      <div className={`mt-4 grid gap-3 ${mode === "both" ? "md:grid-cols-2" : ""}`}>
-        {(mode === "master" || mode === "both") && (
-          <div className="relative rounded-[5px] border border-amber-200 bg-amber-50/40 p-4">
-            <h3 className="text-[14px] font-medium text-[#1f2733]">Таблиця MG <span className="text-[#9E9E9E]">(.xls / .xlsx)</span></h3>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#5a6472]">
-              Повна база товарів <b>за весь час</b>. <b>Створює картки товарів</b>: назви, бренди, ціни, розміри, склад.
-              Ключова колонка — <b>АРТИКУЛ</b>: по ньому потім чіпляються залишки.
-            </p>
-            <ExampleTable
-              header={["КОД", "АРТИКУЛ", "БРЕНД", "НАИМЕНОВАНИЕ", "Размеры", "Цена базовая", "Цена продажи"]}
-              row={["10001", "ART-10001", "Mania Group", "Пальто вовняне", "S M M L", "4200", "3360"]}
-              accent="bg-amber-50 text-amber-900"
-            />
-            <DownloadExample kind="master" label="Завантажити приклад MG.xlsx" />
-          </div>
-        )}
-
-        {(mode === "offers" || mode === "both") && (
-          <div className="relative rounded-[5px] border border-blue-200 bg-blue-50/40 p-4">
-            <h3 className="text-[14px] font-medium text-[#1f2733]">Таблиця ОСТАТКИ <span className="text-[#9E9E9E]">(.csv)</span></h3>
-            <p className="mt-1 text-[12px] leading-relaxed text-[#5a6472]">
-              Що <b>реально є зараз</b> + актуальні ціни. <b>Оновлює наявність і ціни</b> в уже створених товарах,
-              зіставляючи по <b>factory_article + розмір</b>. Роздільник — <b>крапка з комою</b>.
-            </p>
-            <ExampleTable
-              header={["external_Id", "factory_article", "barcode", "size", "quantity", "base_price", "discount_price"]}
-              row={["ART-10001", "ART-10001", "48200000...", "S", "2", "4200.00", "3360.00"]}
-              accent="bg-blue-50 text-blue-900"
-            />
-            <DownloadExample kind="offers" label="Завантажити приклад ОСТАТКИ.csv" />
-          </div>
-        )}
+      <div className="mt-4 relative rounded-[5px] border border-blue-200 bg-blue-50/40 p-4">
+        <p className="text-[12px] leading-relaxed text-[#5a6472]">
+          Що <b>реально є зараз</b> + актуальні ціни. <b>Оновлює наявність і ціни</b> у вже створених товарах, зіставляючи по <b>factory_article + розмір</b>
+          (а рядок без збігу, якщо несе назву товару, <b>сам створює нову картку</b> — окремий MG-файл для цього більше не потрібен). Роздільник — <b>крапка з комою</b>.
+        </p>
+        <ExampleTable
+          header={["external_Id", "factory_article", "barcode", "size", "quantity", "base_price", "discount_price"]}
+          row={["ART-10001", "ART-10001", "48200000...", "S", "2", "4200.00", "3360.00"]}
+          accent="bg-blue-50 text-blue-900"
+        />
+        <DownloadExample label="Завантажити приклад ОСТАТКИ.csv" />
       </div>
 
       <div className="mt-4 grid gap-2 rounded-[5px] bg-[#FAFAFA] p-3 text-[11px] text-[#5a6472] sm:grid-cols-2">
         <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Спершу <b>превʼю</b> — нічого не змінюється, поки не натиснете «Застосувати»</span>
-        {mode === "both" && <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Можна кинути <b>обидві таблиці одразу</b> — MG застосується першою</span>}
-        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Рядок ОСТАТКИ без свого товару потрапить у <b>«не знайдено»</b> — створіть товар прямо звідти, одним кліком</span>
+        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Рядок без свого товару, але з назвою — <b>сам стане новою карткою</b> при застосуванні</span>
+        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Рядок зовсім без даних для створення потрапить у <b>«не знайдено»</b> — створіть товар прямо звідти, одним кліком</span>
         <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Незнайомий формат колонок <b>розпізнає ШІ</b> автоматично</span>
       </div>
 
@@ -709,32 +597,31 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
         <div className="mt-4 rounded-[5px] border border-[#E0E0E0] bg-[#FAFAFA] p-4">
           {/* numbered, connected timeline — mirrors the actual preview→apply sequence */}
           <div>
-            <GuideStep n={1} color="bg-amber-500" title="Розпізнавання файлу">
+            <GuideStep n={1} color="bg-blue-500" title="Розпізнавання файлу">
               <p>
                 Щойно файл кинуто в зону завантаження, він одразу йде на «превʼю» (нічого ще не пишеться в базу).
-                Сервер дивиться на назви колонок: якщо є <span className="font-mono text-[11px]">factory_article</span> / <span className="font-mono text-[11px]">quantity</span> / <span className="font-mono text-[11px]">barcode</span> — це
-                таблиця <b>ОСТАТКИ</b>; якщо є <span className="font-mono text-[11px]">АРТИКУЛ</span> / <span className="font-mono text-[11px]">НАИМЕНОВАНИЕ</span> / «Размеры» — це <b>MG-таблиця товарів</b>.
+                Сервер дивиться на назви колонок — потрібні <span className="font-mono text-[11px]">size</span> і хоча б одне з
+                <span className="font-mono text-[11px]"> quantity</span> / <span className="font-mono text-[11px]">base_price</span>.
               </p>
               <p>
-                Якщо колонки не збігаються з жодним відомим шаблоном — файл автоматично надсилається на розпізнавання ШІ, який сам визначає, яка колонка за що відповідає.
+                Якщо колонки не збігаються з відомим шаблоном — файл автоматично надсилається на розпізнавання ШІ, який сам визначає, яка колонка за що відповідає.
                 Якщо навіть ШІ не може впевнено визначити формат — картка файлу підсвічується червоним і показує помилку замість статистики.
               </p>
             </GuideStep>
 
-            <GuideStep n={2} color="bg-blue-500" title="Превʼю — як саме зіставляються рядки з товарами">
-              <p>Для кожного рядка ОСТАТКИ система шукає відповідний товар у каталозі за ланцюжком пріоритету (перший збіг перемагає):</p>
+            <GuideStep n={2} color="bg-[#2f9488]" title="Превʼю — як саме зіставляються рядки з товарами">
+              <p>Для кожного рядка система шукає відповідний товар у каталозі за ланцюжком пріоритету (перший збіг перемагає):</p>
               <ol className="ml-4 list-decimal space-y-0.5">
                 <li><b>offer_code</b> — точний код пропозиції з розмірної сітки товару, якщо він вже був заповнений раніше;</li>
                 <li><b>barcode</b> — штрихкод конкретного розміру;</li>
-                <li><b>factory_article</b> — заводський артикул постачальника (заповнюється MG-файлом або вручну в картці товару);</li>
+                <li><b>factory_article</b> — заводський артикул постачальника (заповнюється при попередньому імпорті або вручну в картці товару);</li>
                 <li><b>external_id / sku</b> — резервний варіант, коли жоден із перших трьох не збігся.</li>
               </ol>
               <p>
-                Якщо жоден із чотирьох варіантів не знайшов товар — рядок потрапляє у список <b>«Не знайдено»</b>. Найчастіша причина: MG-файл із цим товаром
-                ще не застосований (тоді картка сама покаже приглушений напис «Очікує застосування MG» замість тривожного попередження), артикул у файлі
-                ОСТАТКИ написаний інакше, ніж у картці товару (зайвий пробіл, інший регістр, інша транслітерація), або товар <b>справді ще не існує</b> в каталозі.
-                Для останнього випадку кожен рядок «Не знайдено» має кнопку <b>«+ Створити товар»</b> — відкриває коротку форму (назва + ціна), уже заповнену
-                кодом, розміром і кількістю з файлу, і одразу після створення перевіряє рядок ще раз. Це прибирає потребу заливати MG-файл заради 1–2 нових позицій.
+                Якщо жоден із чотирьох варіантів не знайшов товар, але рядок несе назву товару (типово для одезда-шаблону) — така група рядків
+                (усі розміри одного товару) при застосуванні <b>сама створить нову картку</b>. Якщо ж даних для створення теж немає — рядок потрапляє
+                у список <b>«Не знайдено»</b>, де кожен запис має кнопку <b>«+ Створити товар»</b> — коротка форма (назва + ціна), вже заповнена
+                кодом, розміром і кількістю з файлу.
               </p>
               <p>
                 На цьому етапі порівнюються поточні значення в базі (<i>було</i>) з тими, що прийшли у файлі (<i>стане</i>) — саме це і показує таблиця
@@ -742,20 +629,11 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
               </p>
             </GuideStep>
 
-            <GuideStep n={3} color="bg-[#2f9488]" title="«Застосувати» — що саме записується в базу" last>
+            <GuideStep n={3} color="bg-emerald-600" title="«Застосувати» — що саме записується в базу" last>
               <p>
-                <b>Для MG-файлу:</b> для кожного рядка створюється або оновлюється товар (назва, бренд, ціни, категорія), а розмірна сітка з колонки «Размеры»
-                перетворюється на реальні записи в <span className="font-mono text-[11px]">product_variants</span> (по одному на розмір). Товару автоматично
-                присвоюється <span className="font-mono text-[11px]">factory_article</span> — саме він потім стає ключем для файлу ОСТАТКИ.
-              </p>
-              <p>
-                <b>Для файлу ОСТАТКИ:</b> для кожного зіставленого рядка оновлюється кількість і ціна конкретного розміру у <span className="font-mono text-[11px]">product_variants</span>,
+                Для кожного зіставленого рядка оновлюється кількість і ціна конкретного розміру у <span className="font-mono text-[11px]">product_variants</span>,
                 і кожна зміна кількості пишеться окремим рядком в <span className="font-mono text-[11px]">stock_movements</span> (звідки береться цифра «рухів» у результаті).
                 Після цього <b>сумарний залишок і статус «в наявності» перераховуються автоматично</b> як сума по всіх розмірах — вручну чіпати не потрібно.
-              </p>
-              <p>
-                Якщо кинуто одразу два файли — MG завжди застосовується першим, а щойно MG застосовано, картка ОСТАТКИ автоматично оновлює своє превʼю
-                й підхоплює нові товари.
               </p>
             </GuideStep>
           </div>
@@ -769,7 +647,7 @@ function StartGuide({ mode, onChangeMode }: { mode: ImportMode; onChangeMode: ()
             >
               <ul className="ml-4 list-disc space-y-0.5">
                 <li><b>Знайдено</b> — рядків файлу з товаром у каталозі (буде застосовано).</li>
-                <li><b>Не знайдено</b> — рядків без збігу (для MG-файлу тут «Нові товари» — будуть створені).</li>
+                <li><b>Нові товари</b> — груп рядків без збігу, які самі створять картку товару.</li>
                 <li><b>Товарів</b> — унікальних карток, які зачепить файл (створення + оновлення).</li>
                 <li><b>Нові розміри</b> — записів у product_variants, що з'являться вперше.</li>
                 <li><b>Зміни залишку / ціни</b> — рядків, що реально відрізняються від бази зараз.</li>
@@ -801,11 +679,10 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
   onGoToCatalog?: () => void;
 }) {
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [mode, setMode] = useState<ImportMode | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [historyFilter, setHistoryFilter] = useState<"" | "master" | "offers">("");
+  const [historyFilter, setHistoryFilter] = useState<"" | "offers">("");
   const [historyOpenIdx, setHistoryOpenIdx] = useState<number | null>(null);
   const [applyingAll, setApplyingAll] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -845,13 +722,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       if (d.preview) {
         const preview = d.preview as ImportPreview;
         setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "ready", preview } : f));
-        // Dropped together, MASTER + OFFERS previews resolve in parallel — whoever
-        // finishes last would normally grab the expanded slot. If that's OFFERS
-        // while a MASTER file is still sitting there un-applied, it hides the
-        // one card with a working "Застосувати" button behind a scary "0
-        // знайдено" state. Master always wins the expanded slot in that case.
-        const siblingMasterPending = filesRef.current.some((f) => f.id !== id && f.preview?.kind === "master" && f.status !== "done");
-        if (!(preview.kind === "offers" && siblingMasterPending)) setExpandedId(id);
+        setExpandedId(id);
         return preview;
       }
       setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "error", error: d.error ?? "Помилка читання" } : f));
@@ -905,12 +776,12 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
         if (res.stockMovements) parts.push(`${res.stockMovements} рухів залишків`);
         onImported?.(`Імпорт застосовано: ${parts.join(" · ") || "без змін"}`);
 
-        // A MASTER apply just changed products.factory_article — any sibling
-        // file still waiting (e.g. an OFFERS file dropped in the same batch)
-        // was matched against the OLD, pre-apply DB state at drop-time. Its
-        // preview counts are now stale ("0 знайдено" forever) unless we
-        // re-run preview for it against the fresh DB. Awaited so callers
-        // (applyAll) see up-to-date filesRef state right after this resolves.
+        // This apply may have auto-created products (odezda-style rows) or
+        // changed factory_article — any sibling file still waiting (dropped in
+        // the same batch) was matched against the OLD, pre-apply DB state at
+        // drop-time. Its preview counts are now stale unless we re-run preview
+        // for it against the fresh DB. Awaited so callers (applyAll) see
+        // up-to-date filesRef state right after this resolves.
         const siblings = filesRef.current.filter((f) => f.id !== id && (f.status === "ready" || f.status === "error"));
         await Promise.all(siblings.map((s) => runPreview(s.id, s.file)));
       } else {
@@ -924,19 +795,17 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
     }
   }, [runPreview, loadCatalog]);
 
-  // Applies every ready file, MASTER first. Re-checks the LIVE file list after
-  // each apply (via filesRef) instead of a list frozen at call-time — a MASTER
-  // apply re-previews sibling OFFERS files in-flight (see applyFile), which can
-  // turn a file that looked unmatched at drop-time into a real match. Without
-  // this re-check, that file would never get applied in the same batch.
+  // Applies every ready file. Re-checks the LIVE file list after each apply
+  // (via filesRef) instead of a list frozen at call-time — an apply re-previews
+  // sibling files in-flight (see applyFile), which can turn a file that looked
+  // unmatched at drop-time into a real match. Without this re-check, that file
+  // would never get applied in the same batch.
   const applyAll = useCallback(async () => {
     setApplyingAll(true);
     const appliedIds = new Set<string>();
     for (let guard = 0; guard < 50; guard++) {
-      const candidates = sortedByPriority(
-        filesRef.current.filter((f) =>
-          !appliedIds.has(f.id) && f.status === "ready" && (f.preview?.matchedRows ?? 0) > 0
-        )
+      const candidates = filesRef.current.filter((f) =>
+        !appliedIds.has(f.id) && f.status === "ready" && (f.preview?.matchedRows ?? 0) > 0
       );
       if (candidates.length === 0) break;
       const next = candidates[0];
@@ -955,19 +824,8 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
     updated: a.updated + r.productsUpdated,
     movements: a.movements + r.stockMovements,
   }), { created: 0, updated: 0, movements: 0 });
-  const kinds      = files.filter((f) => f.preview).map((f) => f.preview!.kind);
-  const hasBoth    = kinds.includes("master") && kinds.includes("offers");
-  // MG only sets up the bridge (factory_article) + whatever crude stock the
-  // "Розміри" column implied — real stock/prices come from ОСТАТКИ. If this
-  // batch never had an ОСТАТКИ file at all, that's still an open step, not
-  // just a "done" state to leave the admin to rediscover on their own.
-  const onlyMasterApplied = allDone && doneResults.length > 0 && files.every((f) => f.status !== "done" || f.preview?.kind === "master");
-
-  /** Clears the finished batch and opens a specific mode directly — used by
-   *  the "next step" nudge so clicking it doesn't dump the admin back on the
-   *  3-way picker when we already know exactly what they need next. */
-  function startNewBatch(m: ImportMode | null) {
-    setFiles([]); setExpandedId(null); setMode(m);
+  function startNewBatch() {
+    setFiles([]); setExpandedId(null);
   }
 
   return (
@@ -983,19 +841,10 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
           )}
           <h1 className="text-[22px] font-light tracking-tight">Завантажити товари</h1>
           <p className="mt-0.5 text-[12px] text-[#9E9E9E]">
-            {mode == null
-              ? "Оберіть, що саме завантажуєте — система підбере потрібний формат."
-              : mode === "master" ? "Тільки нові товари — таблиця MG (.xls)."
-              : mode === "offers" ? "Тільки оновлення залишків і цін — таблиця ОСТАТКИ (.csv)."
-              : "MG та ОСТАТКИ — перетягніть один або кілька файлів одразу."}
+            Оновлення залишків і цін — таблиця ОСТАТКИ (.csv); рядок без товару в каталозі сам створить нову картку.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {hasBoth && (
-            <span className="rounded-[3px] border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
-              ⟳ МG спочатку, потім прайс
-            </span>
-          )}
           {readyCount > 1 && (
             <button onClick={applyAll} disabled={applyingAll}
               className="h-9 rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] shadow-sm hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
@@ -1003,7 +852,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
             </button>
           )}
           {hasFiles && (
-            <button onClick={() => startNewBatch(null)}
+            <button onClick={startNewBatch}
               className="h-9 rounded-[3px] border border-[#E0E0E0] px-3 text-[11px] text-[#3a4250] hover:border-[#2f9488]">
               {allDone ? "Нові файли" : "Очистити"}
             </button>
@@ -1061,18 +910,6 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
               </button>
             )}
           </div>
-          {onlyMasterApplied && (
-            <div className="flex flex-wrap items-center gap-3 border-t border-blue-200 bg-blue-50 px-4 py-2.5 text-[12px] text-blue-800">
-              <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              <span>
-                Наступний крок: файл MG лише створив картки товарів. Щоб виставити <b>реальні залишки й ціни</b>,
-                завантажте таблицю ОСТАТКИ.
-              </span>
-              <button onClick={() => startNewBatch("offers")} className="ml-auto shrink-0 text-[11px] uppercase tracking-[0.1em] text-blue-900 hover:underline">
-                Далі — завантажити ОСТАТКИ →
-              </button>
-            </div>
-          )}
           {!!catalog?.noPhoto && applied.created > 0 && (
             <div className="flex flex-wrap items-center gap-3 border-t border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
               <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" strokeLinecap="round" /></svg>
@@ -1091,14 +928,10 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       )}
 
       {/* onboarding — only before the first file is added */}
-      {!hasFiles && (mode == null
-        ? <ModePicker onPick={setMode} onGoToCatalog={onGoToCatalog} />
-        : <StartGuide mode={mode} onChangeMode={() => setMode(null)} />
-      )}
+      {!hasFiles && <StartGuide />}
 
-      {/* drop zone — hidden until a mode is picked, so the very first thing an
-          admin does is state their intent instead of facing a generic box */}
-      {mode != null && !allDone && (
+      {/* drop zone */}
+      {!allDone && (
         <div
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
@@ -1117,24 +950,13 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
                 <path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <p className="mt-3 text-[14px] text-[#3a4250]">Перетягніть файл або натисніть для вибору</p>
-              <p className="mt-1 text-[12px] text-[#9E9E9E]">
-                {mode === "master" ? ".xls · .xlsx" : mode === "offers" ? ".csv" : ".csv · .xls · .xlsx — можна кинути кілька файлів одразу"}
-              </p>
-              <div className="mt-3 flex items-center justify-center gap-3 text-[11px]">
-                {(mode === "master" || mode === "both") && (
-                  <span className="rounded-[3px] border border-amber-200 bg-amber-50 px-2 py-1 text-amber-600">Таблиця MG (.xls)</span>
-                )}
-                {mode === "both" && <span className="text-[#BDBDBD]">+</span>}
-                {(mode === "offers" || mode === "both") && (
-                  <span className="rounded-[3px] border border-blue-200 bg-blue-50 px-2 py-1 text-blue-600">Таблиця ОСТАТКИ (.csv)</span>
-                )}
-              </div>
+              <p className="mt-1 text-[12px] text-[#9E9E9E]">.csv · .xls · .xlsx — можна кинути кілька файлів одразу</p>
             </>
           ) : (
             <p className="text-[12px] text-[#9E9E9E]">+ Додати ще файли</p>
           )}
           <input ref={fileRef} type="file"
-            accept={mode === "master" ? ".xls,.xlsx" : mode === "offers" ? ".csv" : ".csv,.xls,.xlsx"}
+            accept=".csv,.xls,.xlsx"
             multiple className="sr-only"
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }} />
         </div>
@@ -1143,25 +965,21 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       {/* file list */}
       {hasFiles && (
         <div className="mt-4 space-y-2">
-          {files.map((item) => {
-            const siblingMasterPending = files.some((f) => f.id !== item.id && f.preview?.kind === "master" && f.status !== "done");
-            return (
-              <FileCard
-                key={item.id}
-                item={item}
-                expanded={expandedId === item.id}
-                siblingMasterPending={siblingMasterPending}
-                onExpand={() => setExpandedId((v) => v === item.id ? null : item.id)}
-                onRemove={() => {
-                  setFiles((prev) => prev.filter((f) => f.id !== item.id));
-                  if (expandedId === item.id) setExpandedId(null);
-                }}
-                onApply={() => applyFile(item.id)}
-                onRetry={() => (item.preview ? applyFile(item.id) : runPreview(item.id, item.file))}
-                onProductCreated={() => { runPreview(item.id, item.file); loadCatalog(); }}
-              />
-            );
-          })}
+          {files.map((item) => (
+            <FileCard
+              key={item.id}
+              item={item}
+              expanded={expandedId === item.id}
+              onExpand={() => setExpandedId((v) => v === item.id ? null : item.id)}
+              onRemove={() => {
+                setFiles((prev) => prev.filter((f) => f.id !== item.id));
+                if (expandedId === item.id) setExpandedId(null);
+              }}
+              onApply={() => applyFile(item.id)}
+              onRetry={() => (item.preview ? applyFile(item.id) : runPreview(item.id, item.file))}
+              onProductCreated={() => { runPreview(item.id, item.file); loadCatalog(); }}
+            />
+          ))}
         </div>
       )}
 
@@ -1173,7 +991,6 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
             <div className="flex flex-wrap gap-1.5">
               {([
                 { v: "", l: "Всі" },
-                { v: "master", l: "MG" },
                 { v: "offers", l: "ОСТАТКИ" },
               ] as const).map((f) => (
                 <button key={f.v} onClick={() => { setHistoryFilter(f.v); setHistoryOpenIdx(null); }}

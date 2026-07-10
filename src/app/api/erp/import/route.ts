@@ -37,9 +37,10 @@ export async function GET() {
 }
 
 /**
- * "Завантажити товари" — upload a price/stock file (Intertop prices.csv or MG
- * master .xls). mode=preview (default) returns a dry-run summary; mode=apply
- * writes the changes. Multipart form: { file, mode }.
+ * "Завантажити товари" — upload a price/stock file (Intertop prices.csv,
+ * or the odezda.xlsx / WooCommerce variable-export equivalent).
+ * mode=preview (default) returns a dry-run summary; mode=apply writes the
+ * changes. Multipart form: { file, mode }.
  */
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -3,8 +3,8 @@
 import { ErpImport } from "./ErpImport";
 
 /**
- * "Завантажити товари" modal. Single real flow: drop the MG master .xls
- * and/or the Intertop prices.csv, preview the diff, apply.
+ * "Завантажити товари" modal. Single real flow: drop the Intertop ОСТАТКИ
+ * table, preview the diff, apply — same format the store runs on end to end.
  *
  * (Used to be a 4-tab Intertop-cabinet-style wizard with two template-export
  * tabs and a price-upload tab — all three were either broken or fully
@@ -40,8 +40,7 @@ export function ErpImportTabs({
 
       <div className={isModal ? "max-h-[70vh] overflow-y-auto p-6" : undefined}>
         <p className="mb-4 text-[13px] text-[#8a94a0]">
-          <b className="text-[#2b2d42]">Оберіть файл</b> — таблиця MG (.xls) створює й оновлює товари, таблиця ОСТАТКИ (.csv) оновлює лише наявність і ціни.
-          Система сама розпізнає тип файлу.
+          <b className="text-[#2b2d42]">Оберіть файл</b> — таблиця ОСТАТКИ (.csv) оновлює наявність і ціни, а рядок без товару в каталозі сам створює нову картку.
         </p>
         <ErpImport onBack={onClose} onImported={onImported} onGoToCatalog={onGoToCatalog} />
 
