@@ -192,7 +192,76 @@ function productColumns(cells: string[]): Record<keyof OfferProductInfo, number>
   return idx;
 }
 
+// Guide 2.8's XML price/stock feed: <catalog created_at="…"><offers><offer>
+// article/barcode/sku_size/sku/quantity/base_price/discount_price</offer>…
+// </offers></catalog>. Detected before handing the buffer to SheetJS, which
+// would otherwise choke trying to read XML text as a spreadsheet.
+function looksLikeXml(buf: Buffer, filename: string): boolean {
+  if (/\.xml$/i.test(filename)) return true;
+  const head = buf.subarray(0, 200).toString("utf8").trimStart();
+  return head.startsWith("<?xml") || /^<catalog[\s>]/i.test(head);
+}
+
+const XML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+function decodeXmlEntities(s: string): string {
+  return s.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-f]+);/gi, (m, ent: string) => {
+    if (ent[0] === "#") {
+      const code = ent[1].toLowerCase() === "x" ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+    }
+    return XML_ENTITIES[ent.toLowerCase()] ?? m;
+  });
+}
+
+/**
+ * The guide's <offer> field set is flat (no nesting, order-independent per
+ * the guide's own note) — a bounded regex over each <offer>…</offer> block
+ * is enough and avoids adding an XML-parsing dependency for this one, simple,
+ * well-documented shape. Intertop's own "sku" tag here means "Код Торгової
+ * пропозиції" (their offer/mp-code) — maps to our offer_code, NOT our
+ * internal products.sku — matching resolveOfferTargets' own priority order
+ * (offer_code → barcode → article → factory_article).
+ */
+export function parseXmlOffers(text: string): OfferRow[] {
+  const rows: OfferRow[] = [];
+  const offerBlocks = text.match(/<offer\b[^>]*>[\s\S]*?<\/offer>/gi) ?? [];
+  for (const block of offerBlocks) {
+    const tag = (name: string): string => {
+      const m = block.match(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, "i"));
+      return m ? decodeXmlEntities(m[1].trim()) : "";
+    };
+    const article = tag("article");
+    const barcode = tag("barcode");
+    const size = tag("sku_size");
+    const offerCode = tag("sku");
+    if (!article && !barcode && !offerCode) continue; // no identifier at all — unusable row
+    const quantityRaw = tag("quantity");
+    rows.push({
+      external_id: "", factory_article: "", barcode, size, offer_code: offerCode,
+      quantity: quantityRaw !== "" ? Math.max(0, Math.round(num(quantityRaw))) : null,
+      base_price: num(tag("base_price")), discount_price: num(tag("discount_price")), article,
+    });
+  }
+  return rows;
+}
+
+/**
+ * The <catalog created_at="…"> attribute — guide 2.8: if this value hasn't
+ * changed since the last successful fetch of this same feed, the update is
+ * skipped entirely (the supplier didn't actually regenerate the file).
+ * Exported for lib/importSources.ts's runImportSource to compare against
+ * import_sources.last_feed_created_at before bothering to parse/apply.
+ */
+export function extractXmlCreatedAt(text: string): string | null {
+  const m = text.match(/<catalog\b[^>]*\bcreated_at\s*=\s*"([^"]*)"/i);
+  return m ? m[1] : null;
+}
+
 export function parseImport(buf: Buffer, filename: string): Parsed {
+  if (looksLikeXml(buf, filename)) {
+    const rows = parseXmlOffers(buf.toString("utf8"));
+    return rows.length > 0 ? { kind: "offers", filename, rows } : { kind: "unknown", filename, rows: [] };
+  }
   const grid = readGrid(buf, filename);
   const head = grid.slice(0, 12);
 

@@ -64,7 +64,7 @@ export function ErpImportTabs({
           onChange={setTab}
         />
 
-        {tab === "sources" && <AdminImportSources />}
+        {tab === "sources" && <AdminImportSources onToast={onImported} />}
         {tab === "templates" && <AdminImportTemplates />}
         {tab === "valueLists" && <AdminValueLists />}
 

@@ -626,6 +626,8 @@ CREATE TABLE IF NOT EXISTS import_sources (
   feed_url     TEXT,
   last_run_at  TIMESTAMPTZ,
   next_run_at  TIMESTAMPTZ,
+  last_feed_created_at TEXT,  -- guide 2.8: XML <catalog created_at="…"> last seen — unchanged ⇒ skip
+  last_run_summary TEXT NOT NULL DEFAULT '',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -691,6 +693,15 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS subtype  TEXT NOT NULL DEFAULT '';
 -- and updateAdminProduct flips it to TRUE the moment moderation_status ever
 -- becomes 'approved' — see lib/products.ts.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS ever_published BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Intertop 2.8 guide: a "Джерела даних" source with feed_type='url' can now
+-- actually be fetched/parsed/applied (see lib/importSources.ts's
+-- runImportSource), either on demand or from a VPS cron hitting
+-- /api/admin/import-sources/run-due every 3 hours. These two columns support
+-- that: the XML feed's own created_at (skip reprocessing if unchanged) and a
+-- short human-readable outcome for the admin table.
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_feed_created_at TEXT;
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_run_summary TEXT NOT NULL DEFAULT '';
 `;
 
 /**

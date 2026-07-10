@@ -8,7 +8,9 @@ type Source = {
   id: string; name: string; feed_type: FeedType;
   template_id: string | null; template_name?: string | null;
   status: "new" | "ok" | "error"; error_count: number; feed_url: string | null;
-  last_run_at: string | null; next_run_at: string | null; created_at: string; updated_at: string;
+  last_run_at: string | null; next_run_at: string | null;
+  last_feed_created_at: string | null; last_run_summary: string;
+  created_at: string; updated_at: string;
 };
 type TemplateOption = { id: string; name: string };
 
@@ -23,13 +25,14 @@ function dmy(s: string | null) {
 const STATUS_COLOR: Record<Source["status"], string> = { new: "#8a94a0", ok: "#2f9488", error: "#c0524a" };
 const STATUS_LABEL: Record<Source["status"], string> = { new: "Не запускалось", ok: "Успішно", error: "Помилка" };
 
-export function AdminImportSources() {
+export function AdminImportSources({ onToast }: { onToast?: (msg: string) => void } = {}) {
   const [sources, setSources] = useState<Source[]>([]);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Source | null | "new">(null);
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [runningId, setRunningId] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -76,6 +79,21 @@ export function AdminImportSources() {
     load();
   };
 
+  /** Guide 2.8's "Оновити зараз" — fetch this URL feed and apply it now,
+   *  outside its normal 3-hour cron cycle. */
+  const runNow = async (s: Source) => {
+    setRunningId(s.id);
+    try {
+      const res = await fetch(`/api/admin/import-sources/${s.id}/run`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { onToast?.(data.error ?? "Помилка запуску"); return; }
+      onToast?.(data.skipped ? data.reason : `Джерело «${s.name}»: ${data.matchedRows} поз., ${data.productsCreated} нових товарів`);
+      load();
+    } finally {
+      setRunningId(null);
+    }
+  };
+
   const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
 
   return (
@@ -106,7 +124,7 @@ export function AdminImportSources() {
               <th className={thCls}>Статус джерела даних</th>
               <th className={`${thCls} text-right`}>Помилок</th>
               <th className={thCls}>Дата останнього запуску</th>
-              <th className={thCls}>Дата наступного</th>
+              <th className={thCls}>Результат</th>
               <th className={thCls}></th>
             </tr>
           </thead>
@@ -126,11 +144,19 @@ export function AdminImportSources() {
                 <td className="px-3 py-2.5"><StatusDot color={STATUS_COLOR[s.status]} label={STATUS_LABEL[s.status]} /></td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-[#2b2d42]">{s.error_count}</td>
                 <td className="px-3 py-2.5 text-[#5a6472]">{dmy(s.last_run_at)}</td>
-                <td className="px-3 py-2.5 text-[#5a6472]">{dmy(s.next_run_at)}</td>
+                <td className="max-w-[220px] truncate px-3 py-2.5 text-[#5a6472]" title={s.last_run_summary}>{s.last_run_summary || "—"}</td>
                 <td className="px-3 py-2.5 text-right">
-                  <button onClick={(e) => { e.stopPropagation(); remove(s); }} className="text-[12px] text-[#c0524a] hover:underline">
-                    Видалити
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    {s.feed_type === "url" && s.feed_url && (
+                      <button onClick={(e) => { e.stopPropagation(); runNow(s); }} disabled={runningId === s.id}
+                        className="text-[12px] text-[#2f9488] hover:underline disabled:opacity-50">
+                        {runningId === s.id ? "Оновлення…" : "Оновити зараз"}
+                      </button>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); remove(s); }} className="text-[12px] text-[#c0524a] hover:underline">
+                      Видалити
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -163,7 +189,7 @@ export function AdminImportSources() {
             <select value={form.feed_type} onChange={(e) => setForm((f) => ({ ...f, feed_type: e.target.value as FeedType }))}
               className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none">
               <option value="file">Файл (ручне завантаження)</option>
-              <option value="url">URL-фід — найближчим часом</option>
+              <option value="url">URL-фід (XML/CSV)</option>
             </select>
           </label>
           {form.feed_type === "url" && (
@@ -171,11 +197,19 @@ export function AdminImportSources() {
               <label className="block">
                 <span className="mb-1 block text-[12px] text-[#8a94a0]">URL фіда</span>
                 <input value={form.feed_url} onChange={(e) => setForm((f) => ({ ...f, feed_url: e.target.value }))}
-                  placeholder="https://…"
+                  placeholder="https://site.local/prices.xml"
                   className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none" />
               </label>
               <div className="rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-3 py-2 text-[12px] text-[#5a6472]">
-                Автоматичне регулярне опитування URL-фідів (XML/Google Shopping) ще не реалізовано — джерело можна створити заздалегідь, але воно поки не запускається саме.
+                Посилання на XML ({"<catalog><offers><offer>"}…) або CSV з тими ж полями. Оновлюється автоматично що 3 години, або натисніть «Оновити зараз» у списку джерел.
+                {editing !== "new" && editing && (
+                  <>
+                    {" "}<button type="button" onClick={() => runNow(editing)} disabled={runningId === editing.id}
+                      className="font-medium text-[#2f9488] hover:underline disabled:opacity-50">
+                      {runningId === editing.id ? "Оновлення…" : "Оновити зараз →"}
+                    </button>
+                  </>
+                )}
               </div>
             </>
           )}
