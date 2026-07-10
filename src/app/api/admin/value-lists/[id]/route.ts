@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { getValueList, updateValueList, deleteValueList, type ValueListInput } from "@/lib/valueLists";
+import { getValueList, updateValueList, deleteValueList, linkedTemplates, type ValueListInput } from "@/lib/valueLists";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
   const { id } = await params;
   const l = await getValueList(id);
   if (!l) return NextResponse.json({ error: "Список не знайдено" }, { status: 404 });
-  return NextResponse.json({ list: l });
+  return NextResponse.json({ list: l, linkedTemplates: await linkedTemplates(id) });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {

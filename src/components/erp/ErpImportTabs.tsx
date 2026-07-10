@@ -4,24 +4,26 @@ import { useState } from "react";
 import { ErpImport } from "./ErpImport";
 import { SubTabs } from "@/components/admin/intertop/primitives";
 import { AdminImportSources } from "@/components/admin/AdminImportSources";
-import { AdminImportTemplates } from "@/components/admin/AdminImportTemplates";
-import { AdminValueLists } from "@/components/admin/AdminValueLists";
 
 /**
- * "Завантажити товари" — Intertop agora's own "Імпорт" screen has 4 tabs
- * (Джерела даних · Операції · Шаблони даних · Списки значень); this mirrors
- * that shell. "Операції" is the one real upload/preview/apply flow
- * (ErpImport) — everything else here is a supporting registry around it.
+ * "Завантажити товари" — has 2 tabs: Джерела даних · Операції. "Операції" is
+ * the one real upload/preview/apply flow (ErpImport); "Джерела даних" is the
+ * persistent import-channel registry (see lib/importSources.ts).
  *
- * (An EARLIER version of this screen tried a different 4-tab layout —
+ * "Шаблони даних"/"Списки значень" used to live here too, but the official
+ * Intertop 2.9 guide ("Зіставлення властивостей") documents them as their
+ * OWN top-level nav item (sibling of Властивості товарів/Розмірні сітки),
+ * NOT nested under Імпорт — see AdminPropertyMatching.tsx. Moved there to
+ * match.
+ *
+ * (An EVEN EARLIER version of this screen tried a different 4-tab layout —
  * two template-export tabs plus a price-upload tab — and it was removed
  * for being broken/duplicative and confusing people into thinking they
- * needed an extra "create template" step that didn't exist. This version
- * is structurally different: the tabs here are registries (sources,
- * templates, value lists) around the SAME single upload flow, not
- * competing upload paths — see maniagroup-intertop-reskin memory.)
+ * needed an extra "create template" step that didn't exist. This shell is
+ * structurally different: registries around the SAME single upload flow,
+ * not competing upload paths — see maniagroup-intertop-reskin memory.)
  */
-type ImportTab = "sources" | "operations" | "templates" | "valueLists";
+type ImportTab = "sources" | "operations";
 
 export function ErpImportTabs({
   onClose,
@@ -57,16 +59,12 @@ export function ErpImportTabs({
           tabs={[
             { id: "sources", label: "Джерела даних" },
             { id: "operations", label: "Операції" },
-            { id: "templates", label: "Шаблони даних" },
-            { id: "valueLists", label: "Списки значень" },
           ]}
           active={tab}
           onChange={setTab}
         />
 
         {tab === "sources" && <AdminImportSources onToast={onImported} />}
-        {tab === "templates" && <AdminImportTemplates />}
-        {tab === "valueLists" && <AdminValueLists />}
 
         {tab === "operations" && (
           <>

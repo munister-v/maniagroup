@@ -174,7 +174,7 @@ export async function runImportSource(id: string): Promise<RunSourceResult> {
     parsed = rows.length > 0 ? { kind: "offers", filename, rows } : { kind: "unknown", filename, rows: [] };
   } else if (source.template_id) {
     const tpl = await getImportTemplate(source.template_id);
-    parsed = tpl ? parseImportWithTemplate(buf, filename, tpl) : await parseImportSmart(buf, filename);
+    parsed = tpl ? await parseImportWithTemplate(buf, filename, tpl) : await parseImportSmart(buf, filename);
   } else {
     parsed = await parseImportSmart(buf, filename);
   }

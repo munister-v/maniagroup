@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     if (templateId) {
       const tpl = await getImportTemplate(String(templateId));
       if (!tpl) return NextResponse.json({ error: "Шаблон не знайдено" }, { status: 400 });
-      parsed = parseImportWithTemplate(buf, file.name, tpl);
+      parsed = await parseImportWithTemplate(buf, file.name, tpl);
     } else {
       parsed = await parseImportSmart(buf, file.name);
     }

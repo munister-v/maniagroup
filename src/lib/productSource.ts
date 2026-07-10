@@ -282,6 +282,9 @@ export type DbProductDetail = {
   inStock: boolean;
   metaTitle?: string;
   metaDescription?: string;
+  /** Intertop 2.10 guide: explicit size-chart binding (products.size_chart_code)
+   *  — see SizeChartButton / /api/size-chart. */
+  sizeChartCode?: string;
 };
 
 export async function dbProductById(idOrSlug: string): Promise<DbProductDetail | null> {
@@ -330,6 +333,7 @@ export async function dbProductById(idOrSlug: string): Promise<DbProductDetail |
     inStock: erpInStock,
     metaTitle: row.meta_title || undefined,
     metaDescription: row.meta_description || undefined,
+    sizeChartCode: row.size_chart_code || undefined,
   };
 }
 

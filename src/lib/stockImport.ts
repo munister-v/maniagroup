@@ -41,6 +41,7 @@ import * as XLSX from "xlsx";
 import "./xlsxCodepage";
 import { pool, q } from "./pg";
 import { aiDetectImport } from "./aiImport";
+import { loadValueListMaps } from "./valueLists";
 
 export type ImportKind = "offers" | "unknown";
 
@@ -415,7 +416,7 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
  *  cycle with importTemplates.ts (which itself doesn't touch stockImport.ts). */
 export type StockImportTemplate = {
   header_row: number; data_start_row: number;
-  columns: { raw_label: string; property_key: string }[];
+  columns: { raw_label: string; property_key: string; value_list_id?: string | null }[];
 };
 
 /**
@@ -423,9 +424,12 @@ export type StockImportTemplate = {
  * of guessing columns via OFFER_SYN/PRODUCT_SYN synonyms, match each raw
  * header cell against the template's saved raw_label→property_key pairs.
  * Reuses parseOffers for the actual row-building so a template produces the
- * exact same OfferRow shape as auto-detect.
+ * exact same OfferRow shape as auto-detect. A column that references a value
+ * list (Intertop 2.9 "Зіставлення властивостей") gets its matched cells
+ * translated raw→canonical (case-insensitive; unmatched cells pass through
+ * unchanged) before rows are built.
  */
-export function parseImportWithTemplate(buf: Buffer, filename: string, template: StockImportTemplate): Parsed {
+export async function parseImportWithTemplate(buf: Buffer, filename: string, template: StockImportTemplate): Promise<Parsed> {
   const grid = readGrid(buf, filename);
   const headerRowIdx = Math.max(0, template.header_row - 1);
   const cells = (grid[headerRowIdx] ?? []).map((c) => String(c ?? "").trim());
@@ -441,14 +445,32 @@ export function parseImportWithTemplate(buf: Buffer, filename: string, template:
   const prodIdx = {} as Record<keyof OfferProductInfo, number>;
   (Object.keys(PRODUCT_SYN) as (keyof OfferProductInfo)[]).forEach((k) => { prodIdx[k] = -1; });
 
+  const valueListByColIdx = new Map<number, string>();
   for (const col of template.columns) {
     const colIdx = findCol(col.raw_label);
     if (colIdx < 0) continue;
     if (col.property_key in idx) idx[col.property_key as OfferReqKey] = colIdx;
     else if (col.property_key in prodIdx) prodIdx[col.property_key as keyof OfferProductInfo] = colIdx;
+    if (col.value_list_id) valueListByColIdx.set(colIdx, col.value_list_id);
   }
 
   const dataStart = Math.max(headerRowIdx + 1, template.data_start_row - 1);
+
+  if (valueListByColIdx.size > 0) {
+    const maps = await loadValueListMaps([...new Set(valueListByColIdx.values())]);
+    for (let i = dataStart; i < grid.length; i++) {
+      const row = grid[i];
+      if (!row) continue;
+      for (const [colIdx, listId] of valueListByColIdx) {
+        const map = maps.get(listId);
+        if (!map) continue;
+        const raw = String(row[colIdx] ?? "").trim();
+        const canon = map.get(raw.toLowerCase());
+        if (canon !== undefined) row[colIdx] = canon;
+      }
+    }
+  }
+
   return { kind: "offers", filename, rows: parseOffers(grid, dataStart, idx, prodIdx) };
 }
 

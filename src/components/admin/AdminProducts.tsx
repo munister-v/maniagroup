@@ -41,6 +41,9 @@ type FullProduct = Row & {
   /** "Матеріал верху" / "Підвид" — see products.ts / lib/classifierTree.ts. */
   material: string;
   subtype: string;
+  /** Intertop 2.10 guide: explicit binding to a size_charts row by its code
+   *  — see AdminSizeCharts.tsx / /api/size-chart. */
+  size_chart_code: string;
   /** Intertop 2.1 moderation workflow — draft | pending | approved | rejected
    *  | archived (2.7 guide — a live product taken down, not deleted). */
   moderation_status: string;
@@ -91,6 +94,7 @@ type Draft = {
   country: string;
   material: string;
   subtype: string;
+  size_chart_code: string;
   short_description: string;
   description: string;
 };
@@ -102,7 +106,7 @@ const EMPTY_DRAFT: Draft = {
   name: "", name_uk: "", description_uk: "", brand: "", sku: "", factory_article: "", category: "", category_slug: "", gender: "",
   regular_price: "", sale_price: "", is_in_stock: true, status: "draft",
   images: [], sizes: [], color: "", composition: "", season: "", country: "",
-  material: "", subtype: "",
+  material: "", subtype: "", size_chart_code: "",
   short_description: "", description: "",
 };
 
@@ -129,6 +133,7 @@ function draftFromProduct(p: FullProduct): Draft {
     is_in_stock: p.is_in_stock, status: p.status, images,
     sizes, color: p.color ?? "", composition: p.composition ?? "", season: p.season ?? "",
     country: p.country ?? "", material: p.material ?? "", subtype: p.subtype ?? "",
+    size_chart_code: p.size_chart_code ?? "",
     short_description: p.short_description ?? "", description: p.description ?? "",
   };
 }
@@ -157,6 +162,7 @@ function draftToPayload(d: Draft) {
     country: d.country.trim(),
     material: d.material.trim(),
     subtype: d.subtype.trim(),
+    size_chart_code: d.size_chart_code.trim(),
     short_description: d.short_description,
     description: d.description,
   };
@@ -688,6 +694,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                     <label className="block"><span className={lbl}>Країна</span><input className={inp} value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></label>
                     <label className="block"><span className={lbl}>Матеріал верху</span><input className={inp} value={draft.material} onChange={(e) => setDraft({ ...draft, material: e.target.value })} /></label>
                     <label className="block"><span className={lbl}>Підвид</span><input className={inp} value={draft.subtype} onChange={(e) => setDraft({ ...draft, subtype: e.target.value })} placeholder="напр. Прямі джинси — див. «Класифікатор товарів»" /></label>
+                    <label className="block"><span className={lbl}>Розмірна сітка</span><input className={inp} value={draft.size_chart_code} onChange={(e) => setDraft({ ...draft, size_chart_code: e.target.value })} placeholder="Код сітки — див. «Розмірні сітки»" /></label>
                   </div>
                   <label className="block"><span className={lbl}>Короткий опис (внутрішній)</span><textarea rows={2} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.short_description} onChange={(e) => setDraft({ ...draft, short_description: e.target.value })} /></label>
                 </div>

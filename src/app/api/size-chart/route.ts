@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { q } from "@/lib/pg";
+import { q, q1 } from "@/lib/pg";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
+  const code = req.nextUrl.searchParams.get("code") ?? "";
   const brand = req.nextUrl.searchParams.get("brand") ?? "";
   const gender = req.nextUrl.searchParams.get("gender") ?? "";
 
-  // Try to find chart: exact brand + gender match first, then brand-only, then all-brands
+  // Intertop 2.10 guide: a product explicitly bound to a chart by code takes
+  // priority — the brand+gender best-match below is only a fallback for
+  // products that predate this binding or were never given one.
+  if (code) {
+    const byCode = await q1(`SELECT * FROM size_charts WHERE code = $1 LIMIT 1`, [code]);
+    if (byCode) return NextResponse.json(byCode);
+  }
+
   const charts = await q(
     `SELECT * FROM size_charts
      ORDER BY

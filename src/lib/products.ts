@@ -58,6 +58,10 @@ export type AdminProductInput = {
   /** "Підвид" — the classifier level one step more specific than `category`
    *  (which plays the role of Intertop's "Вид товара"). See AdminClassifier.tsx. */
   subtype?: string;
+  /** Intertop 2.10 guide: binds this product to a size_charts row by its
+   *  `code` — the explicit mechanism, distinct from /api/size-chart's
+   *  brand+gender best-match fallback used when this is blank. */
+  size_chart_code?: string;
   /** Historical "has this product ever gone live" flag (Intertop 2.7 guide)
    *  — see lib/pg.ts schema comment. Normally set automatically by
    *  updateAdminProduct when moderation_status becomes 'approved'; exposed
@@ -307,8 +311,8 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
       (id, sku, factory_article, name, name_uk, slug, brand, category, category_slug, gender,
        price, regular_price, sale_price, is_in_stock, status, moderation_status,
        image_src, images, attributes, description, description_uk, short_description,
-       color, country, season, collection, composition, material, subtype, ever_published)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
+       color, country, season, collection, composition, material, subtype, ever_published, size_chart_code)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
     [
       id, input.sku ?? "", input.factory_article ?? "", input.name, input.name_uk ?? "", slug, input.brand ?? "Mania Group",
       input.category ?? "Одяг", input.category_slug || slugify(input.category ?? "tovar") || "tovar",
@@ -318,7 +322,7 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
       JSON.stringify(input.images ?? (input.image_src ? [{ src: input.image_src }] : [])),
       sizeAttributes(input.sizes), input.description ?? "", input.description_uk ?? "", input.short_description ?? "",
       input.color ?? "", input.country ?? "", input.season ?? "", input.collection ?? "", input.composition ?? "",
-      input.material ?? "", input.subtype ?? "", input.ever_published ?? false,
+      input.material ?? "", input.subtype ?? "", input.ever_published ?? false, input.size_chart_code ?? "",
     ],
   );
   if (input.sizes && input.sizes.length > 0) await syncManualVariants(id, input.sizes);
@@ -366,6 +370,7 @@ export async function duplicateAdminProduct(id: string): Promise<{ id: string }>
     composition: String(src.composition ?? ""),
     material: String(src.material ?? ""),
     subtype: String(src.subtype ?? ""),
+    size_chart_code: String(src.size_chart_code ?? ""),
   });
 }
 
@@ -402,6 +407,7 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   if (input.composition !== undefined) add("composition", input.composition);
   if (input.material !== undefined) add("material", input.material);
   if (input.subtype !== undefined) add("subtype", input.subtype);
+  if (input.size_chart_code !== undefined) add("size_chart_code", input.size_chart_code);
   // Going live even once is a one-way historical fact (Intertop 2.7 guide) —
   // force it here rather than trusting every transition() call site to
   // remember to pass ever_published:true alongside moderation_status:'approved'.

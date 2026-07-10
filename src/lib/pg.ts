@@ -702,6 +702,30 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS ever_published BOOLEAN NOT NULL DE
 -- short human-readable outcome for the admin table.
 ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_feed_created_at TEXT;
 ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_run_summary TEXT NOT NULL DEFAULT '';
+
+-- Intertop 2.9 guide ("Зіставлення властивостей"): a value list isn't just a
+-- flat vocabulary — it's scoped to ONE property and its rows are a raw→
+-- canonical MAPPING ("Значення продавця" → "Значення"), used to translate a
+-- supplier's own labels (e.g. "42"/"XL") into our canonical values before
+-- import writes them. template_type mirrors "Тип шаблону" (Товари/Торгові
+-- пропозиції) — schema-only for now, our importer only ever produces offer
+-- rows (see stockImport.ts), so this doesn't change parsing behavior yet.
+ALTER TABLE value_lists ADD COLUMN IF NOT EXISTS property_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE value_list_items ADD COLUMN IF NOT EXISTS seller_value TEXT NOT NULL DEFAULT '';
+ALTER TABLE import_templates ADD COLUMN IF NOT EXISTS template_type TEXT NOT NULL DEFAULT 'offers';
+ALTER TABLE import_template_columns ADD COLUMN IF NOT EXISTS value_list_id BIGINT REFERENCES value_lists(id) ON DELETE SET NULL;
+
+-- Intertop 2.10 guide ("Розмірні сітки"): real charts are typed (одяг/
+-- взуття/аксесуари/ювелірні вироби/для дому), each type with its own fixed
+-- property set (see AdminSizeCharts.tsx SIZE_CHART_TYPES), and bound to a
+-- product by an explicit code rather than a brand+gender best-match guess.
+-- chart rows stay a flexible JSONB array (now free-form {size,...props} —
+-- old {label,eu,us,uk,cm} rows still render fine, SizeChartModal iterates
+-- whatever keys are present instead of hardcoding eu/us/uk/cm).
+ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS type       TEXT NOT NULL DEFAULT 'clothing';
+ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS code       TEXT NOT NULL DEFAULT '';
+ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE products    ADD COLUMN IF NOT EXISTS size_chart_code TEXT NOT NULL DEFAULT '';
 `;
 
 /**

@@ -60,7 +60,7 @@ function ProductView({
   detail: DbProductDetail;
   related: DbProductDetail["product"][];
 }) {
-  const { product, images, sizes, sizeVariants, composition, color, season, country, inStock } = detail;
+  const { product, images, sizes, sizeVariants, composition, color, season, country, inStock, sizeChartCode } = detail;
   const gallery = images.map((img, i) => ({
     id: i,
     src: img.src,
@@ -151,7 +151,7 @@ function ProductView({
 
             {sizes.length > 0 && (
               <div className="mt-6">
-                <SizeChartButton brand={product.brand} gender={product.gender} />
+                <SizeChartButton brand={product.brand} gender={product.gender} sizeChartCode={sizeChartCode} />
               </div>
             )}
 

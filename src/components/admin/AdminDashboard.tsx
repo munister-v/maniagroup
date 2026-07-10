@@ -11,6 +11,7 @@ import { CatalogGrid } from "./CatalogGrid";
 import { AdminVariants } from "./AdminVariants";
 import { AdminClassifier } from "./AdminClassifier";
 import { AdminProperties } from "./AdminProperties";
+import { AdminPropertyMatching } from "./AdminPropertyMatching";
 import { AdminSizeCharts } from "./AdminSizeCharts";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
@@ -20,7 +21,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -83,6 +84,7 @@ const NAV_MAIN: RailItem[] = [
       { id: "products", label: "Список товарів" },
       { id: "offers", label: "Торгові пропозиції" },
       { id: "properties", label: "Властивості товарів" },
+      { id: "propertyMatching", label: "Зіставлення властивостей" },
       { id: "catalog", label: "Імпорт" },
       { id: "sizeCharts", label: "Розмірні сітки" },
       { id: "classifier", label: "Класифікатор товарів" },
@@ -424,6 +426,7 @@ export function AdminDashboard({
           {section === "offers" && <AdminVariants onToast={showToast} onImport={goToImport} />}
           {section === "classifier" && <AdminClassifier />}
           {section === "properties" && <AdminProperties />}
+          {section === "propertyMatching" && <AdminPropertyMatching />}
           {section === "sizeCharts" && <AdminSizeCharts />}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
