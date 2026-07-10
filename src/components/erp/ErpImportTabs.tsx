@@ -1,16 +1,28 @@
 "use client";
 
+import { useState } from "react";
 import { ErpImport } from "./ErpImport";
+import { SubTabs } from "@/components/admin/intertop/primitives";
+import { AdminImportSources } from "@/components/admin/AdminImportSources";
+import { AdminImportTemplates } from "@/components/admin/AdminImportTemplates";
+import { AdminValueLists } from "@/components/admin/AdminValueLists";
 
 /**
- * "Завантажити товари" modal. Single real flow: drop the Intertop ОСТАТКИ
- * table, preview the diff, apply — same format the store runs on end to end.
+ * "Завантажити товари" — Intertop agora's own "Імпорт" screen has 4 tabs
+ * (Джерела даних · Операції · Шаблони даних · Списки значень); this mirrors
+ * that shell. "Операції" is the one real upload/preview/apply flow
+ * (ErpImport) — everything else here is a supporting registry around it.
  *
- * (Used to be a 4-tab Intertop-cabinet-style wizard with two template-export
- * tabs and a price-upload tab — all three were either broken or fully
- * duplicated this one real importer, and confused people into thinking they
- * needed an extra "create template" step that doesn't exist. Removed.)
+ * (An EARLIER version of this screen tried a different 4-tab layout —
+ * two template-export tabs plus a price-upload tab — and it was removed
+ * for being broken/duplicative and confusing people into thinking they
+ * needed an extra "create template" step that didn't exist. This version
+ * is structurally different: the tabs here are registries (sources,
+ * templates, value lists) around the SAME single upload flow, not
+ * competing upload paths — see maniagroup-intertop-reskin memory.)
  */
+type ImportTab = "sources" | "operations" | "templates" | "valueLists";
+
 export function ErpImportTabs({
   onClose,
   onImported,
@@ -20,6 +32,8 @@ export function ErpImportTabs({
   onImported?: (msg: string) => void;
   onGoToCatalog?: () => void;
 } = {}) {
+  const [tab, setTab] = useState<ImportTab>("sources");
+
   function downloadCatalog(format: "csv" | "xlsx") {
     const a = document.createElement("a");
     a.href = `/api/erp/export?format=${format}&scope=all&requireImage=0`;
@@ -39,17 +53,36 @@ export function ErpImportTabs({
       )}
 
       <div className={isModal ? "max-h-[70vh] overflow-y-auto p-6" : undefined}>
-        <p className="mb-4 text-[13px] text-[#8a94a0]">
-          <b className="text-[#2b2d42]">Оберіть файл</b> — таблиця ОСТАТКИ (.csv) оновлює наявність і ціни, а рядок без товару в каталозі сам створює нову картку.
-        </p>
-        <ErpImport onBack={onClose} onImported={onImported} onGoToCatalog={onGoToCatalog} />
+        <SubTabs
+          tabs={[
+            { id: "sources", label: "Джерела даних" },
+            { id: "operations", label: "Операції" },
+            { id: "templates", label: "Шаблони даних" },
+            { id: "valueLists", label: "Списки значень" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
 
-        <div className="mt-6 flex items-center gap-3 border-t border-[#e6eaec] pt-4 text-[12px] text-[#8a94a0]">
-          <span>Вивантажити поточний каталог:</span>
-          <button onClick={() => downloadCatalog("csv")} className="text-[#2b2d42] hover:underline">CSV</button>
-          <span>·</span>
-          <button onClick={() => downloadCatalog("xlsx")} className="text-[#2b2d42] hover:underline">Excel</button>
-        </div>
+        {tab === "sources" && <AdminImportSources />}
+        {tab === "templates" && <AdminImportTemplates />}
+        {tab === "valueLists" && <AdminValueLists />}
+
+        {tab === "operations" && (
+          <>
+            <p className="mb-4 text-[13px] text-[#8a94a0]">
+              <b className="text-[#2b2d42]">Оберіть файл</b> — таблиця ОСТАТКИ (.csv) оновлює наявність і ціни, а рядок без товару в каталозі сам створює нову картку.
+            </p>
+            <ErpImport onBack={onClose} onImported={onImported} onGoToCatalog={onGoToCatalog} />
+
+            <div className="mt-6 flex items-center gap-3 border-t border-[#e6eaec] pt-4 text-[12px] text-[#8a94a0]">
+              <span>Вивантажити поточний каталог:</span>
+              <button onClick={() => downloadCatalog("csv")} className="text-[#2b2d42] hover:underline">CSV</button>
+              <span>·</span>
+              <button onClick={() => downloadCatalog("xlsx")} className="text-[#2b2d42] hover:underline">Excel</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

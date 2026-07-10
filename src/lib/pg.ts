@@ -602,6 +602,44 @@ CREATE TABLE IF NOT EXISTS import_template_columns (
   sort_order   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_import_template_columns_template ON import_template_columns(template_id, sort_order);
+
+-- ── ERP: import sources registry (Intertop agora "Джерела даних") ──
+-- Named, persistent import channels — for us today always feed_type='file'
+-- (a supplier's recurring upload, re-run manually each time), updated on
+-- every apply. feed_type='url' is a placeholder for a future recurring
+-- XML/Google-feed puller (not implemented — see importTemplates memory,
+-- Стадія 2) and is accepted by the schema but not actionable yet.
+CREATE TABLE IF NOT EXISTS import_sources (
+  id           BIGSERIAL PRIMARY KEY,
+  name         TEXT NOT NULL,
+  feed_type    TEXT NOT NULL DEFAULT 'file',  -- file | url
+  template_id  BIGINT REFERENCES import_templates(id) ON DELETE SET NULL,
+  status       TEXT NOT NULL DEFAULT 'new',   -- new | ok | error
+  error_count  INTEGER NOT NULL DEFAULT 0,
+  feed_url     TEXT,
+  last_run_at  TIMESTAMPTZ,
+  next_run_at  TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_import_sources_name ON import_sources(name);
+
+-- ── ERP: value lists (Intertop agora "Списки значень") ──
+-- Controlled vocabularies (e.g. valid colors, genders, seasons) an import
+-- template's mapped values can be checked/normalized against.
+CREATE TABLE IF NOT EXISTS value_lists (
+  id         BIGSERIAL PRIMARY KEY,
+  name       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS value_list_items (
+  id         BIGSERIAL PRIMARY KEY,
+  list_id    BIGINT NOT NULL REFERENCES value_lists(id) ON DELETE CASCADE,
+  value      TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_value_list_items_list ON value_list_items(list_id, sort_order);
 `;
 
 /**

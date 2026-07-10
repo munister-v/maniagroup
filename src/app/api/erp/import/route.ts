@@ -4,6 +4,7 @@ import { parseImportSmart, parseImportWithTemplate, previewImport, applyImport, 
 import { getMeta, setMeta } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
 import { getImportTemplate } from "@/lib/importTemplates";
+import { recordSourceRun } from "@/lib/importSources";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -72,10 +73,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Не вдалося розпізнати формат — навіть за допомогою ШІ. Перевірте, що у файлі є колонки розміру/ціни/залишку або код товару." }, { status: 400 });
 
   const aiUsed = !!parsed.ai;
+  const tplIdStr = templateId ? String(templateId) : null;
   try {
     if (mode === "apply") {
       const result = await applyImport(parsed);
       await recordHistory(parsed.filename, result);
+      await recordSourceRun(parsed.filename, tplIdStr, true, result.unmatchedRows).catch(() => {});
       const parts = [
         result.productsCreated ? `+${result.productsCreated} нових` : "",
         result.productsUpdated ? `${result.productsUpdated} оновлено` : "",
@@ -88,6 +91,7 @@ export async function POST(req: NextRequest) {
     const preview = await previewImport(parsed);
     return NextResponse.json({ ok: true, mode: "preview", preview: { ...preview, aiUsed } });
   } catch (e) {
+    if (mode === "apply") await recordSourceRun(file.name, tplIdStr, false, 1).catch(() => {});
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка обробки" }, { status: 500 });
   }
 }
