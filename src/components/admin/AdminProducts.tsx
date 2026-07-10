@@ -912,6 +912,7 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
   const [editing, setEditing] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, OfferDraft>>({});
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -969,18 +970,26 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
   const cellInp = "h-8 w-24 border border-[#e6eaec] bg-white px-2 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none";
 
   if (loading) return <div className="space-y-2">{[1, 2].map((i) => <div key={i} className="h-10 animate-pulse bg-[#f7f9fa]" />)}</div>;
-  if (rows.length === 0) return <p className="py-8 text-center text-[13px] text-[#8a94a0]">У товару ще немає розмірів/пропозицій — додайте їх на вкладці «Товар».</p>;
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[12px] text-[#8a94a0]">{rows.length} {rows.length === 1 ? "пропозиція" : "пропозицій"}</p>
-        {!editing && (
-          <button onClick={startEdit} className="h-8 border border-[#2f9488] px-3 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
-            Змінити залишки та ціни
+        <div className="flex items-center gap-2">
+          {!editing && rows.length > 0 && (
+            <button onClick={startEdit} className="h-8 border border-[#2f9488] px-3 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
+              Змінити залишки та ціни
+            </button>
+          )}
+          <button onClick={() => setCreateOpen(true)} className="h-8 border border-[#2b2d42] bg-[#2b2d42] px-3 text-[11px] uppercase tracking-wider text-white hover:bg-[#3a4250]">
+            Створити торгову пропозицію
           </button>
-        )}
+        </div>
       </div>
+
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-[13px] text-[#8a94a0]">У товару ще немає торгових пропозицій — створіть першу кнопкою вище.</p>
+      ) : (
       <div className="overflow-x-auto border border-[#eef2f3]">
         <table className="w-full border-collapse text-[13px]">
           <thead>
@@ -1037,6 +1046,7 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
           </tbody>
         </table>
       </div>
+      )}
       {editing && (
         <div className="mt-3 flex gap-3">
           <button onClick={save} disabled={saving} className="h-9 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
@@ -1047,6 +1057,171 @@ function ProductOffersTab({ productId, onToast }: { productId: string; onToast?:
           </button>
         </div>
       )}
+      {createOpen && (
+        <CreateOfferPanel
+          productId={productId}
+          existingSizes={new Set(rows.map((r) => r.size))}
+          basePrice={rows[0]?.base_price ?? null}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(msg) => { onToast?.(msg); setCreateOpen(false); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── «Створити торгову пропозицію» / «Генератор торгових пропозицій» ────
+ * Guide 2.1 §6: one panel, one size at a time by default; the "Генератор"
+ * link switches to picking several sizes at once (checkboxes) and applies
+ * the same price/stock/packaging across all of them — same underlying call
+ * (POST /api/admin/variants), just one item per picked size. */
+const COMMON_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "34", "36", "38", "40", "42", "44", "46", "48", "50", "52", "ONESIZE"];
+
+function CreateOfferPanel({ productId, existingSizes, basePrice, onClose, onCreated }: {
+  productId: string; existingSizes: Set<string>; basePrice: number | null;
+  onClose: () => void; onCreated: (msg: string) => void;
+}) {
+  const [generator, setGenerator] = useState(false);
+  const [size, setSize] = useState("");
+  const [customSize, setCustomSize] = useState("");
+  const [pickedSizes, setPickedSizes] = useState<Set<string>>(new Set());
+  const [barcode, setBarcode] = useState("");
+  const [active, setActive] = useState(true);
+  const [price, setPrice] = useState(basePrice != null ? String(basePrice) : "");
+  const [salePrice, setSalePrice] = useState("");
+  const [stock, setStock] = useState("0");
+  const [weightPack, setWeightPack] = useState("");
+  const [heightPack, setHeightPack] = useState("");
+  const [widthPack, setWidthPack] = useState("");
+  const [lengthPack, setLengthPack] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function toggleSize(s: string) {
+    setPickedSizes((p) => { const n = new Set(p); n.has(s) ? n.delete(s) : n.add(s); return n; });
+  }
+
+  async function submit() {
+    const sizes = generator ? [...pickedSizes] : [size.trim() || customSize.trim()];
+    const cleanSizes = sizes.filter(Boolean);
+    if (cleanSizes.length === 0) { setError("Оберіть хоча б один розмір"); return; }
+    if (!price || Number(price) <= 0) { setError("Вкажіть ціну"); return; }
+    setError(""); setSaving(true);
+    try {
+      const items = cleanSizes.map((s) => ({
+        size: s,
+        barcode: generator ? "" : barcode.trim(), // one shared barcode makes no sense across several sizes
+        price: Number(price),
+        sale_price: salePrice ? Number(salePrice) : null,
+        stock_qty: Number(stock) || 0,
+        active,
+        weight_pack: weightPack ? Number(weightPack) : null,
+        height_pack: heightPack ? Number(heightPack) : null,
+        width_pack: widthPack ? Number(widthPack) : null,
+        length_pack: lengthPack ? Number(lengthPack) : null,
+      }));
+      const res = await fetch("/api/admin/variants", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: Number(productId), items }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Помилка"); return; }
+      onCreated(`Створено пропозицій: ${data.created}${data.skippedExisting ? ` (${data.skippedExisting} вже існували)` : ""}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const lbl = "text-[10px] uppercase tracking-wider text-[#8a94a0]";
+  const inp = "mt-1 h-10 w-full border border-[#e6eaec] bg-white px-3 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none";
+
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end">
+      <div onClick={onClose} className="absolute inset-0 bg-black/40" />
+      <div className="relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[#eef2f3] px-5 py-4">
+          <h3 className="text-[15px] font-medium text-[#2b2d42]">
+            {generator ? "Генератор торгових пропозицій" : "Створити торгову пропозицію"}
+          </h3>
+          <button onClick={onClose} className="text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
+        </div>
+
+        <div className="flex-1 space-y-4 px-5 py-5">
+          {!generator && (
+            <button onClick={() => setGenerator(true)} className="text-[11px] uppercase tracking-wider text-[#2f9488] hover:underline">
+              Генератор торгових пропозицій →
+            </button>
+          )}
+
+          {!generator ? (
+            <>
+              <label className="block"><span className={lbl}>Штрихкод торгової пропозиції</span>
+                <input className={inp} value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="порожньо — згенерується автоматично" /></label>
+              <label className="block"><span className={lbl}>Розмір *</span>
+                <select className={inp} value={size} onChange={(e) => setSize(e.target.value)}>
+                  <option value="">— оберіть —</option>
+                  {COMMON_SIZES.filter((s) => !existingSizes.has(s)).map((s) => <option key={s} value={s}>{s}</option>)}
+                  <option value="__custom">інший…</option>
+                </select>
+              </label>
+              {size === "__custom" && (
+                <label className="block"><span className={lbl}>Свій розмір</span>
+                  <input className={inp} value={customSize} onChange={(e) => setCustomSize(e.target.value)} /></label>
+              )}
+            </>
+          ) : (
+            <div>
+              <span className={lbl}>Розмір * (оберіть кілька — для кожного створиться своя пропозиція з однаковою ціною/залишком)</span>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {COMMON_SIZES.filter((s) => !existingSizes.has(s)).map((s) => (
+                  <button key={s} type="button" onClick={() => toggleSize(s)}
+                    className={`h-8 rounded-[3px] border px-3 text-[12px] transition-colors ${pickedSizes.has(s) ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#2f9488]"}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
+            <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Активність
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className={lbl}>Ціна, ₴ *</span>
+              <input type="number" className={inp} value={price} onChange={(e) => setPrice(e.target.value)} /></label>
+            <label className="block"><span className={lbl}>Акційна ціна, ₴</span>
+              <input type="number" className={inp} value={salePrice} onChange={(e) => setSalePrice(e.target.value)} /></label>
+          </div>
+          <label className="block"><span className={lbl}>Залишок на торговому складі *</span>
+            <input type="number" min={0} className={inp} value={stock} onChange={(e) => setStock(e.target.value)} /></label>
+
+          <div>
+            <p className={`${lbl} mb-2`}>Властивості упаковки (необов&apos;язково)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block"><span className={lbl}>Вага, кг</span>
+                <input type="number" className={inp} value={weightPack} onChange={(e) => setWeightPack(e.target.value)} /></label>
+              <label className="block"><span className={lbl}>Висота, см</span>
+                <input type="number" className={inp} value={heightPack} onChange={(e) => setHeightPack(e.target.value)} /></label>
+              <label className="block"><span className={lbl}>Ширина, см</span>
+                <input type="number" className={inp} value={widthPack} onChange={(e) => setWidthPack(e.target.value)} /></label>
+              <label className="block"><span className={lbl}>Довжина, см</span>
+                <input type="number" className={inp} value={lengthPack} onChange={(e) => setLengthPack(e.target.value)} /></label>
+            </div>
+          </div>
+
+          {error && <p className="text-[13px] text-[#e5484d]">{error}</p>}
+        </div>
+
+        <div className="sticky bottom-0 flex gap-3 border-t border-[#eef2f3] bg-white px-5 py-4">
+          <button onClick={submit} disabled={saving} className="h-11 flex-1 border border-[#2f9488] text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
+            {saving ? "Зберігаємо…" : "Створити"}
+          </button>
+          <button onClick={onClose} className="h-11 border border-[#e6eaec] px-5 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
+            Закрити
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

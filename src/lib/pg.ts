@@ -319,6 +319,13 @@ ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS sale_price NUMERIC;       
 ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS offer_code TEXT NOT NULL DEFAULT ''; -- mp-код оффера
 CREATE INDEX IF NOT EXISTS idx_variants_offer_code ON product_variants(offer_code) WHERE offer_code <> '';
 
+-- Intertop 2.1 guide's «Створити торгову пропозицію» panel — packaging
+-- dimensions per offer (kg/cm). Nullable: unknown until an admin measures it.
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS weight_pack NUMERIC;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS height_pack NUMERIC;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS width_pack  NUMERIC;
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS length_pack NUMERIC;
+
 -- Every stock change, for a full audit trail ("Оновлено / Ким оновлено").
 CREATE TABLE IF NOT EXISTS stock_movements (
   id         BIGSERIAL PRIMARY KEY,

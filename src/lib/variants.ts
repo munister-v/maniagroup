@@ -17,6 +17,11 @@ export type AdminVariant = {
   sale_price: number | null;
   active: boolean;
   updated_at?: string;
+  // Packaging dimensions (Intertop 2.1 «Створити торгову пропозицію» panel).
+  weight_pack: number | null;
+  height_pack: number | null;
+  width_pack: number | null;
+  length_pack: number | null;
   // joined product columns
   sku: string;
   name: string;
@@ -68,6 +73,8 @@ export async function listAdminVariants(
     `SELECT v.id::text AS id, v.product_id::text AS product_id, v.size, v.barcode,
             v.offer_code, v.stock_qty, v.price::float AS price, v.sale_price::float AS sale_price, v.active,
             to_char(v.updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at,
+            v.weight_pack::float AS weight_pack, v.height_pack::float AS height_pack,
+            v.width_pack::float AS width_pack, v.length_pack::float AS length_pack,
             p.sku, p.name, p.brand, p.category, p.category_slug, p.gender,
             p.factory_article, p.status, p.is_in_stock,
             p.regular_price::float AS base_price, p.image_src
@@ -90,6 +97,10 @@ export type VariantPatch = {
   price?: number | null;
   sale_price?: number | null;
   active?: boolean;
+  weight_pack?: number | null;
+  height_pack?: number | null;
+  width_pack?: number | null;
+  length_pack?: number | null;
 };
 
 /**
@@ -108,6 +119,10 @@ export async function bulkUpdateVariants(ids: string[], patch: VariantPatch): Pr
   if (patch.price !== undefined) { bind.push(patch.price); sets.push(`price = $${bind.length}`); }
   if (patch.sale_price !== undefined) { bind.push(patch.sale_price); sets.push(`sale_price = $${bind.length}`); }
   if (patch.active !== undefined) { bind.push(patch.active); sets.push(`active = $${bind.length}`); }
+  if (patch.weight_pack !== undefined) { bind.push(patch.weight_pack); sets.push(`weight_pack = $${bind.length}`); }
+  if (patch.height_pack !== undefined) { bind.push(patch.height_pack); sets.push(`height_pack = $${bind.length}`); }
+  if (patch.width_pack !== undefined) { bind.push(patch.width_pack); sets.push(`width_pack = $${bind.length}`); }
+  if (patch.length_pack !== undefined) { bind.push(patch.length_pack); sets.push(`length_pack = $${bind.length}`); }
   if (sets.length === 0) return 0;
   sets.push(`updated_at = now()`, `updated_by = 'admin'`);
 
@@ -163,4 +178,67 @@ export async function updateVariantsIndividually(updates: { id: string; patch: V
     );
   }
   return n;
+}
+
+/** «Генератор Штрих-коду» (guide §2, "Генератор торгових пропозицій") — a
+ *  plain unique numeric code when the admin has no real barcode to type in.
+ *  Not a real EAN checksum, just guaranteed-unique-in-our-DB digits. */
+async function generateBarcode(): Promise<string> {
+  for (let i = 0; i < 5; i++) {
+    const candidate = String(Math.floor(2_000_000_000_000 + Math.random() * 7_000_000_000_000));
+    const exists = await q1<{ id: string }>("SELECT id::text FROM product_variants WHERE barcode = $1", [candidate]);
+    if (!exists) return candidate;
+  }
+  return String(Date.now());
+}
+
+export type NewVariantInput = {
+  size: string;
+  barcode?: string;      // empty ⇒ auto-generate, matching the guide's Генератор
+  price: number;
+  sale_price?: number | null;
+  stock_qty: number;
+  active?: boolean;
+  weight_pack?: number | null;
+  height_pack?: number | null;
+  width_pack?: number | null;
+  length_pack?: number | null;
+};
+
+/**
+ * Create one or more trade offers on a product in one go — covers both the
+ * guide's single «Створити торгову пропозицію» panel and its bulk «Генератор
+ * торгових пропозицій» (same price/stock applied across every picked size).
+ * Existing (product_id, size) rows are left untouched (ON CONFLICT DO
+ * NOTHING) — creation never silently overwrites an offer that already exists.
+ */
+export async function createVariants(productId: number, inputs: NewVariantInput[]): Promise<{ created: number; skippedExisting: number }> {
+  let created = 0;
+  for (const inp of inputs) {
+    const size = inp.size.trim();
+    if (!size) continue;
+    const barcode = inp.barcode?.trim() || await generateBarcode();
+    const row = await q1<{ id: string }>(
+      `INSERT INTO product_variants
+         (product_id, size, barcode, stock_qty, price, sale_price, active, weight_pack, height_pack, width_pack, length_pack, updated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'admin')
+       ON CONFLICT (product_id, size) DO NOTHING
+       RETURNING id::text`,
+      [productId, size, barcode, Math.max(0, Math.round(inp.stock_qty) || 0), inp.price,
+       inp.sale_price ?? null, inp.active ?? true, inp.weight_pack ?? null, inp.height_pack ?? null,
+       inp.width_pack ?? null, inp.length_pack ?? null],
+    );
+    if (row) created++;
+  }
+  if (created > 0) {
+    await q(
+      `UPDATE products p
+          SET is_in_stock = (sub.total > 0), updated_at = now()
+         FROM (SELECT product_id, COALESCE(SUM(stock_qty), 0) AS total
+                 FROM product_variants WHERE active GROUP BY product_id) sub
+        WHERE p.id = sub.product_id AND p.id = $1`,
+      [productId],
+    );
+  }
+  return { created, skippedExisting: inputs.length - created };
 }
