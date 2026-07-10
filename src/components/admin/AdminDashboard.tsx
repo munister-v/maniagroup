@@ -12,6 +12,7 @@ import { AdminVariants } from "./AdminVariants";
 import { AdminClassifier } from "./AdminClassifier";
 import { AdminProperties } from "./AdminProperties";
 import { AdminSizeCharts } from "./AdminSizeCharts";
+import { AdminImportTemplates } from "./AdminImportTemplates";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { MonitoringSection } from "./MonitoringSection";
@@ -20,7 +21,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "sizeCharts" | "classifier" | "importTemplates" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -84,6 +85,7 @@ const NAV_MAIN: RailItem[] = [
       { id: "offers", label: "Торгові пропозиції" },
       { id: "properties", label: "Властивості товарів" },
       { id: "catalog", label: "Імпорт" },
+      { id: "importTemplates", label: "Шаблони даних" },
       { id: "sizeCharts", label: "Розмірні сітки" },
       { id: "classifier", label: "Класифікатор товарів" },
     ],
@@ -425,6 +427,7 @@ export function AdminDashboard({
           {section === "classifier" && <AdminClassifier />}
           {section === "properties" && <AdminProperties />}
           {section === "sizeCharts" && <AdminSizeCharts />}
+          {section === "importTemplates" && <AdminImportTemplates />}
           {section === "brands" && <AdminBrandLogos onToast={showToast} />}
           {section === "orders" && <AdminOrders onToast={showToast} />}
           {section === "customers" && <AdminCustomers />}

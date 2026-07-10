@@ -326,6 +326,48 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
   return { kind: "offers", filename, rows: parseOffers(grid, mapping.headerRow + 1, idx), ai: true };
 }
 
+/** Minimal shape parseImportWithTemplate needs — matches importTemplates.ts's
+ *  ImportTemplate & { columns }, kept structural so this file has no import
+ *  cycle with importTemplates.ts (which itself doesn't touch stockImport.ts). */
+export type StockImportTemplate = {
+  header_row: number; data_start_row: number;
+  columns: { raw_label: string; property_key: string }[];
+};
+
+/**
+ * Explicit, admin-defined mapping import (Intertop "Шаблони даних"): instead
+ * of guessing columns via OFFER_SYN/PRODUCT_SYN synonyms, match each raw
+ * header cell against the template's saved raw_label→property_key pairs.
+ * Reuses parseOffers for the actual row-building so a template produces the
+ * exact same OfferRow shape as auto-detect.
+ */
+export function parseImportWithTemplate(buf: Buffer, filename: string, template: StockImportTemplate): Parsed {
+  const grid = readGrid(buf, filename);
+  const headerRowIdx = Math.max(0, template.header_row - 1);
+  const cells = (grid[headerRowIdx] ?? []).map((c) => String(c ?? "").trim());
+  const findCol = (label: string): number => {
+    const exact = cells.findIndex((c) => c === label);
+    if (exact >= 0) return exact;
+    const lower = label.toLowerCase();
+    return cells.findIndex((c) => c.toLowerCase() === lower);
+  };
+
+  const idx = {} as Record<OfferReqKey, number>;
+  (Object.keys(OFFER_SYN) as OfferReqKey[]).forEach((k) => { idx[k] = -1; });
+  const prodIdx = {} as Record<keyof OfferProductInfo, number>;
+  (Object.keys(PRODUCT_SYN) as (keyof OfferProductInfo)[]).forEach((k) => { prodIdx[k] = -1; });
+
+  for (const col of template.columns) {
+    const colIdx = findCol(col.raw_label);
+    if (colIdx < 0) continue;
+    if (col.property_key in idx) idx[col.property_key as OfferReqKey] = colIdx;
+    else if (col.property_key in prodIdx) prodIdx[col.property_key as keyof OfferProductInfo] = colIdx;
+  }
+
+  const dataStart = Math.max(headerRowIdx + 1, template.data_start_row - 1);
+  return { kind: "offers", filename, rows: parseOffers(grid, dataStart, idx, prodIdx) };
+}
+
 function parseOffers(
   grid: unknown[][], from: number, idx: Record<OfferReqKey, number>,
   prodIdx?: Record<keyof OfferProductInfo, number>,
@@ -585,7 +627,7 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   }
   for (const r of stillUnmatched) {
     base.unmatchedRows++;
-    const ukey = r.factory_article || r.offer_code || r.external_id;
+    const ukey = r.article || r.factory_article || r.offer_code || r.external_id || r.barcode;
     // Cap generously (not the old 30) so the admin can export the FULL
     // unmatched list as CSV, not just a display sample.
     if (base.unmatched.length < 5000) base.unmatched.push({

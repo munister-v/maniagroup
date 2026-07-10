@@ -34,7 +34,7 @@ type HistoryEntry = {
 };
 type FileStatus = "idle" | "previewing" | "ready" | "error" | "applying" | "done";
 type FileItem = {
-  id: string; file: File; status: FileStatus;
+  id: string; file: File; status: FileStatus; templateId: string;
   preview: ImportPreview | null; result: ApplyResult | null; error: string;
 };
 
@@ -685,6 +685,8 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
   const [historyFilter, setHistoryFilter] = useState<"" | "offers">("");
   const [historyOpenIdx, setHistoryOpenIdx] = useState<number | null>(null);
   const [applyingAll, setApplyingAll] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; format: string; column_count?: number }[]>([]);
+  const [templateId, setTemplateId] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   // Mirrors `files` for code that needs the LIVE list mid-loop (applyAll) —
   // the `files` closure captured at loop-start goes stale once sibling
@@ -708,14 +710,19 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       .then((r) => r.json())
       .then((d) => setHistory(d.history ?? []))
       .catch(() => {});
+    fetch("/api/admin/import-templates")
+      .then((r) => r.json())
+      .then((d) => setTemplates(d.templates ?? []))
+      .catch(() => {});
     loadCatalog();
   }, [loadCatalog]);
 
-  const runPreview = useCallback(async (id: string, file: File): Promise<ImportPreview | null> => {
+  const runPreview = useCallback(async (id: string, file: File, tplId: string): Promise<ImportPreview | null> => {
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "previewing" } : f));
     const fd = new FormData();
     fd.append("file", file);
     fd.append("mode", "preview");
+    if (tplId) fd.append("templateId", tplId);
     try {
       const r = await fetchWithTimeout("/api/erp/import", { method: "POST", body: fd }, 60_000);
       const d = await r.json();
@@ -738,12 +745,12 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
 
   const addFiles = useCallback((fileList: FileList | File[]) => {
     const toAdd: FileItem[] = Array.from(fileList).map((file) => ({
-      id: uid(), file, status: "idle" as FileStatus,
+      id: uid(), file, status: "idle" as FileStatus, templateId,
       preview: null, result: null, error: "",
     }));
     setFiles((prev) => [...prev, ...toAdd]);
-    for (const item of toAdd) runPreview(item.id, item.file);
-  }, [runPreview]);
+    for (const item of toAdd) runPreview(item.id, item.file, item.templateId);
+  }, [runPreview, templateId]);
 
   const applyFile = useCallback(async (id: string): Promise<void> => {
     // Read the file from filesRef (always current — mirrored via effect),
@@ -753,12 +760,14 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
     // silently reads a stale `null` and returns early — the exact bug behind
     // "Застосувати" appearing to do nothing (state flips to a visual
     // "applying" flash from React's own re-render, then nothing follows).
-    const file = filesRef.current.find((f) => f.id === id)?.file ?? null;
+    const item = filesRef.current.find((f) => f.id === id) ?? null;
+    const file = item?.file ?? null;
     if (!file) return;
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "applying" } : f));
     const fd = new FormData();
     fd.append("file", file);
     fd.append("mode", "apply");
+    if (item?.templateId) fd.append("templateId", item.templateId);
     try {
       // Longer budget than preview — a full-catalog apply writes many rows in
       // one transaction. Still bounded: never leaves "застосування…" hanging
@@ -783,7 +792,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
         // for it against the fresh DB. Awaited so callers (applyAll) see
         // up-to-date filesRef state right after this resolves.
         const siblings = filesRef.current.filter((f) => f.id !== id && (f.status === "ready" || f.status === "error"));
-        await Promise.all(siblings.map((s) => runPreview(s.id, s.file)));
+        await Promise.all(siblings.map((s) => runPreview(s.id, s.file, s.templateId)));
       } else {
         setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "error", error: d.error ?? "Помилка застосування" } : f));
       }
@@ -930,6 +939,23 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       {/* onboarding — only before the first file is added */}
       {!hasFiles && <StartGuide />}
 
+      {/* template selector — explicit column mapping instead of auto-detect;
+          set BEFORE dropping files, each file remembers the template it was
+          added with (see FileItem.templateId) so a later selector change
+          doesn't retroactively affect already-queued files. */}
+      {!allDone && templates.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <label className="text-[11px] uppercase tracking-[0.1em] text-[#9E9E9E]">Шаблон мапінгу</label>
+          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}
+            className="h-8 rounded-[3px] border border-[#E0E0E0] bg-white px-2 text-[12px] text-[#1f2733] outline-none focus:border-[#2f9488]">
+            <option value="">Автовизначення (за замовчуванням)</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} · {t.format.toUpperCase()}{t.column_count ? ` · ${t.column_count} кол.` : ""}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* drop zone */}
       {!allDone && (
         <div
@@ -976,8 +1002,8 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
                 if (expandedId === item.id) setExpandedId(null);
               }}
               onApply={() => applyFile(item.id)}
-              onRetry={() => (item.preview ? applyFile(item.id) : runPreview(item.id, item.file))}
-              onProductCreated={() => { runPreview(item.id, item.file); loadCatalog(); }}
+              onRetry={() => (item.preview ? applyFile(item.id) : runPreview(item.id, item.file, item.templateId))}
+              onProductCreated={() => { runPreview(item.id, item.file, item.templateId); loadCatalog(); }}
             />
           ))}
         </div>

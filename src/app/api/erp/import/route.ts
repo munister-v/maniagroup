@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { parseImportSmart, previewImport, applyImport, type ApplyResult, type ImportKind } from "@/lib/stockImport";
+import { parseImportSmart, parseImportWithTemplate, previewImport, applyImport, type ApplyResult, type ImportKind } from "@/lib/stockImport";
 import { getMeta, setMeta } from "@/lib/db";
 import { logActivity } from "@/lib/activity";
+import { getImportTemplate } from "@/lib/importTemplates";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -51,11 +52,20 @@ export async function POST(req: NextRequest) {
 
   const file = form.get("file");
   const mode = String(form.get("mode") ?? "preview");
+  const templateId = form.get("templateId");
   if (!(file instanceof File)) return NextResponse.json({ error: "Файл не надіслано" }, { status: 400 });
 
   const buf = Buffer.from(await file.arrayBuffer());
-  let parsed;
-  try { parsed = await parseImportSmart(buf, file.name); }
+  let parsed: import("@/lib/stockImport").Parsed & { ai?: boolean };
+  try {
+    if (templateId) {
+      const tpl = await getImportTemplate(String(templateId));
+      if (!tpl) return NextResponse.json({ error: "Шаблон не знайдено" }, { status: 400 });
+      parsed = parseImportWithTemplate(buf, file.name, tpl);
+    } else {
+      parsed = await parseImportSmart(buf, file.name);
+    }
+  }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "Не вдалося прочитати файл" }, { status: 400 }); }
 
   if (parsed.kind === "unknown")

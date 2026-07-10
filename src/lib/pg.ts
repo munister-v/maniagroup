@@ -576,6 +576,32 @@ CREATE TABLE IF NOT EXISTS photo_sources (
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ── ERP: named import templates (Intertop agora "Шаблони даних") ──
+-- Explicit column→property mapping the admin defines once per supplier file
+-- layout, instead of relying purely on stockImport.ts's synonym auto-detect.
+-- Matching is by exact raw column label text in the file's header row.
+CREATE TABLE IF NOT EXISTS import_templates (
+  id             BIGSERIAL PRIMARY KEY,
+  name           TEXT NOT NULL,
+  format         TEXT NOT NULL DEFAULT 'csv',   -- csv | xlsx
+  encoding       TEXT NOT NULL DEFAULT 'utf-8', -- csv only
+  delimiter      TEXT NOT NULL DEFAULT ';',     -- csv only
+  header_row     INTEGER NOT NULL DEFAULT 1,    -- 1-based row with column labels
+  data_start_row INTEGER NOT NULL DEFAULT 2,    -- 1-based row where data begins
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS import_template_columns (
+  id           BIGSERIAL PRIMARY KEY,
+  template_id  BIGINT NOT NULL REFERENCES import_templates(id) ON DELETE CASCADE,
+  raw_label    TEXT NOT NULL,               -- exact column header text in the file
+  property_key TEXT NOT NULL,               -- our canonical field, see importTemplates.ts PROPERTY_LIST
+  required     BOOLEAN NOT NULL DEFAULT FALSE,
+  sort_order   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_import_template_columns_template ON import_template_columns(template_id, sort_order);
 `;
 
 /**
