@@ -62,8 +62,6 @@ const OPT_COLS: {
 }[] = [
   { id: "category",       label: "Категорія",              render: (v) => v.category || "—" },
   { id: "classifier",     label: "Класифікатор",           render: (v) => classifierPath(v) },
-  { id: "factoryArticle", label: "Заводський артикул",      render: (v) => v.factory_article || "—" },
-  { id: "size",           label: "Розмір",                 render: (v) => v.size || "—" },
   { id: "sizeClothing",   label: "Розмір одягу", hideDefault: true, render: (v) => v.size || "—" },
   { id: "price",          label: "Ціна",           align: "right", render: (v) => money(v.price ?? v.base_price) },
   { id: "salePrice",      label: "Акційна ціна",   align: "right", render: (v) => (v.sale_price ? money(v.sale_price) : "—") },
@@ -210,7 +208,8 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
   const allOnPage = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const show = (c: OptCol) => !hidden.has(c);
   const visibleCols = OPT_COLS.filter((c) => !hidden.has(c.id));
-  const colSpan = 5 + visibleCols.length; // checkbox + Штрихкод + Активність + Код товару + Статус
+  // checkbox + Внутр. номер + SKU + Заводський артикул + Розмір + Активність + Статус
+  const colSpan = 7 + visibleCols.length;
 
   const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
   const selCls = "h-9 rounded-[4px] border border-[#e6eaec] bg-white px-2.5 text-[12px] text-[#2b2d42] focus:border-[#2f9488] focus:outline-none";
@@ -338,9 +337,11 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
               <th className="w-10 border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5">
                 <input type="checkbox" checked={allOnPage} onChange={toggleAll} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
               </th>
-              <th className={thCls}>Штрихкод</th>
+              <th className={thCls}>Внутр. номер</th>
+              <th className={thCls}>SKU</th>
+              <th className={thCls}>Заводський артикул</th>
+              <th className={thCls}>Розмір</th>
               <th className={thCls}>Активність</th>
-              <th className={thCls}>Код товару</th>
               <th className={thCls}>Статус</th>
               {visibleCols.map((c) => (
                 <th key={c.id} className={c.align === "right" ? `${thCls} text-right` : thCls}>{c.label}</th>
@@ -355,22 +356,25 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
             ) : rows.map((v) => {
               const isSel = selected.has(v.id);
               const st = siteStatus(v);
-              // Наш SKU-код = внутрішній номер + розмір (напр. 45678-M). v.sku буває
-              // порожнім у старих товарів, тоді падаємо на product_id, щоб ніколи не
-              // показати голий "-M". Ніяких фейкових mp-кодів — цей код усюди.
-              const sku = v.barcode || `${v.sku || v.product_id}-${v.size}`;
-              const code = v.offer_code || sku;
+              // Наша структура ідентифікаторів (не Intertop-mp): внутрішній номер =
+              // тільки цифри (v.sku), SKU = номер + розмір (45678-M). v.sku буває
+              // порожнім у старих товарів — падаємо на product_id, щоб не показати
+              // голий "-M". Штрихкод нам не потрібен.
+              const innerNo = v.sku || v.product_id;
+              const skuCode = `${innerNo}-${v.size}`;
               return (
                 <tr key={v.id} className={`border-b border-[#eef2f3] transition-colors ${isSel ? "bg-[#eef7f6]" : "hover:bg-[#f7f9fa]"}`}>
                   <td className="px-3 py-2.5">
                     <input type="checkbox" checked={isSel} onChange={() => toggleRow(v.id)} className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{sku}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.active ? "Так" : "Ні"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     <button onClick={() => { setSelected(new Set([v.id])); setEditOpen(true); }}
-                      className="font-mono text-[12px] text-[#2f9488] hover:underline">{code}</button>
+                      className="font-mono text-[12px] text-[#2f9488] hover:underline">{innerNo}</button>
                   </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#2b2d42]">{skuCode}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{v.factory_article || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.size || "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{v.active ? "Так" : "Ні"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     <span className="inline-flex items-center gap-1.5">
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: st.color }} />
