@@ -27,6 +27,10 @@ type FullProduct = Row & {
   images: { src: string }[];
   attributes: { taxonomy: string; terms: { name: string; slug: string }[] }[];
   variants?: { size: string; stock_qty: number }[];
+  /** name/description = «Мова Російська» (current real content); name_uk/
+   *  description_uk = «Мова Українська» (Intertop 2.1) — see lib/pg.ts. */
+  name_uk?: string;
+  description_uk?: string;
   description: string;
   short_description: string;
   color: string;
@@ -58,6 +62,8 @@ type SizeRow = { size: string; qty: string };
 
 type Draft = {
   name: string;
+  name_uk: string;
+  description_uk: string;
   brand: string;
   sku: string;
   factory_article: string;
@@ -82,7 +88,7 @@ type Draft = {
 // through На модерацію → Підтверджено before it can reach the site) —
 // status defaults to "draft" here, not "publish".
 const EMPTY_DRAFT: Draft = {
-  name: "", brand: "", sku: "", factory_article: "", category: "", category_slug: "", gender: "",
+  name: "", name_uk: "", description_uk: "", brand: "", sku: "", factory_article: "", category: "", category_slug: "", gender: "",
   regular_price: "", sale_price: "", is_in_stock: true, status: "draft",
   images: [], sizes: [], color: "", composition: "", season: "", country: "",
   short_description: "", description: "",
@@ -105,7 +111,8 @@ function draftFromProduct(p: FullProduct): Draft {
   const images = (p.images ?? []).map((i) => i.src).filter(Boolean);
   if (images.length === 0 && p.image_src) images.push(p.image_src);
   return {
-    name: p.name, brand: p.brand, sku: p.sku, factory_article: p.factory_article ?? "", category: p.category, category_slug: p.category_slug ?? "", gender: p.gender,
+    name: p.name, name_uk: p.name_uk ?? "", description_uk: p.description_uk ?? "",
+    brand: p.brand, sku: p.sku, factory_article: p.factory_article ?? "", category: p.category, category_slug: p.category_slug ?? "", gender: p.gender,
     regular_price: String(p.regular_price ?? ""), sale_price: p.sale_price ? String(p.sale_price) : "",
     is_in_stock: p.is_in_stock, status: p.status, images,
     sizes, color: p.color ?? "", composition: p.composition ?? "", season: p.season ?? "",
@@ -116,6 +123,8 @@ function draftFromProduct(p: FullProduct): Draft {
 function draftToPayload(d: Draft) {
   return {
     name: d.name.trim(),
+    name_uk: d.name_uk.trim(),
+    description_uk: d.description_uk,
     brand: d.brand.trim() || "Mania Group",
     sku: d.sku.trim(),
     factory_article: d.factory_article.trim(),
@@ -568,19 +577,18 @@ export function AdminProducts({ onToast, initialOpen }: {
             <div className="bg-[#f4f6f7] px-5 py-5">
               <DetailCard title="Дані про товар">
                 <div className="space-y-4">
-                  <label className="block"><span className={lbl}>Назва *</span><input className={inp} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block"><span className={lbl}>Бренд</span><input className={inp} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
-                    <label className="block"><span className={lbl}>SKU (внутрішній)</span><input className={inp} value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>Бренд *</span><input className={inp} value={draft.brand} onChange={(e) => setDraft({ ...draft, brand: e.target.value })} /></label>
+                    <label className="block"><span className={lbl}>SKU (внутрішній, «Артикул»)</span><input className={inp} value={draft.sku} onChange={(e) => setDraft({ ...draft, sku: e.target.value })} /></label>
                   </div>
                   <label className="block">
-                    <span className={lbl}>Заводський артикул постачальника</span>
+                    <span className={lbl}>Заводський артикул постачальника *</span>
                     <input className={inp} value={draft.factory_article} onChange={(e) => setDraft({ ...draft, factory_article: e.target.value })}
                       placeholder="код, яким постачальник позначає товар у файлі ОСТАТКИ" />
                     <span className="mt-1 block text-[10px] text-[#aab4bf]">Саме за цим кодом залишки/ціни з файлу ОСТАТКИ автоматично підтягнуться до цього товару — без нього доведеться оновлювати вручну.</span>
                   </label>
                   <div className="grid grid-cols-2 gap-3">
-                    <label className="block"><span className={lbl}>Стать</span>
+                    <label className="block"><span className={lbl}>Класифікатор: Стать *</span>
                       <select className={inp} value={draft.gender} onChange={(e) => {
                         const gender = e.target.value;
                         const stillValid = PRODUCT_CATEGORIES.find((c) => c.slug === draft.category_slug)?.genders.includes(gender as "men" | "women");
@@ -591,7 +599,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                         <option value="men">Чоловікам</option>
                       </select>
                     </label>
-                    <label className="block"><span className={lbl}>Категорія</span>
+                    <label className="block"><span className={lbl}>Класифікатор: Категорія *</span>
                       <select className={inp} value={draft.category_slug} onChange={(e) => {
                         const opt = PRODUCT_CATEGORIES.find((c) => c.slug === e.target.value);
                         setDraft({ ...draft, category_slug: opt?.slug ?? "", category: opt?.label ?? "" });
@@ -610,6 +618,30 @@ export function AdminProducts({ onToast, initialOpen }: {
                 </div>
               </DetailCard>
 
+              {/* Intertop 2.1's exact per-language split: «Мова Українська» /
+                  «Мова Російська» each carry their own Назва+Опис. Our existing
+                  catalog content is Russian-language (see lib/pg.ts comment) —
+                  Ukrainian starts genuinely empty, not backfilled with guesses. */}
+              <DetailCard title="Мова Українська">
+                <div className="space-y-4">
+                  <label className="block"><span className={lbl}>Назва (uk)</span>
+                    <input className={inp} value={draft.name_uk} onChange={(e) => setDraft({ ...draft, name_uk: e.target.value })} placeholder="ще не перекладено" /></label>
+                  <label className="block"><span className={lbl}>Опис (uk)</span>
+                    <textarea rows={3} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none"
+                      value={draft.description_uk} onChange={(e) => setDraft({ ...draft, description_uk: e.target.value })} placeholder="ще не перекладено" /></label>
+                </div>
+              </DetailCard>
+
+              <DetailCard title="Мова Російська">
+                <div className="space-y-4">
+                  <label className="block"><span className={lbl}>Назва (ru) *</span>
+                    <input className={inp} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></label>
+                  <label className="block"><span className={lbl}>Опис (ru)</span>
+                    <textarea rows={3} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none"
+                      value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
+                </div>
+              </DetailCard>
+
               <DetailCard title="Розміри та залишок">
                 <SizeQtyEditor sizes={draft.sizes} onChange={(sizes) => setDraft({ ...draft, sizes })} />
               </DetailCard>
@@ -618,7 +650,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                 <ImageManager images={draft.images} onChange={(images) => setDraft({ ...draft, images })} onToast={onToast} />
               </DetailCard>
 
-              <DetailCard title="Опис та атрибути" defaultOpen={false}>
+              <DetailCard title="Атрибути" defaultOpen={false}>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block"><span className={lbl}>Колір</span><input className={inp} value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} /></label>
@@ -626,8 +658,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                     <label className="block"><span className={lbl}>Сезон</span><input className={inp} value={draft.season} onChange={(e) => setDraft({ ...draft, season: e.target.value })} /></label>
                     <label className="block"><span className={lbl}>Країна</span><input className={inp} value={draft.country} onChange={(e) => setDraft({ ...draft, country: e.target.value })} /></label>
                   </div>
-                  <label className="block"><span className={lbl}>Короткий опис</span><textarea rows={2} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.short_description} onChange={(e) => setDraft({ ...draft, short_description: e.target.value })} /></label>
-                  <label className="block"><span className={lbl}>Повний опис</span><textarea rows={4} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
+                  <label className="block"><span className={lbl}>Короткий опис (внутрішній)</span><textarea rows={2} className="w-full border border-[#e6eaec] bg-white p-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" value={draft.short_description} onChange={(e) => setDraft({ ...draft, short_description: e.target.value })} /></label>
                 </div>
               </DetailCard>
 

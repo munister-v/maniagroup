@@ -649,6 +649,17 @@ CREATE INDEX IF NOT EXISTS idx_value_list_items_list ON value_list_items(list_id
 -- default to 'approved' since they're already live, properly-configured
 -- products that never needed this review step.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DEFAULT 'approved';
+
+-- Intertop 2.1 guide splits the product card into «Мова Українська» /
+-- «Мова Російська» (separate name+opис per language). Our existing name/
+-- description columns are already Russian-language content (verified against
+-- real rows — "Джинси"/"Сарафан" etc. are actually Russian spellings), so
+-- they map onto «Мова Російська» as-is. name_uk/description_uk are new,
+-- genuinely empty until an admin fills them in — nothing fabricated. The
+-- storefront still reads name/description only; wiring an actual uk/ru
+-- switcher there is separate, future work.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS name_uk        TEXT NOT NULL DEFAULT '';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS description_uk TEXT NOT NULL DEFAULT '';
 `;
 
 /**

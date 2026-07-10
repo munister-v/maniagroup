@@ -20,6 +20,10 @@ export type SizeQty = { size: string; qty: number };
 
 export type AdminProductInput = {
   name: string;
+  /** Ukrainian name/description — separate from the Russian-language name/
+   *  description above (Intertop 2.1's «Мова Українська»/«Мова Російська»). */
+  name_uk?: string;
+  description_uk?: string;
   slug?: string;
   sku?: string;
   factory_article?: string; // bridge code an OFFERS (ОСТАТКИ) file matches on — see lib/erp.ts header
@@ -284,19 +288,19 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
 
   await q(
     `INSERT INTO products
-      (id, sku, factory_article, name, slug, brand, category, category_slug, gender,
+      (id, sku, factory_article, name, name_uk, slug, brand, category, category_slug, gender,
        price, regular_price, sale_price, is_in_stock, status, moderation_status,
-       image_src, images, attributes, description, short_description,
+       image_src, images, attributes, description, description_uk, short_description,
        color, country, season, collection, composition)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)`,
     [
-      id, input.sku ?? "", input.factory_article ?? "", input.name, slug, input.brand ?? "Mania Group",
+      id, input.sku ?? "", input.factory_article ?? "", input.name, input.name_uk ?? "", slug, input.brand ?? "Mania Group",
       input.category ?? "Одяг", input.category_slug || slugify(input.category ?? "tovar") || "tovar",
       input.gender ?? "", price, input.regular_price, input.sale_price ?? null,
       input.is_in_stock ?? true, input.status ?? "draft", input.moderation_status ?? "draft",
       input.image_src ?? input.images?.[0]?.src ?? "",
       JSON.stringify(input.images ?? (input.image_src ? [{ src: input.image_src }] : [])),
-      sizeAttributes(input.sizes), input.description ?? "", input.short_description ?? "",
+      sizeAttributes(input.sizes), input.description ?? "", input.description_uk ?? "", input.short_description ?? "",
       input.color ?? "", input.country ?? "", input.season ?? "", input.collection ?? "", input.composition ?? "",
     ],
   );
@@ -321,6 +325,8 @@ export async function duplicateAdminProduct(id: string): Promise<{ id: string }>
   );
   return createAdminProduct({
     name: `${src.name} (копія)`,
+    name_uk: src.name_uk ? `${src.name_uk} (копія)` : "",
+    description_uk: String(src.description_uk ?? ""),
     brand: String(src.brand ?? ""),
     factory_article: String(src.factory_article ?? ""),
     category: String(src.category ?? ""),
@@ -350,6 +356,8 @@ export async function updateAdminProduct(id: string, input: Partial<AdminProduct
   const add = (col: string, val: unknown) => { bind.push(val); sets.push(`${col} = $${bind.length}`); };
 
   if (input.name !== undefined) add("name", input.name);
+  if (input.name_uk !== undefined) add("name_uk", input.name_uk);
+  if (input.description_uk !== undefined) add("description_uk", input.description_uk);
   if (input.slug !== undefined) add("slug", input.slug);
   if (input.sku !== undefined) add("sku", input.sku);
   if (input.factory_article !== undefined) add("factory_article", input.factory_article);
