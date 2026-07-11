@@ -61,22 +61,57 @@ async function rawFetch(url: string): Promise<Buffer | null> {
 
 /**
  * Normalize a fetched logo through sharp: enforce the minimum dimension,
- * re-encode to a clean PNG, and classify its background. Returns null when
- * the image is too small (favicon-tier) or undecodable.
+ * re-encode to a clean PNG, and make it render well on the white brand tile.
+ * A solid-dark-fill MONOCHROME logo (white-on-black wordmark, e.g. PINKO /
+ * FENDI / MOSCHINO) is inverted to dark-on-white so it reads on the white
+ * tile instead of showing as a black box; COLORED logos (e.g. a red mascot
+ * badge) are left untouched. Returns null when too small or undecodable.
  */
 async function processLogo(buf: Buffer): Promise<{ png: Buffer; bg: LogoBg } | null> {
   try {
-    const img = sharp(buf, { failOn: "none" });
-    const meta = await img.metadata();
+    const base = sharp(buf, { failOn: "none" });
+    const meta = await base.metadata();
     const w = meta.width ?? 0;
     const h = meta.height ?? 0;
     if (w < MIN_DIM || h < MIN_DIM) return null;
 
-    const png = await img.png().toBuffer();
-    const bg = await classifyBg(png);
+    let png = await base.png().toBuffer();
+    let bg = await classifyBg(png);
+    if (bg === "dark" && (await isMonochrome(png))) {
+      png = await sharp(png).negate({ alpha: false }).png().toBuffer();
+      bg = "light";
+    }
     return { png, bg };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Mean colour saturation of opaque pixels on a 24×24 thumbnail. Near-zero for
+ * a black/white/grey wordmark (safe to colour-invert), high for a genuinely
+ * coloured logo (must NOT be inverted — inversion would flip its brand colours).
+ */
+async function isMonochrome(png: Buffer): Promise<boolean> {
+  try {
+    const { data, info } = await sharp(png)
+      .resize(24, 24, { fit: "fill" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const ch = info.channels;
+    let sat = 0, n = 0;
+    for (let i = 0; i < data.length; i += ch) {
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const a = ch >= 4 ? data[i + 3] : 255;
+      if (a < 128) continue;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      sat += mx === 0 ? 0 : (mx - mn) / mx;
+      n++;
+    }
+    return n === 0 ? true : sat / n < 0.15;
+  } catch {
+    return false;
   }
 }
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { dbBrands } from "@/lib/productSource";
-import { getResolvedBrandLogoMap, getBrandLogoBgMap, resolveBrandLogo } from "@/lib/brandLogos";
+import { getResolvedBrandLogoMap, resolveBrandLogo } from "@/lib/brandLogos";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const metadata = {
@@ -11,21 +11,20 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-type B = { name: string; slug: string; count: number; logo: string | null; dark?: boolean };
+type B = { name: string; slug: string; count: number; logo: string | null };
 
 export default async function BrandsPage() {
   let raw: { name: string; slug: string; count: number }[] = [];
   try { raw = await dbBrands(); } catch { raw = []; }
   let logos: Record<string, string> = {};
-  let bgMap: Record<string, "light" | "dark"> = {};
-  try { [logos, bgMap] = await Promise.all([getResolvedBrandLogoMap(), getBrandLogoBgMap()]); } catch { logos = {}; bgMap = {}; }
+  try { logos = await getResolvedBrandLogoMap(); } catch { logos = {}; }
 
   // Dedupe families sharing a logo URL (keep the shortest/root name), resolve logos.
   const byLogo = new Map<string, B>();
   const seen: B[] = [];
   for (const b of raw) {
     const logo = resolveBrandLogo(b.name, logos);
-    const item: B = { ...b, logo, dark: bgMap[b.name] === "dark" };
+    const item: B = { ...b, logo };
     if (logo) {
       const ex = byLogo.get(logo);
       if (!ex || b.name.length < ex.name.length) byLogo.set(logo, item);
@@ -64,13 +63,13 @@ export default async function BrandsPage() {
               <Link
                 href={`/catalog?brand=${b.slug}`}
                 title={`${b.name} · ${b.count}`}
-                className={`group relative flex h-[84px] items-center justify-center rounded-[3px] border px-5 transition-all hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)] ${b.dark ? "border-[#0b0b0b] bg-[#0b0b0b] hover:border-black" : "border-line/60 bg-white hover:border-ink/25"}`}
+                className="group relative flex h-[84px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
               >
                 <BrandLogo
                   name={b.name}
                   src={b.logo}
                   imgClass="max-h-[48px] max-w-full object-contain"
-                  textClass={`text-center font-display text-[16px] leading-tight tracking-wide ${b.dark ? "text-white/85" : "text-ink/75"}`}
+                  textClass="text-center font-display text-[16px] leading-tight tracking-wide text-ink/75"
                 />
                 <span className="absolute bottom-1.5 right-2 text-[10px] tabular-nums text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">{b.count}</span>
               </Link>

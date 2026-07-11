@@ -6,7 +6,7 @@ import { Footer } from "@/components/Footer";
 import { WishlistProvider } from "@/components/WishlistContext";
 import { getSiteContent, announcementActive } from "@/lib/siteContent";
 import { dbBrands } from "@/lib/productSource";
-import { getResolvedBrandLogoMap, getBrandLogoBgMap } from "@/lib/brandLogos";
+import { getResolvedBrandLogoMap } from "@/lib/brandLogos";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -99,8 +99,7 @@ export default async function RootLayout({
   let brands: { name: string; slug: string }[] = [];
   try { brands = await dbBrands(); } catch { brands = []; }
   let brandLogos: Record<string, string> = {};
-  let brandBg: Record<string, "light" | "dark"> = {};
-  try { [brandLogos, brandBg] = await Promise.all([getResolvedBrandLogoMap(), getBrandLogoBgMap()]); } catch { brandLogos = {}; brandBg = {}; }
+  try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
   return (
     <html
       lang="uk"
@@ -113,7 +112,7 @@ export default async function RootLayout({
         />
         <WishlistProvider>
           <AnnouncementBar />
-          <Header brands={brands} brandLogos={brandLogos} brandBg={brandBg} />
+          <Header brands={brands} brandLogos={brandLogos} />
           <main className="flex-1 pb-14 md:pb-0">{children}</main>
           <Footer />
         </WishlistProvider>

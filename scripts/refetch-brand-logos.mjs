@@ -60,13 +60,33 @@ async function classifyBg(png) {
   } catch { return "light"; }
 }
 
+async function isMonochrome(png) {
+  try {
+    const { data, info } = await sharp(png).resize(24, 24, { fit: "fill" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const ch = info.channels;
+    let sat = 0, n = 0;
+    for (let i = 0; i < data.length; i += ch) {
+      const r = data[i], g = data[i + 1], b = data[i + 2], a = ch >= 4 ? data[i + 3] : 255;
+      if (a < 128) continue;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      sat += mx === 0 ? 0 : (mx - mn) / mx; n++;
+    }
+    return n === 0 ? true : sat / n < 0.15;
+  } catch { return false; }
+}
+
 async function processLogo(buf) {
   try {
-    const img = sharp(buf, { failOn: "none" });
-    const meta = await img.metadata();
+    const base = sharp(buf, { failOn: "none" });
+    const meta = await base.metadata();
     if ((meta.width ?? 0) < MIN_DIM || (meta.height ?? 0) < MIN_DIM) return null;
-    const png = await img.png().toBuffer();
-    return { png, bg: await classifyBg(png) };
+    let png = await base.png().toBuffer();
+    let bg = await classifyBg(png);
+    if (bg === "dark" && (await isMonochrome(png))) {
+      png = await sharp(png).negate({ alpha: false }).png().toBuffer();
+      bg = "light";
+    }
+    return { png, bg };
   } catch { return null; }
 }
 

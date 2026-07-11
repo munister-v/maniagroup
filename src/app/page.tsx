@@ -6,7 +6,7 @@ import { NewsletterForm } from "@/components/NewsletterForm";
 import { ProductRail } from "@/components/ProductRail";
 import { CATEGORIES, type Product } from "@/lib/catalog";
 import { getProducts, getFeaturedProducts, dbBrands } from "@/lib/productSource";
-import { getResolvedBrandLogoMap, getBrandLogoBgMap, resolveBrandLogo } from "@/lib/brandLogos";
+import { getResolvedBrandLogoMap, resolveBrandLogo } from "@/lib/brandLogos";
 import { BrandLogo } from "@/components/BrandLogo";
 import { getSiteContent } from "@/lib/siteContent";
 
@@ -32,8 +32,7 @@ export default async function Home() {
   try { brands = await dbBrands(); } catch { brands = []; }
 
   let brandLogos: Record<string, string> = {};
-  let brandBg: Record<string, "light" | "dark"> = {};
-  try { [brandLogos, brandBg] = await Promise.all([getResolvedBrandLogoMap(), getBrandLogoBgMap()]); } catch { brandLogos = {}; brandBg = {}; }
+  try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
 
   const hero = brands.length
     ? {
@@ -48,7 +47,7 @@ export default async function Home() {
 
   const sectionMap: Record<string, React.ReactNode> = {
     hero: <Hero hero={hero} />,
-    marquee: <BrandStrip brands={brands} logoMap={brandLogos} bgMap={brandBg} />,
+    marquee: <BrandStrip brands={brands} logoMap={brandLogos} />,
     categories: <PromoTiles />,
     featured: <ProductRail title="Обране" eyebrow="Кураторський вибір" href="/catalog" products={featured} />,
     newArrivals: <ProductRail title="Нові надходження" eyebrow="Щойно завезли" href="/catalog" products={products} />,
@@ -184,14 +183,14 @@ function PromoTiles() {
 }
 
 /* ───────────────────────────────────────────────── Brand strip */
-function BrandStrip({ brands, logoMap, bgMap }: { brands: { name: string; slug: string }[]; logoMap: Record<string, string>; bgMap: Record<string, "light" | "dark"> }) {
+function BrandStrip({ brands, logoMap }: { brands: { name: string; slug: string }[]; logoMap: Record<string, string> }) {
   if (brands.length === 0) return null;
-  const byLogoUrl = new Map<string, { name: string; slug: string; logo: string; dark: boolean }>();
+  const byLogoUrl = new Map<string, { name: string; slug: string; logo: string }>();
   for (const b of brands) {
     const logo = resolveBrandLogo(b.name, logoMap);
     if (!logo) continue;
     const existing = byLogoUrl.get(logo);
-    if (!existing || b.name.length < existing.name.length) byLogoUrl.set(logo, { ...b, logo, dark: bgMap[b.name] === "dark" });
+    if (!existing || b.name.length < existing.name.length) byLogoUrl.set(logo, { ...b, logo });
   }
   const ordered = [...byLogoUrl.values()].slice(0, 18);
   return (
@@ -205,10 +204,10 @@ function BrandStrip({ brands, logoMap, bgMap }: { brands: { name: string; slug: 
           {ordered.map((brand, i) => (
             <li key={brand.slug} className={i >= 9 ? "hidden sm:block" : ""}>
               <Link href={`/catalog?brand=${brand.slug}`} aria-label={brand.name} title={brand.name}
-                className={`flex h-[64px] items-center justify-center border px-3 transition-all hover:shadow-[0_2px_12px_-6px_rgba(23,19,15,0.3)] md:h-[76px] md:px-4 ${brand.dark ? "border-[#0b0b0b] bg-[#0b0b0b] hover:border-black" : "border-line bg-white hover:border-ink/30"}`}>
+                className="flex h-[64px] items-center justify-center border border-line bg-white px-3 transition-all hover:border-ink/30 hover:shadow-[0_2px_12px_-6px_rgba(23,19,15,0.3)] md:h-[76px] md:px-4">
                 <BrandLogo name={brand.name} src={brand.logo}
                   imgClass="max-h-[40px] max-w-full object-contain md:max-h-[46px]"
-                  textClass={`whitespace-nowrap font-display text-[13px] tracking-wide md:text-[15px] ${brand.dark ? "text-white/85" : "text-ink/65"}`} />
+                  textClass="whitespace-nowrap font-display text-[13px] tracking-wide text-ink/65 md:text-[15px]" />
               </Link>
             </li>
           ))}
