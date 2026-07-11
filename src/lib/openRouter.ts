@@ -9,17 +9,32 @@ async function resolveKey(): Promise<string | null> {
   return process.env.OPENROUTER_API_KEY || (await getSetting("openrouter_api_key")) || null;
 }
 
-// Ordered list of free models to try. First one is preferred.
-// Verified live on OpenRouter (older :free slugs like qwen-2.5/gemini-flash-exp
-// were retired — these are the ones that currently respond). The fallback loop
-// skips any model that returns 404/429 and tries the next.
+// Ordered list of free models to try, biggest/most-capable general-chat
+// models first, small/niche ones last as a final safety net. Cross-checked
+// live against GET https://openrouter.ai/api/v1/models on 2026-07-11 (23
+// ":free" models existed; excluded here: content-safety classifiers,
+// code-only models, and vision-language variants — this assistant is plain
+// text chat). Free-tier models get rate-limited independently of each
+// other and somewhat randomly, so trying the next one on any failure (not
+// just 429) is the actual safety net — see orChat's loop below.
 const FALLBACK_MODELS = [
-  "google/gemma-4-31b-it:free",
-  "google/gemma-4-26b-a4b-it:free",
+  "openai/gpt-oss-120b:free",
+  "openai/gpt-oss-20b:free",
   "meta-llama/llama-3.3-70b-instruct:free",
   "qwen/qwen3-next-80b-a3b-instruct:free",
   "nousresearch/hermes-3-llama-3.1-405b:free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+  "nvidia/nemotron-3-nano-30b-a3b:free",
+  "nvidia/nemotron-nano-9b-v2:free",
   "meta-llama/llama-3.2-3b-instruct:free",
+  "liquid/lfm-2.5-1.2b-instruct:free",
+  "tencent/hy3:free",
+  "poolside/laguna-m.1:free",
+  "poolside/laguna-xs-2.1:free",
 ];
 
 async function callModel(
@@ -62,15 +77,20 @@ export async function orChat(
   if (!key) throw new Error("OPENROUTER_API_KEY not set — додайте в Налаштування → AI-генератор або в .env.local");
 
   const models = opts?.model ? [opts.model, ...FALLBACK_MODELS] : FALLBACK_MODELS;
-  let lastError: Error = new Error("No models tried");
+  const failures: string[] = [];
 
   for (const model of models) {
     try {
       return await callModel(model, messages, key, opts);
     } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e));
-      console.error(`[orChat] ${model} failed: ${lastError.message.slice(0, 120)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      failures.push(`${model}: ${msg.slice(0, 120)}`);
+      console.error(`[orChat] ${model} failed: ${msg.slice(0, 120)}`);
     }
   }
-  throw lastError;
+  // Every model in the fallback chain failed — this is not "one model is
+  // down", so say so plainly instead of surfacing just the last error as if
+  // it were the whole story (that used to hide that 16 other models were
+  // also tried and failed first).
+  throw new Error(`Усі ${models.length} безкоштовних моделей недоступні. Остання помилка: ${failures[failures.length - 1] ?? "?"}`);
 }
