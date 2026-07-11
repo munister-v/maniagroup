@@ -483,10 +483,29 @@ export async function bulkProducts(ids: string[], action: BulkAction): Promise<{
   // other source of truth, so the manual toggle stays fully in effect there.
   const hasVariants = `EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id AND v.active)`;
   switch (action) {
-    case "publish":
-      await q("UPDATE products SET status = 'publish', updated_at = now() WHERE id = ANY($1)", [nums]); break;
+    // Labeled «На модерацію» in CatalogGrid — was a real moderation-bypass
+    // bug: this used to force status='publish' directly without ever
+    // touching moderation_status, and lib/productSource.ts (the real
+    // storefront query) gates purely on `status` — so one click on any
+    // never-reviewed Чернетка product made it genuinely live to customers,
+    // completely skipping the На модерації → Підтвердити review guide 2.1
+    // built. Now it only ever sends to the review queue, same as the
+    // single-product "Чернетка → На модерації" transition; already-approved
+    // rows are skipped (nothing to (re-)submit).
+    case "publish": {
+      const r = await q(
+        `UPDATE products SET moderation_status = 'pending', status = 'draft', updated_at = now()
+          WHERE id = ANY($1) AND moderation_status <> 'approved' RETURNING id`,
+        [nums],
+      );
+      return { count: r.length, skipped: nums.length - r.length };
+    }
+    // Labeled «В чернетку» — keep status and moderation_status in sync (this
+    // used to leave moderation_status untouched, so an approved+live product
+    // sent to draft this way kept showing "Підтверджено" on its own card
+    // while the list said "Приховано").
     case "unpublish":
-      await q("UPDATE products SET status = 'draft', updated_at = now() WHERE id = ANY($1)", [nums]); break;
+      await q("UPDATE products SET status = 'draft', moderation_status = 'draft', updated_at = now() WHERE id = ANY($1)", [nums]); break;
     case "in_stock": {
       const r = await q(`UPDATE products SET is_in_stock = TRUE, updated_at = now() WHERE id = ANY($1) AND NOT ${hasVariants} RETURNING id`, [nums]);
       return { count: r.length, skipped: nums.length - r.length };

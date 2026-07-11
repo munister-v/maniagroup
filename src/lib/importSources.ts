@@ -71,22 +71,27 @@ export async function deleteImportSource(id: string): Promise<void> {
 /**
  * Called from the upload/apply path so every file import shows up in the
  * registry — matched by exact name (the filename), created on first sight.
+ * `summary` was previously never passed (the Результат column stayed
+ * permanently "—" for every file-based source — only the newer URL-feed
+ * path via runImportSource ever populated it), so a file import that
+ * genuinely applied changes looked identical to one that touched nothing.
  */
 export async function recordSourceRun(
-  name: string, templateId: string | null, ok: boolean, errorCount: number,
+  name: string, templateId: string | null, ok: boolean, errorCount: number, summary = "",
 ): Promise<void> {
   const existing = await q1<{ id: string }>("SELECT id::text FROM import_sources WHERE name = $1", [name]);
   const status: SourceStatus = ok ? "ok" : "error";
   if (existing) {
     await q(
-      `UPDATE import_sources SET status=$2, error_count=$3, template_id=COALESCE($4, template_id), last_run_at=now(), updated_at=now() WHERE id=$1`,
-      [Number(existing.id), status, errorCount, templateId ? Number(templateId) : null],
+      `UPDATE import_sources SET status=$2, error_count=$3, template_id=COALESCE($4, template_id),
+          last_run_at=now(), last_run_summary=$5, updated_at=now() WHERE id=$1`,
+      [Number(existing.id), status, errorCount, templateId ? Number(templateId) : null, summary],
     );
   } else {
     await q(
-      `INSERT INTO import_sources (name, feed_type, template_id, status, error_count, last_run_at)
-       VALUES ($1,'file',$2,$3,$4,now())`,
-      [name, templateId ? Number(templateId) : null, status, errorCount],
+      `INSERT INTO import_sources (name, feed_type, template_id, status, error_count, last_run_at, last_run_summary)
+       VALUES ($1,'file',$2,$3,$4,now(),$5)`,
+      [name, templateId ? Number(templateId) : null, status, errorCount, summary],
     );
   }
 }

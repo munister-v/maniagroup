@@ -78,20 +78,22 @@ export async function POST(req: NextRequest) {
     if (mode === "apply") {
       const result = await applyImport(parsed);
       await recordHistory(parsed.filename, result);
-      await recordSourceRun(parsed.filename, tplIdStr, true, result.unmatchedRows).catch(() => {});
       const parts = [
         result.productsCreated ? `+${result.productsCreated} нових` : "",
         result.productsUpdated ? `${result.productsUpdated} оновлено` : "",
         result.stockMovements ? `${result.stockMovements} рухів` : "",
         result.unmatchedRows ? `${result.unmatchedRows} не знайдено` : "",
       ].filter(Boolean).join(" · ");
-      await logActivity("import", `${parsed.filename} — ${parts || "без змін"}`, result.matchedRows);
+      const summary = parts || "без змін";
+      await recordSourceRun(parsed.filename, tplIdStr, true, result.unmatchedRows, summary).catch(() => {});
+      await logActivity("import", `${parsed.filename} — ${summary}`, result.matchedRows);
       return NextResponse.json({ ok: true, mode, result, aiUsed });
     }
     const preview = await previewImport(parsed);
     return NextResponse.json({ ok: true, mode: "preview", preview: { ...preview, aiUsed } });
   } catch (e) {
-    if (mode === "apply") await recordSourceRun(file.name, tplIdStr, false, 1).catch(() => {});
-    return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка обробки" }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "Помилка обробки";
+    if (mode === "apply") await recordSourceRun(file.name, tplIdStr, false, 1, msg.slice(0, 200)).catch(() => {});
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
