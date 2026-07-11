@@ -168,9 +168,15 @@ function draftToPayload(d: Draft) {
   };
 }
 
-export function AdminProducts({ onToast, initialOpen }: {
+export function AdminProducts({ onToast, initialOpen, onClose }: {
   onToast?: (msg: string) => void;
   initialOpen?: { kind: "new" } | { kind: "edit"; id: string } | null;
+  /** Called whenever the editor drawer is dismissed (save/cancel/delete/×) —
+   *  lets a parent that only wanted "open straight to this product's editor"
+   *  (see CatalogGrid's openFullCard) know it's time to show its own list
+   *  again, instead of stranding the admin in this component's bare browse
+   *  view underneath the now-closed drawer. */
+  onClose?: () => void;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
@@ -310,6 +316,7 @@ export function AdminProducts({ onToast, initialOpen }: {
     if (res.ok) {
       onToast?.("Товар видалено");
       setEditorId(null);
+      onClose?.();
       load(page, search, stock);
     } else {
       const data = await res.json().catch(() => null);
@@ -338,6 +345,7 @@ export function AdminProducts({ onToast, initialOpen }: {
     const data = await res.json();
     if (!res.ok) { setError(data.error ?? "Помилка збереження"); return; }
     setEditorId(null);
+    onClose?.();
     onToast?.(editorId === "new" ? "Товар створено" : "Зміни збережено");
     load(page, search, stock);
   }
@@ -494,12 +502,12 @@ export function AdminProducts({ onToast, initialOpen }: {
       {/* Editor drawer */}
       {editorId && (
         <div className="fixed inset-0 z-[80] flex justify-end">
-          <div onClick={() => setEditorId(null)} className="absolute inset-0 bg-black/40" />
+          <div onClick={() => { setEditorId(null); onClose?.(); }} className="absolute inset-0 bg-black/40" />
           <div className="relative flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-white shadow-2xl">
             <div className="sticky top-0 z-10 border-b border-[#eef2f3] bg-white">
               <div className="flex items-center gap-2 px-6 py-4">
                 {editorId !== "new" && (
-                  <button onClick={() => setEditorId(null)} aria-label="Закрити" className="text-[#8a94a0] hover:text-[#2b2d42]">
+                  <button onClick={() => { setEditorId(null); onClose?.(); }} aria-label="Закрити" className="text-[#8a94a0] hover:text-[#2b2d42]">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </button>
                 )}
@@ -512,7 +520,7 @@ export function AdminProducts({ onToast, initialOpen }: {
                   </button>
                 )}
                 {editorId === "new" && (
-                  <button onClick={() => setEditorId(null)} className="ml-auto text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
+                  <button onClick={() => { setEditorId(null); onClose?.(); }} className="ml-auto text-[#8a94a0] hover:text-[#2b2d42]">✕</button>
                 )}
               </div>
               {editorId !== "new" && (
@@ -725,7 +733,7 @@ export function AdminProducts({ onToast, initialOpen }: {
               <button onClick={save} disabled={saving} className="h-11 flex-1 border border-[#2f9488] text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
                 {saving ? "Зберігаємо…" : editorId === "new" ? "Створити товар" : "Зберегти зміни"}
               </button>
-              <button onClick={() => setEditorId(null)} className="h-11 border border-[#e6eaec] px-5 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
+              <button onClick={() => { setEditorId(null); onClose?.(); }} className="h-11 border border-[#e6eaec] px-5 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42]">
                 Скасувати
               </button>
             </div>

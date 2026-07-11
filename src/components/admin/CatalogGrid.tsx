@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminProducts } from "./AdminProducts";
 import { SocialPostButton } from "./AiAssistant";
 import { BulkPhotoMatcher } from "./BulkPhotoMatcher";
@@ -51,38 +51,6 @@ type Row = {
 type Field = keyof Row;
 type CellValue = string | number | boolean | null;
 
-type Col = {
-  key: Field;
-  label: string;
-  type: "text" | "number" | "bool" | "gender" | "status";
-  w: number;
-  sortable?: boolean;
-};
-
-const COLS: Col[] = [
-// Widths are minimums; the table is w-full so on wide screens columns stretch
-// to fill the whole width. Kept to the essential set so it fits a laptop with
-// NO horizontal scroll — колір/сезон/склад/країна/опис are edited in the card
-// (and колір/сезон are already filterable via the toolbar dropdowns).
-  { key: "name", label: "Назва", type: "text", w: 190, sortable: true },
-  { key: "brand", label: "Бренд", type: "text", w: 112, sortable: true },
-  { key: "sku", label: "SKU", type: "text", w: 92, sortable: true },
-  { key: "category", label: "Категорія", type: "text", w: 110, sortable: true },
-  { key: "gender", label: "Стать", type: "gender", w: 74 },
-  { key: "regular_price", label: "Ціна", type: "number", w: 82, sortable: true },
-  { key: "sale_price", label: "Акція", type: "number", w: 82, sortable: true },
-  { key: "is_in_stock", label: "Наявн.", type: "bool", w: 66, sortable: true },
-  { key: "status", label: "Статус", type: "status", w: 98, sortable: true },
-  { key: "featured", label: "Обр.", type: "bool", w: 56 },
-];
-
-// Excel-style column letters: 0→A, 25→Z, 26→AA
-function colLetter(i: number): string {
-  let n = i + 1, s = "";
-  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
-  return s;
-}
-
 /**
  * Whether the product is actually visible on the storefront right now, why
  * not if it isn't, and — when there's a one-click fix — exactly what that
@@ -114,22 +82,6 @@ function siteStatus(row: Row): {
   return { label: "LIVE", dot: "bg-[#2e7d32]", title: "Товар видно на сайті" };
 }
 
-/** One documentation card in the help panel — icon badge + title + body. */
-function HelpCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
-  return (
-    <div className="flex gap-3 rounded-[5px] border border-[#e6eaec] bg-[#f7f9fa] p-3.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[#8a94a0] shadow-[0_0_0_1px_#e6eaec]">
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="mb-1 text-[12px] font-semibold text-[#2b2d42]">{title}</p>
-        <div className="space-y-1.5 text-[12px] leading-relaxed text-[#5a6472]">{children}</div>
-      </div>
-    </div>
-  );
-}
-const ICON_STROKE = { fill: "none", stroke: "currentColor", strokeWidth: 1.7 } as const;
-
 const PER_PAGE_OPTIONS = [50, 100, 200, 500];
 
 // Export column names — must match the server's localized headers (export route).
@@ -142,7 +94,13 @@ const EXPORT_COLUMNS = [
 type CatalogFocus = { stock?: string; siteStatus?: string; token: number } | null;
 
 export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }: { onToast?: (m: string) => void; onImport?: () => void; dataVersion?: number; focus?: CatalogFocus }) {
-  const [mode, setMode] = useState<"grid" | "cards" | "list">("list");
+  // "list" is the one and only browsing view (Intertop has just one table
+  // screen too — see maniagroup-intertop-reskin memory for why this used to
+  // be 3 separate modes and got unified). "cards" is not a real alternate
+  // view; it's how the AdminProducts editor overlay gets shown (see
+  // openFullNew/openFullCard below) — never a persistent, user-chosen tab.
+  const [mode, setMode] = useState<"cards" | "list">("list");
+  const [editMode, setEditMode] = useState(false);
   const [rows, setRows] = useState<Row[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -164,7 +122,6 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   const [bulkPhotoOpen, setBulkPhotoOpen] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
   const [cardsInitial, setCardsInitial] = useState<{ kind: "new" } | { kind: "edit"; id: string } | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadSeq = useRef(0);
 
@@ -186,10 +143,6 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   const [exportScope, setExportScope] = useState<"all" | "filtered" | "selected" | "page">("filtered");
   const [exportFormat, setExportFormat] = useState("xlsx");
   const [exportCols, setExportCols] = useState<Set<string>>(new Set(EXPORT_COLUMNS));
-
-  // Excel-style active cell + cell input refs for keyboard nav
-  const [active, setActive] = useState<{ row: string; col: Field } | null>(null);
-  const cellRefs = useRef<Map<string, HTMLInputElement | HTMLSelectElement>>(new Map());
 
   /** Shared filter params (everything except pagination/sort). */
   const filterParams = useCallback(() => {
@@ -372,22 +325,6 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     setSelected((s) => (s.size === rows.length ? new Set() : new Set(rows.map((r) => r.id))));
   }
 
-  // ── Excel cell navigation ─────────────────────────────────────────────────
-  const setRef = (rowId: string, col: Field) => (el: HTMLInputElement | HTMLSelectElement | null) => {
-    const k = `${rowId}|${col}`;
-    if (el) cellRefs.current.set(k, el); else cellRefs.current.delete(k);
-  };
-  function moveVertical(rowId: string, col: Field, dir: 1 | -1) {
-    const idx = rows.findIndex((r) => r.id === rowId);
-    const next = rows[idx + dir];
-    if (!next) return;
-    setActive({ row: next.id, col });
-    requestAnimationFrame(() => cellRefs.current.get(`${next.id}|${col}`)?.focus());
-  }
-  function cellKey(e: KeyboardEvent<HTMLElement>, rowId: string, col: Field) {
-    if (e.key === "Enter") { e.preventDefault(); moveVertical(rowId, col, e.shiftKey ? -1 : 1); }
-  }
-
   // ── Export ───────────────────────────────────────────────────────────────
   // Build export params for the chosen scope + selected columns.
   function buildExportParams(format: string): URLSearchParams {
@@ -445,36 +382,29 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     if (w) { w.document.write(html); w.document.close(); }
   }
 
+  // The AdminProducts editor overlay — entered only via openFullNew/
+  // openFullCard (row click, "Створити товар"), never a persistent tab.
   if (mode === "cards") {
     return (
       <div>
-        <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} onBulkPhotos={() => setBulkPhotoOpen(true)} />
-        <AdminProducts onToast={onToast} initialOpen={cardsInitial} />
+        <AdminProducts onToast={onToast} initialOpen={cardsInitial}
+          onClose={() => { setMode("list"); setCardsInitial(null); load(); }} />
         {bulkPhotoOpen && <BulkPhotoMatcher onClose={() => setBulkPhotoOpen(false)} onToast={onToast} />}
       </div>
     );
   }
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const inp = "h-7 w-full bg-transparent px-1.5 text-[13px] leading-7 text-[#2b2d42] outline-none";
-
-  // Active-cell derived values for the formula bar
-  const aRow = active ? rows.find((r) => r.id === active.row) ?? null : null;
-  const aColIdx = active ? COLS.findIndex((c) => c.key === active.col) : -1;
-  const aCol = aColIdx >= 0 ? COLS[aColIdx] : null;
-  const aRowNum = aRow ? (page - 1) * perPage + rows.findIndex((r) => r.id === aRow.id) + 1 : 0;
-  const aRef = aCol && aRow ? `${colLetter(aColIdx)}${aRowNum}` : "";
-  const aEditable = !!aCol && (aCol.type === "text" || aCol.type === "number");
 
   return (
     <div className="flex flex-col">
-      <ModeToggle mode={mode} setMode={(m) => { if (m === "cards") setCardsInitial(null); setMode(m); }} onImport={onImport} onNew={openFullNew} onBulkPhotos={() => setBulkPhotoOpen(true)} />
-
-      {/* Intertop-clone header for the "list" mode — big title + selection
-          count + the exact action-button cluster (Створити/Завантажити +
-          selection-gated Деактивувати/На модерацію/В чернетку + preview/export/
-          filter icon buttons). */}
-      {mode === "list" && (() => {
+      {/* Intertop-clone header — big title + selection count + the exact
+          action-button cluster (Створити/Завантажити + selection-gated
+          Деактивувати/На модерацію/В чернетку/В архів + Фото масово/
+          Редагувати комірки/preview/export/filter icon buttons). This is
+          now the ONLY browsing view — see the mode comment above for why
+          this used to be split into 3 separate tabs. */}
+      {(() => {
         const gated = "flex h-9 items-center gap-1.5 rounded-[4px] border px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] transition-colors border-[#d5dbe0] text-[#5a6472] hover:enabled:border-[#2b2d42] hover:enabled:text-[#2b2d42] disabled:cursor-not-allowed disabled:border-[#eef2f3] disabled:text-[#c3ccd4]";
         const primary = "flex h-9 items-center gap-1.5 rounded-[4px] border border-[#2f9488] px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white";
         const icon = "flex h-9 w-9 items-center justify-center rounded-[4px] border border-[#2f9488] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white";
@@ -510,6 +440,17 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                 В архів
                 <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8M10 13h4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
+              <button disabled={!selected.size} onClick={() => { if (confirm(`Видалити ${selected.size} товар(ів)? Незворотно.`)) bulk("delete"); }}
+                title="Тільки товари, які ще ніколи не були на сайті — інші треба архівувати" className={`${gated} !text-red-600 hover:!border-red-600`}>
+                Видалити
+              </button>
+              <button onClick={() => setBulkPhotoOpen(true)} title="Масово прив'язати фото за назвою файлу (SKU/артикул)" className={gated}>
+                Фото масово
+              </button>
+              <button onClick={() => setEditMode((v) => !v)} title="Редагувати ціну/залишок/статус прямо в таблиці"
+                className={editMode ? "flex h-9 items-center gap-1.5 rounded-[4px] border border-[#2f9488] bg-[#2f9488] px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] text-white" : gated}>
+                Редагувати комірки
+              </button>
               <a href="/" target="_blank" rel="noreferrer" title="Переглянути на сайті" className={icon}>
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
               </a>
@@ -525,107 +466,19 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         );
       })()}
 
-      {mode === "list" && (
-        <SubTabs
-          tabs={[
-            { id: "", label: "Всі товари" },
-            { id: "publish", label: "На сайті" },
-            { id: "draft", label: "Чернетки" },
-          ]}
-          active={statusF}
-          onChange={(v) => { setStatusF(v); setPage(1); }}
-        />
-      )}
+      <SubTabs
+        tabs={[
+          { id: "", label: "Всі товари" },
+          { id: "publish", label: "На сайті" },
+          { id: "draft", label: "Чернетки" },
+        ]}
+        active={statusF}
+        onChange={(v) => { setStatusF(v); setPage(1); }}
+      />
 
-      {mode === "grid" && (<>
-      {/* Intro / how-to — one compact line, expands on demand */}
-      <div className="mb-3 flex items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-3.5 py-2 text-[12px] text-[#5a6472]">
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 text-[#8a94a0]" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" strokeLinecap="round" /></svg>
-        <span className="min-w-0 flex-1 truncate">
-          <b className="text-[#2b2d42]">Таблиця як Excel</b> — клікніть клітинку, редагуйте, <b>Enter</b>/<b>Tab</b> — рух, потім «Зберегти всі».
-        </span>
-        <button onClick={() => setHelpOpen((v) => !v)} className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0] hover:text-[#2b2d42]">
-          {helpOpen ? "Згорнути" : "Докладніше"}
-        </button>
-      </div>
-      {helpOpen && (
-        <div className="mb-3 grid gap-2.5 md:grid-cols-2">
-          <HelpCard
-            title="Як редагувати й що саме зберігається"
-            icon={<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" {...ICON_STROKE}><path d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-1.5-9.5a2.1 2.1 0 013 3L12 16l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-          >
-            <p>
-              Клік по клітинці робить її активною (зелена рамка) — саме тоді значення видно й у рядку формул <span className="font-mono text-[11px]">fx</span> вгорі таблиці.
-              Введене значення одразу підсвічує <b>весь рядок жовтим</b> — це «незбережена зміна», вона ще ніде не записана.
-              <b>Enter</b> переходить у ту саму колонку на рядок нижче, <b>Tab</b> — на наступну колонку.
-            </p>
-            <p>
-              Кнопка <b>«Зберегти всі»</b> надсилає ВСІ правки одним запитом. Сервер оновлює кожен товар окремо: якщо змінилась ціна — перераховує підсумкову
-              (акційна, якщо менша за базову, інакше базова). Кожне збереження логується в <b>Моніторинг → журнал активності</b>.
-            </p>
-            <p>
-              <b>Наявність</b> і <b>Обране</b> — прямі перемикачі, а не реальні розмірні залишки: якщо у товару є розмірна сітка, «Наявність»
-              <b> автоматично перерахується</b> з суми залишків при наступному імпорті ОСТАТКИ. Для точного контролю відкривайте <b>«Картка»</b>.
-            </p>
-          </HelpCard>
-
-          <HelpCard
-            title="Пошук і фільтри — як саме звужується список"
-            icon={<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" {...ICON_STROKE}><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" /></svg>}
-          >
-            <p>
-              Поле пошуку шукає одночасно в назві, бренді й артикулі (з затримкою 350мс, щоб не бомбардувати сервер на кожну літеру).
-              Кожен фільтр додає ще одну умову — всі діють одночасно (логічне «І»): «бренд + наявність + ціна від 1000» покаже тільки товари,
-              що відповідають усім трьом одразу. Кнопка «Скинути (N)» знімає всі фільтри разом.
-            </p>
-          </HelpCard>
-
-          <HelpCard
-            title="Масові дії та експорт — з чим саме працюють"
-            icon={<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" {...ICON_STROKE}><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" strokeLinecap="round" /></svg>}
-          >
-            <p>
-              Клік по <b>номеру рядка</b> ліворуч виділяє рядок, кутик угорі — всі рядки на сторінці. Масові дії (опублікувати/сховати/наявність/обране/видалити)
-              виконуються одним SQL-запитом по всіх вибраних id — швидко навіть для сотень товарів.
-            </p>
-            <p>
-              <b>Експорт</b> дає вибір обсягу: весь каталог, поточний фільтр, вибрані рядки або поточна сторінка — і формату (Excel/CSV/JSON/PDF-друк).
-              Обидві дії записуються в журнал активності.
-            </p>
-          </HelpCard>
-
-          <HelpCard
-            title="«Фото масово» — як система впізнає, якому товару належить файл"
-            icon={<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" {...ICON_STROKE}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="13" r="3.5" /></svg>}
-          >
-            <p>
-              Для кожного файлу система бере назву без розширення (напр. <span className="font-mono">90101-2.jpg</span> → <span className="font-mono">90101-2</span>)
-              і шукає серед товарів <b>найдовший</b> відомий SKU або заводський артикул, що є початком цієї назви — працює і для простих кодів
-              (<span className="font-mono">90101</span>), і для складних (<span className="font-mono">DEMO-PALTO-01</span>).
-            </p>
-            <p>
-              Залишок назви після коду (напр. «-2») зчитується як номер фото і визначає порядок — перше фото стає головним. Кожне фото автоматично
-              стискається й перекодовується у WebP (до 2000px). Нерозпізнані файли показуються окремим списком — прив'язати можна вручну через «Картка».
-            </p>
-          </HelpCard>
-
-          <HelpCard
-            title="Картка товару — розміри й реальні залишки"
-            icon={<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" {...ICON_STROKE}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M8 15h4" strokeLinecap="round" /></svg>}
-          >
-            <p>
-              У картці розміри вводяться парами «розмір + кількість» — кожен рядок стає справжнім записом залишку в системі (не текстовою міткою).
-              Поле <b>«Заводський артикул постачальника»</b> — місток: саме за ним файл ОСТАТКИ пізніше знаходить товар і оновлює кількість/ціну автоматично.
-              Без артикулу товар, створений вручну, залишиться недосяжним для автооновлення.
-            </p>
-          </HelpCard>
-        </div>
-      )}
-      </>)}
-
-      {/* Toolbar — search + filters + export. Hidden in list mode until the
-          funnel icon toggles it (Intertop-style); always shown otherwise. */}
-      {(mode !== "list" || filtersOpen) && (
+      {/* Toolbar — search + filters + export. Hidden until the funnel icon
+          toggles it (Intertop-style). */}
+      {filtersOpen && (
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           value={search}
@@ -744,237 +597,31 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         </div>
       )}
 
-      {/* Bulk action bar */}
+      {/* Secondary bulk actions — the common ones (publish/unpublish/archive/
+          delete) live in the header cluster above; these are the rest, only
+          worth a click when something's selected. */}
       {selected.size > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-white px-3 py-2 text-[11px] uppercase tracking-[0.1em]">
           <span className="text-[#8a94a0]">Обрано {selected.size}</span>
           {[
-            { a: "publish", l: "Опублікувати" }, { a: "unpublish", l: "Сховати" },
             { a: "in_stock", l: "В наявн." }, { a: "out_of_stock", l: "Немає" },
             { a: "feature", l: "В обране" }, { a: "unfeature", l: "З обраного" },
             { a: "show_without_photo", l: "Показати без фото" }, { a: "hide_without_photo", l: "Сховати без фото" },
           ].map((b) => (
             <button key={b.a} onClick={() => bulk(b.a)} className="text-[#2b2d42] underline-offset-2 hover:underline">{b.l}</button>
           ))}
-          <button onClick={() => bulk("archive")} title="Тільки товари в статусі «На сайті», макс. 100"
-            className="text-[#2b2d42] underline-offset-2 hover:underline">В архів</button>
-          <button onClick={() => { if (confirm(`Видалити ${selected.size} товарів?`)) bulk("delete"); }}
-            className="text-red-600 underline-offset-2 hover:underline">Видалити</button>
         </div>
       )}
 
-      {mode === "grid" && (<>
-      {/* Formula bar (Excel-style) */}
-      <div className="flex items-stretch border border-b-0 border-[#d5dbe0] bg-[#f7f9fa] text-[13px]">
-        <div className="flex w-[94px] shrink-0 items-center justify-center border-r border-[#d5dbe0] px-2 font-medium tabular-nums text-[#444]">
-          {aRef || "—"}
-        </div>
-        <div className="flex w-9 shrink-0 items-center justify-center border-r border-[#d5dbe0] font-serif text-[15px] italic text-[#9a9a9a]">fx</div>
-        <input
-          value={aRow && aCol ? String(cell(aRow, aCol.key) ?? "") : ""}
-          readOnly={!aEditable}
-          onChange={(e) => aRow && aCol && setCell(aRow.id, aCol.key, e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && aRow && aCol) moveVertical(aRow.id, aCol.key, 1); }}
-          placeholder="Оберіть клітинку для редагування…"
-          className="h-8 flex-1 bg-white px-2.5 text-[#2b2d42] outline-none placeholder:text-[#bbb] read-only:bg-[#fafafa] read-only:text-[#8a8a8a]"
-        />
-      </div>
-
-      {/* Grid — Excel look */}
-      <div className="max-h-[68vh] overflow-auto border border-[#d5dbe0] bg-white">
-        <table className="w-full border-collapse text-[13px]">
-          <thead>
-            <tr>
-              {/* select-all corner */}
-              <th className="sticky left-0 top-0 z-30 w-10 min-w-10 border-b border-r border-[#d5dbe0] bg-[#eef2f3] p-0">
-                <button onClick={toggleAll} title="Виділити все" className="relative block h-full min-h-[38px] w-full">
-                  <span className="absolute bottom-[3px] right-[3px] h-0 w-0 border-b-[7px] border-l-[7px] border-b-[#9a9a9a] border-l-transparent" />
-                </button>
-              </th>
-              {/* photo (frozen) */}
-              <th className="sticky left-10 top-0 z-30 w-11 min-w-11 border-b border-r border-[#d5dbe0] bg-[#eef2f3] text-center align-bottom">
-                <div className="pb-1 text-[10px] text-[#8a8a8a]">Фото</div>
-              </th>
-              {/* site status (computed, not editable) */}
-              <th className="top-0 z-20 w-[132px] min-w-[132px] border-b border-r border-[#d5dbe0] bg-[#eef2f3] text-center align-bottom">
-                <div className="pb-1 text-[10px] text-[#8a8a8a]">На сайті</div>
-              </th>
-              {COLS.map((c, ci) => {
-                const isActiveCol = active?.col === c.key;
-                return (
-                  <th key={c.key} style={{ minWidth: c.w }}
-                    className={`sticky top-0 z-20 border-b border-r border-[#d5dbe0] px-2 pb-1 pt-0.5 text-left align-bottom ${isActiveCol ? "bg-[#e3f2f0]" : "bg-[#eef2f3]"}`}>
-                    <div className={`text-center text-[10px] font-normal leading-none ${isActiveCol ? "text-[#2f9488]" : "text-[#8a8a8a]"}`}>{colLetter(ci)}</div>
-                    {c.sortable ? (
-                      <button onClick={() => toggleSort(c.key)} className="mt-1 flex w-full items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-[#3a4250] hover:text-[#2f9488]">
-                        {c.label}{sortBy === c.key && <span className="text-[#2f9488]">{sortDir === "asc" ? "▲" : "▼"}</span>}
-                      </button>
-                    ) : (
-                      <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.03em] text-[#3a4250]">{c.label}</div>
-                    )}
-                  </th>
-                );
-              })}
-              <th className="sticky top-0 z-20 w-16 min-w-16 border-b border-[#d5dbe0] bg-[#eef2f3]" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr><td colSpan={COLS.length + 4} className="px-3 py-10 text-center text-[#8a94a0]">Завантаження…</td></tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={COLS.length + 4} className="px-3 py-10 text-center text-[#8a94a0]">Нічого не знайдено</td></tr>
-            )}
-            {!loading && rows.map((row, ri) => {
-              const rowDirty = !!edits[row.id];
-              const isSel = selected.has(row.id);
-              const isActiveRow = active?.row === row.id;
-              const rowNum = (page - 1) * perPage + ri + 1;
-              return (
-                <tr key={row.id} className={rowDirty ? "bg-[#fff8e6]" : "hover:bg-[#eef7f6]"}>
-                  {/* row number / row select */}
-                  <td onClick={() => toggleRow(row.id)} title="Клік — виділити рядок"
-                    className={`sticky left-0 z-10 h-7 cursor-pointer select-none border-b border-r text-center text-[11px] tabular-nums ${
-                      isSel ? "border-[#277d73] bg-[#2f9488] font-semibold text-white"
-                      : isActiveRow ? "border-[#d5dbe0] bg-[#e3f2f0] font-semibold text-[#2f9488]"
-                      : "border-[#e6eaec] bg-[#eef2f3] text-[#8a8a8a] hover:bg-[#e4e4e4]"}`}>
-                    {rowNum}
-                  </td>
-                  {/* photo (frozen) */}
-                  <td className={`sticky left-10 z-10 border-b border-r border-[#e6eaec] p-0 ${isSel ? "bg-[#eef7f6]" : "bg-white"}`}>
-                    <div className="flex h-7 items-center justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {row.image_src
-                        ? <img src={row.image_src} alt="" className="h-6 w-6 rounded-[1px] object-cover" />
-                        : <div className="h-6 w-6 rounded-[1px] bg-[#eee]" />}
-                    </div>
-                  </td>
-                  {/* site status — a badge, or a one-click fix when one exists */}
-                  {(() => {
-                    const st = siteStatus(row);
-                    return (
-                      <td title={st.title} className={`border-b border-r border-[#e6eaec] px-1.5 ${isSel ? "bg-[#eef7f6]" : ""}`}>
-                        {st.fix ? (
-                          <button onClick={() => quickFix(row.id, st.fix!.patch)} disabled={fixingId === row.id}
-                            className="flex w-full items-center justify-center gap-1 rounded-[2px] border border-[#e0e0e0] bg-white px-1 py-0.5 text-[10px] text-[#2f9488] hover:border-[#2f9488] disabled:opacity-50">
-                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
-                            {fixingId === row.id ? "…" : st.fix.label}
-                          </button>
-                        ) : (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
-                            <span className="truncate text-[10.5px] text-[#5a6472]">{st.label}</span>
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })()}
-                  {COLS.map((c) => {
-                    const isActive = isActiveRow && active?.col === c.key;
-                    const num = c.type === "number";
-                    return (
-                      <td key={c.key}
-                        onClick={() => setActive({ row: row.id, col: c.key })}
-                        className={`border-b border-r border-[#e6eaec] p-0 ${isSel ? "bg-[#eef7f6]" : ""}`}
-                        style={isActive ? { boxShadow: "inset 0 0 0 2px #2f9488" } : undefined}>
-                        {c.type === "bool" ? (
-                          c.key === "is_in_stock" && row.has_variants ? (
-                            <div className="flex h-7 items-center justify-center" title="Розраховується автоматично із залишків розмірів — редагуйте в «Картці», а не тут">
-                              <input type="checkbox" checked={Boolean(cell(row, c.key))} disabled
-                                className="h-3.5 w-3.5 accent-[#b6c0ca] cursor-not-allowed" />
-                            </div>
-                          ) : (
-                            <div className="flex h-7 items-center justify-center">
-                              <input type="checkbox" checked={Boolean(cell(row, c.key))}
-                                onChange={(e) => setCell(row.id, c.key, e.target.checked)} className="h-3.5 w-3.5 accent-[#2f9488]" />
-                            </div>
-                          )
-                        ) : c.type === "gender" ? (
-                          <select ref={setRef(row.id, c.key)} value={String(cell(row, c.key) ?? "")}
-                            onFocus={() => setActive({ row: row.id, col: c.key })}
-                            onKeyDown={(e) => cellKey(e, row.id, c.key)}
-                            onChange={(e) => setCell(row.id, c.key, e.target.value)} className={inp}>
-                            <option value="">—</option>
-                            <option value="men">Чол.</option>
-                            <option value="women">Жін.</option>
-                          </select>
-                        ) : c.type === "status" ? (
-                          <select ref={setRef(row.id, c.key)} value={String(cell(row, c.key) ?? "")}
-                            onFocus={() => setActive({ row: row.id, col: c.key })}
-                            onKeyDown={(e) => cellKey(e, row.id, c.key)}
-                            onChange={(e) => setCell(row.id, c.key, e.target.value)} className={inp}>
-                            <option value="publish">Опубл.</option>
-                            <option value="draft">Чернетка</option>
-                          </select>
-                        ) : (
-                          <input ref={setRef(row.id, c.key)} type={num ? "number" : "text"}
-                            value={(cell(row, c.key) ?? "") as string | number}
-                            onFocus={() => setActive({ row: row.id, col: c.key })}
-                            onKeyDown={(e) => cellKey(e, row.id, c.key)}
-                            onChange={(e) => setCell(row.id, c.key, e.target.value)}
-                            className={`${inp} ${num ? "text-right tabular-nums" : ""}`} />
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className={`border-b border-[#e6eaec] px-2 ${isSel ? "bg-[#eef7f6]" : ""}`}>
-                    <div className="flex items-center justify-end gap-1">
-                      <SocialPostButton
-                        product={{
-                          name: row.name,
-                          brand: row.brand,
-                          category: row.category,
-                          color: row.color,
-                          season: row.season,
-                          composition: row.composition,
-                          price: String(row.price ?? row.regular_price ?? 0),
-                          oldPrice: row.sale_price != null && row.regular_price != null && row.sale_price < row.regular_price ? String(row.regular_price) : undefined,
-                          inStock: String(row.is_in_stock),
-                        }}
-                        onToast={onToast}
-                      />
-                      <button onClick={() => openFullCard(row.id)} title="Відкрити картку товару"
-                        className="flex h-6 w-6 items-center justify-center rounded-[2px] border border-[#c9c9c9] bg-white text-[#3a4250] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]">
-                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2v-5m-1.5-9.5a2.1 2.1 0 013 3L12 16l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Excel status bar + sheet tab */}
-      <div className="flex items-center justify-between border border-t-0 border-[#d5dbe0] bg-[#f3f3f3] px-1.5 py-1 text-[11px] text-[#555]">
-        <div className="flex items-end gap-0.5">
-          <span className="rounded-t-[3px] border border-b-0 border-[#d5dbe0] bg-white px-3 py-0.5 font-medium text-[#2f9488]">Товари</span>
-          <span className="px-1.5 text-[#aaa]">＋</span>
-        </div>
-        <div className="flex items-center gap-4 tabular-nums">
-          <span>Записів: {total.toLocaleString("uk-UA")}</span>
-          {selected.size > 0 && <span className="font-medium text-[#2f9488]">Виділено: {selected.size}</span>}
-          {dirtyCount > 0 && <span className="font-medium text-[#b8860b]">Змінено: {dirtyCount}</span>}
-          <span>Стор. {page} / {totalPages}</span>
-          <div className="flex gap-1">
-            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}
-              className="h-6 rounded-[2px] border border-[#c9c9c9] bg-white px-2 disabled:opacity-30 hover:enabled:border-[#2f9488]">‹</button>
-            <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}
-              className="h-6 rounded-[2px] border border-[#c9c9c9] bg-white px-2 disabled:opacity-30 hover:enabled:border-[#2f9488]">›</button>
-          </div>
-        </div>
-      </div>
-      </>)}
-
-      {mode === "list" && (
-        <ProductListView
-          rows={rows} loading={loading} total={total} page={page} perPage={perPage}
-          setPage={setPage} setPerPage={setPerPage} totalPages={totalPages}
-          selected={selected} toggleRow={toggleRow} toggleAll={toggleAll}
-          onOpen={openFullCard}
-        />
-      )}
+      <ProductListView
+        rows={rows} loading={loading} total={total} page={page} perPage={perPage}
+        setPage={setPage} setPerPage={setPerPage} totalPages={totalPages}
+        selected={selected} toggleRow={toggleRow} toggleAll={toggleAll}
+        onOpen={openFullCard}
+        editMode={editMode} cell={cell} setCell={setCell}
+        fixingId={fixingId} quickFix={quickFix} onToast={onToast}
+        sortBy={sortBy} sortDir={sortDir} toggleSort={toggleSort}
+      />
 
       {/* Danger zone — deliberately tucked away at the very bottom, separate
           from every normal action, so it's never one accidental click away. */}
@@ -995,52 +642,6 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   );
 }
 
-function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "grid" | "cards" | "list"; setMode: (m: "grid" | "cards" | "list") => void; onImport?: () => void; onNew?: () => void; onBulkPhotos?: () => void }) {
-  return (
-    <div className="mb-4 flex items-center gap-2">
-      <div className="flex items-center gap-0.5 rounded-[3px] border border-[#e6eaec] p-0.5">
-        <button onClick={() => setMode("grid")}
-          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "grid" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
-          Таблиця
-        </button>
-        <button onClick={() => setMode("list")}
-          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "list" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
-          Список
-        </button>
-        <button onClick={() => setMode("cards")}
-          className={`h-8 rounded-[2px] px-3 text-[11px] uppercase tracking-[0.1em] transition-colors ${mode === "cards" ? "bg-[#2f9488] text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>
-          Картки + фото
-        </button>
-      </div>
-      {mode !== "list" && (
-      <div className="ml-auto flex items-center gap-2">
-        {onNew && (
-          <button onClick={onNew}
-            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#2f9488] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
-            Новий товар
-          </button>
-        )}
-        {onBulkPhotos && (
-          <button onClick={onBulkPhotos} title="Масово прив'язати фото за назвою файлу (SKU/артикул)"
-            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#2f9488] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z" /></svg>
-            Фото масово
-          </button>
-        )}
-        {onImport && (
-          <button onClick={onImport}
-            className="flex h-8 items-center gap-1.5 rounded-[3px] border border-[#2f9488] px-3 text-[11px] uppercase tracking-[0.1em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            Імпорт XLS
-          </button>
-        )}
-      </div>
-      )}
-    </div>
-  );
-}
-
 /** Extra product-level columns beyond the always-shown core (ID товару ·
  *  Назва (рос.) · Зображення · Категорія · Код товару · Заводський артикул ·
  *  SKU · Статус · Публікувався · Востаннє змінено), exposed via a «Колонки»
@@ -1052,7 +653,7 @@ function ModeToggle({ mode, setMode, onImport, onNew, onBulkPhotos }: { mode: "g
  *  since the 2.10 guide) — genuinely missing was just exposing them as
  *  optional list columns, not new schema. brand/gender/price were already
  *  filterable but not visible as columns either. */
-type OptCol = "nameUk" | "brand" | "gender" | "price" | "salePrice" | "material" | "subtype"
+type OptCol = "nameUk" | "brand" | "gender" | "price" | "salePrice" | "inStock" | "featured" | "material" | "subtype"
   | "color" | "season" | "country" | "composition" | "sizeChartCode" | "moderation" | "description" | "descriptionUk" | "createdAt";
 
 const money = (n: number | null) => (n == null ? "—" : `${Math.round(n).toLocaleString("uk-UA")} ₴`);
@@ -1061,11 +662,13 @@ const MODERATION_LABEL: Record<string, string> = {
 };
 
 const OPT_COLS: { id: OptCol; label: string; hideDefault?: boolean; align?: "right"; render: (r: Row) => ReactNode }[] = [
+  { id: "price",         label: "Ціна",          align: "right", render: (r) => money(r.regular_price) },
+  { id: "salePrice",     label: "Акційна ціна",  align: "right", render: (r) => money(r.sale_price) },
+  { id: "inStock",       label: "Наявність",     render: (r) => (r.is_in_stock ? "Так" : "Ні") },
   { id: "nameUk",        label: "Назва (укр.)",  hideDefault: true, render: (r) => r.name_uk || "—" },
   { id: "brand",         label: "Бренд",         hideDefault: true, render: (r) => r.brand || "—" },
   { id: "gender",        label: "Стать",         hideDefault: true, render: (r) => r.gender || "—" },
-  { id: "price",         label: "Ціна",          hideDefault: true, align: "right", render: (r) => money(r.regular_price) },
-  { id: "salePrice",     label: "Акційна ціна",  hideDefault: true, align: "right", render: (r) => money(r.sale_price) },
+  { id: "featured",      label: "Обране",        hideDefault: true, render: (r) => (r.featured ? "Так" : "Ні") },
   { id: "material",      label: "Матеріал верху", hideDefault: true, render: (r) => r.material || "—" },
   { id: "subtype",       label: "Підвид",        hideDefault: true, render: (r) => r.subtype || "—" },
   { id: "color",         label: "Колір",         hideDefault: true, render: (r) => r.color || "—" },
@@ -1087,13 +690,26 @@ const OPT_COLS: { id: OptCol; label: string; hideDefault?: boolean; align?: "rig
       paging; row-click opens the full card for editing. ──────── */
 function ProductListView({
   rows, loading, total, page, perPage, setPage, setPerPage, totalPages,
-  selected, toggleRow, toggleAll, onOpen,
+  selected, toggleRow, toggleAll, onOpen, editMode, cell, setCell, fixingId, quickFix, onToast,
+  sortBy, sortDir, toggleSort,
 }: {
   rows: Row[]; loading: boolean; total: number; page: number; perPage: number;
   setPage: (v: number | ((p: number) => number)) => void;
   setPerPage: (n: number) => void; totalPages: number;
   selected: Set<string>; toggleRow: (id: string) => void; toggleAll: () => void;
   onOpen: (id: string) => void;
+  /** Inline "Редагувати комірки" mode — reuses the same edits/cell/setCell
+   *  the sticky save bar (in the parent) already commits, so price/stock/
+   *  status edits here go through the exact same bulk-save path. */
+  editMode: boolean;
+  cell: (row: Row, key: Field) => CellValue;
+  setCell: (id: string, key: Field, value: CellValue) => void;
+  fixingId: string | null;
+  quickFix: (id: string, patch: Partial<Pick<Row, "status" | "show_without_photo">>) => void;
+  onToast?: (m: string) => void;
+  sortBy: string;
+  sortDir: "asc" | "desc";
+  toggleSort: (key: Field) => void;
 }) {
   const from = total === 0 ? 0 : (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
@@ -1113,6 +729,16 @@ function ProductListView({
   }
 
   const thCls = "whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]";
+  // Column-header sort — mirrors the old Excel grid's sortable columns
+  // (name/category/sku/status), just without the spreadsheet chrome.
+  const sortTh = (key: Field, label: string) => (
+    <th className={thCls}>
+      <button onClick={() => toggleSort(key)} className="flex items-center gap-1 hover:text-[#2f9488]">
+        {label}
+        {sortBy === key && <span className="text-[#2f9488]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+      </button>
+    </th>
+  );
 
   return (
     <div>
@@ -1148,19 +774,19 @@ function ProductListView({
                 <input type="checkbox" checked={allOnPage} onChange={toggleAll}
                   className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
               </th>
-              <th className={thCls}>ID товару</th>
-              <th className={thCls}>Назва (рос.)</th>
+              {sortTh("id", "ID товару")}
+              {sortTh("name", "Назва (рос.)")}
               <th className={thCls}>Зображення</th>
-              <th className={thCls}>Категорія</th>
-              <th className={thCls}>Код товару</th>
+              {sortTh("category", "Категорія")}
               <th className={thCls}>Заводський артикул</th>
-              <th className={thCls}>SKU</th>
-              <th className={thCls}>Статус</th>
+              {sortTh("sku", "SKU")}
+              {sortTh("status", "Статус")}
               {visibleCols.map((c) => (
                 <th key={c.id} className={c.align === "right" ? `${thCls} text-right` : thCls}>{c.label}</th>
               ))}
               <th className={`${thCls} text-center`}>Публікувався</th>
               <th className={thCls}>Востаннє змінено</th>
+              <th className={`${thCls} text-right`}>Дії</th>
             </tr>
           </thead>
           <tbody>
@@ -1188,18 +814,49 @@ function ProductListView({
                         </div>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.category || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.factory_article || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.sku || "—"}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5" title={st.title}>
+                  <td className="whitespace-nowrap px-3 py-2.5" title={st.title} onClick={(e) => st.fix && e.stopPropagation()}>
                     <span className="inline-flex items-center gap-1.5">
                       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${st.dot}`} />
                       <span className="text-[12px] text-[#3a4250]">{st.label}</span>
+                      {st.fix && (
+                        <button onClick={() => quickFix(row.id, st.fix!.patch)} disabled={fixingId === row.id}
+                          className="text-[11px] text-[#2f9488] underline-offset-2 hover:underline disabled:opacity-40">
+                          {fixingId === row.id ? "…" : st.fix.label}
+                        </button>
+                      )}
                     </span>
                   </td>
                   {visibleCols.map((c) => (
-                    <td key={c.id} className={`max-w-[220px] truncate px-3 py-2.5 text-[#5a6472] ${c.align === "right" ? "text-right tabular-nums" : ""}`}>
-                      {c.render(row)}
+                    <td key={c.id} onClick={(e) => editMode && e.stopPropagation()}
+                      className={`max-w-[220px] truncate px-3 py-2.5 text-[#5a6472] ${c.align === "right" ? "text-right tabular-nums" : ""}`}>
+                      {!editMode ? c.render(row) : c.id === "price" ? (
+                        <input type="number" value={cell(row, "regular_price") == null ? "" : String(cell(row, "regular_price"))}
+                          onChange={(e) => setCell(row.id, "regular_price", e.target.value === "" ? null : Number(e.target.value))}
+                          className="h-7 w-24 rounded-[3px] border border-[#e6eaec] px-1.5 text-right text-[12px] focus:border-[#2f9488] focus:outline-none" />
+                      ) : c.id === "salePrice" ? (
+                        <input type="number" value={cell(row, "sale_price") == null ? "" : String(cell(row, "sale_price"))}
+                          onChange={(e) => setCell(row.id, "sale_price", e.target.value === "" ? null : Number(e.target.value))}
+                          className="h-7 w-24 rounded-[3px] border border-[#e6eaec] px-1.5 text-right text-[12px] focus:border-[#2f9488] focus:outline-none" />
+                      ) : c.id === "inStock" ? (
+                        row.has_variants ? (
+                          <div className="flex justify-center" title="Розраховується автоматично із залишків розмірів — редагуйте в «Картці», а не тут">
+                            <input type="checkbox" checked={Boolean(cell(row, "is_in_stock"))} disabled
+                              className="h-3.5 w-3.5 accent-[#b6c0ca] cursor-not-allowed" />
+                          </div>
+                        ) : (
+                          <div className="flex justify-center">
+                            <input type="checkbox" checked={Boolean(cell(row, "is_in_stock"))}
+                              onChange={(e) => setCell(row.id, "is_in_stock", e.target.checked)} className="h-3.5 w-3.5 accent-[#2f9488]" />
+                          </div>
+                        )
+                      ) : c.id === "featured" ? (
+                        <div className="flex justify-center">
+                          <input type="checkbox" checked={Boolean(cell(row, "featured"))}
+                            onChange={(e) => setCell(row.id, "featured", e.target.checked)} className="h-3.5 w-3.5 accent-[#2f9488]" />
+                        </div>
+                      ) : c.render(row)}
                     </td>
                   ))}
                   <td className="px-3 py-2.5 text-center">
@@ -1208,6 +865,18 @@ function ProductListView({
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[12px] tabular-nums text-[#8a94a0]">{row.updated_at ?? "—"}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                    <SocialPostButton
+                      product={{
+                        name: row.name, brand: row.brand, category: row.category,
+                        color: row.color, season: row.season, composition: row.composition,
+                        price: String(row.price ?? row.regular_price ?? 0),
+                        oldPrice: row.sale_price != null && row.regular_price != null && row.sale_price < row.regular_price ? String(row.regular_price) : undefined,
+                        inStock: String(row.is_in_stock),
+                      }}
+                      onToast={onToast}
+                    />
+                  </td>
                 </tr>
               );
             })}
