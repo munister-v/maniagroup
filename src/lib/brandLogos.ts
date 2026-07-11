@@ -12,9 +12,9 @@
  */
 import { q } from "./pg";
 import { BRAND_LOGO_BY_DBNAME } from "./catalog";
-import { downloadLogoForBrand, hasLocalLogo, localLogoUrl } from "./logoDownloader";
+import { downloadLogoForBrand, hasLocalLogo, localLogoUrl, clearLocalLogo, type LogoBg } from "./logoDownloader";
 
-export type BrandLogoRow = { brand: string; logo_url: string; source: "manual" | "auto" };
+export type BrandLogoRow = { brand: string; logo_url: string; source: "manual" | "auto"; bg: LogoBg };
 
 /** Curated domains for well-known brands in the catalog (best-effort). */
 const BRAND_DOMAINS: Record<string, string> = {
@@ -132,7 +132,7 @@ export async function getBrandLogoMap(): Promise<Record<string, string>> {
 
 /** Full rows (with source) for the admin manager. */
 export async function listBrandLogos(): Promise<BrandLogoRow[]> {
-  return q<BrandLogoRow>("SELECT brand, logo_url, source FROM brand_logos ORDER BY brand");
+  return q<BrandLogoRow>("SELECT brand, logo_url, source, bg FROM brand_logos ORDER BY brand");
 }
 
 /** Resolve the best logo URL for one brand: DB → bundled PNG → null (text). */
@@ -149,12 +149,23 @@ export async function getResolvedBrandLogoMap(): Promise<Record<string, string>>
   return { ...BRAND_LOGO_BY_DBNAME, ...(await getBrandLogoMap()) };
 }
 
-export async function setBrandLogo(brand: string, logoUrl: string, source: "manual" | "auto" = "manual"): Promise<void> {
+/** Brands whose stored logo is a solid dark fill and needs a dark tile.
+ *  Bundled logos are all transparent dark-ink wordmarks → always 'light'. */
+export async function getBrandLogoBgMap(): Promise<Record<string, LogoBg>> {
+  const rows = await q<{ brand: string; bg: LogoBg }>("SELECT brand, bg FROM brand_logos");
+  const out: Record<string, LogoBg> = {};
+  for (const r of rows) out[r.brand] = r.bg;
+  return out;
+}
+
+export async function setBrandLogo(
+  brand: string, logoUrl: string, source: "manual" | "auto" = "manual", bg: LogoBg = "light",
+): Promise<void> {
   await q(
-    `INSERT INTO brand_logos (brand, logo_url, source, updated_at)
-     VALUES ($1, $2, $3, now())
-     ON CONFLICT (brand) DO UPDATE SET logo_url = EXCLUDED.logo_url, source = EXCLUDED.source, updated_at = now()`,
-    [brand, logoUrl, source],
+    `INSERT INTO brand_logos (brand, logo_url, source, bg, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (brand) DO UPDATE SET logo_url = EXCLUDED.logo_url, source = EXCLUDED.source, bg = EXCLUDED.bg, updated_at = now()`,
+    [brand, logoUrl, source, bg],
   );
 }
 
@@ -176,9 +187,9 @@ export async function autoFillBrandLogos(brands: string[]): Promise<number> {
     if (BRAND_LOGO_BY_DBNAME[brand]) continue;
     const domain = BRAND_DOMAINS[brand];
     if (!domain) continue;
-    const url = await downloadLogoForBrand(brand, domain);
-    if (url) {
-      await setBrandLogo(brand, url, "auto");
+    const logo = await downloadLogoForBrand(brand, domain);
+    if (logo) {
+      await setBrandLogo(brand, logo.url, "auto", logo.bg);
       n++;
     }
   }
@@ -186,11 +197,15 @@ export async function autoFillBrandLogos(brands: string[]): Promise<number> {
 }
 
 /**
- * Downloads all known-domain brands locally (including those with stale/broken
- * external URLs). Overwrites auto-sourced entries; never touches manual logos.
- * Returns counts: { attempted, saved, skipped }.
+ * Downloads all known-domain brands locally. Overwrites auto-sourced entries;
+ * never touches manual logos or bundled brands. With `force`, re-fetches even
+ * brands that already have a cached file (used to upgrade old low-quality
+ * favicon-tier logos to high-res Logo.dev ones) — a brand Logo.dev no longer
+ * serves at ≥64px gets its stale file + auto DB row PURGED so it falls back to
+ * the clean text wordmark instead of keeping a blurry favicon.
+ * Returns counts: { attempted, saved, skipped, purged }.
  */
-export async function downloadAllBrandLogos(): Promise<{ attempted: number; saved: number; skipped: number }> {
+export async function downloadAllBrandLogos(force = false): Promise<{ attempted: number; saved: number; skipped: number; purged: number }> {
   const existing = await q<{ brand: string; source: string; logo_url: string }>(
     "SELECT brand, source, logo_url FROM brand_logos",
   );
@@ -199,25 +214,32 @@ export async function downloadAllBrandLogos(): Promise<{ attempted: number; save
   let attempted = 0;
   let saved = 0;
   let skipped = 0;
+  let purged = 0;
 
   for (const [brand, domain] of Object.entries(BRAND_DOMAINS)) {
     if (manualSet.has(brand)) { skipped++; continue; }
     if (BRAND_LOGO_BY_DBNAME[brand]) { skipped++; continue; }
     attempted++;
 
-    // If already cached locally, just make sure DB entry is correct
-    if (hasLocalLogo(brand)) {
-      await setBrandLogo(brand, localLogoUrl(brand), "auto");
-      saved++;
+    // Non-force + already cached: just make sure the DB entry is correct.
+    if (!force && hasLocalLogo(brand)) {
+      const logo = await downloadLogoForBrand(brand, domain); // returns cached url + re-derived bg
+      if (logo) { await setBrandLogo(brand, logo.url, "auto", logo.bg); saved++; }
       continue;
     }
 
-    const url = await downloadLogoForBrand(brand, domain);
-    if (url) {
-      await setBrandLogo(brand, url, "auto");
+    const logo = await downloadLogoForBrand(brand, domain, force);
+    if (logo) {
+      await setBrandLogo(brand, logo.url, "auto", logo.bg);
       saved++;
+    } else if (force) {
+      // Logo.dev no longer has a usable ≥64px logo — drop the stale file and
+      // the auto row so the UI falls back to a clean text wordmark.
+      clearLocalLogo(brand);
+      await q("DELETE FROM brand_logos WHERE brand = $1 AND source = 'auto'", [brand]);
+      purged++;
     }
   }
 
-  return { attempted, saved, skipped };
+  return { attempted, saved, skipped, purged };
 }

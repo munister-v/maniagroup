@@ -10,10 +10,10 @@ import { BrandLogo } from "./BrandLogo";
 
 type Brand = { name: string; slug: string };
 
-type BrandWithLogo = Brand & { logo: string | null };
+type BrandWithLogo = Brand & { logo: string | null; dark?: boolean };
 
 /** Resolve logos, deduplicate families sharing the same logo, sort logo-first. */
-function orderBrands(brands: Brand[], logoMap: Record<string, string>): BrandWithLogo[] {
+function orderBrands(brands: Brand[], logoMap: Record<string, string>, bgMap: Record<string, "light" | "dark"> = {}): BrandWithLogo[] {
   // Group by logo URL: when several brands share a URL, keep the shortest name (root brand)
   const byLogoUrl = new Map<string, BrandWithLogo>();
   const noLogo: BrandWithLogo[] = [];
@@ -23,7 +23,7 @@ function orderBrands(brands: Brand[], logoMap: Record<string, string>): BrandWit
     if (!logo) { noLogo.push({ ...b, logo: null }); continue; }
     const existing = byLogoUrl.get(logo);
     if (!existing || b.name.length < existing.name.length) {
-      byLogoUrl.set(logo, { ...b, logo });
+      byLogoUrl.set(logo, { ...b, logo, dark: bgMap[b.name] === "dark" });
     }
   }
   return [...byLogoUrl.values(), ...noLogo];
@@ -81,7 +81,7 @@ const SOCIAL_ICONS = {
     "M21.05 3.07 17.6 19.65c-.26 1.16-.94 1.44-1.9.9l-5.26-3.88-2.54 2.45c-.28.28-.52.52-1.06.52l.38-5.4L17.4 5.6c.46-.4-.1-.62-.62-.22L7.1 11.8l-5.26-1.64c-1.14-.36-1.16-1.14.24-1.69L19.66 1.6c.95-.36 1.78.22 1.4 1.47Z",
 };
 
-export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; brandLogos?: Record<string, string> }) {
+export function Header({ brands = [], brandLogos = {}, brandBg = {} }: { brands?: Brand[]; brandLogos?: Record<string, string>; brandBg?: Record<string, "light" | "dark"> }) {
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -262,7 +262,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
 
         {/* mega-menu panel */}
         {active === "Бренди" ? (
-          <BrandsPanel brands={brands} logoMap={brandLogos} />
+          <BrandsPanel brands={brands} logoMap={brandLogos} bgMap={brandBg} />
         ) : active ? (
           <MegaPanel item={MEGA_MENU.find((m) => m.label === active)!} />
         ) : null}
@@ -561,8 +561,8 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
   );
 }
 
-function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<string, string> }) {
-  const ordered = orderBrands(brands, logoMap);
+function BrandsPanel({ brands, logoMap, bgMap = {} }: { brands: Brand[]; logoMap: Record<string, string>; bgMap?: Record<string, "light" | "dark"> }) {
+  const ordered = orderBrands(brands, logoMap, bgMap);
   const withLogo = ordered.filter((b) => b.logo);
   const textOnly = ordered.filter((b) => !b.logo);
 
@@ -586,7 +586,7 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
               <li key={b.slug}>
                 <Link
                   href={`/catalog?brand=${b.slug}`}
-                  className="flex h-[72px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
+                  className={`flex h-[72px] items-center justify-center rounded-[3px] border px-5 transition-all hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)] ${b.dark ? "border-[#0b0b0b] bg-[#0b0b0b] hover:border-black" : "border-line/60 bg-white hover:border-ink/25"}`}
                   title={b.name}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -603,7 +603,7 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
                       if (span) span.style.display = "block";
                     }}
                   />
-                  <span className="hidden font-display text-[15px] text-ink/70">{b.name}</span>
+                  <span className={`hidden font-display text-[15px] ${b.dark ? "text-white/80" : "text-ink/70"}`}>{b.name}</span>
                 </Link>
               </li>
             ))}

@@ -17,6 +17,7 @@ export async function GET() {
       slug: b.slug,
       logo: row?.logo_url || bundled || null,
       source: row ? row.source : bundled ? "bundled" : "none",
+      bg: row?.bg ?? "light",
     };
   });
   return NextResponse.json({ brands: data });

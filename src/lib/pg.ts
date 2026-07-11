@@ -726,6 +726,14 @@ ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS type       TEXT NOT NULL DEFAUL
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS code       TEXT NOT NULL DEFAULT '';
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE products    ADD COLUMN IF NOT EXISTS size_chart_code TEXT NOT NULL DEFAULT '';
+
+-- Brand-logo background hint: many high-res Logo.dev icons are a solid dark
+-- fill (e.g. white "PINKO" text on black) which looks like a black box on the
+-- white brand strip. logoDownloader.ts samples each downloaded logo's corner
+-- pixels and marks it 'dark' (needs a dark tile — renders as an intentional
+-- brand badge) or 'light' (dark ink / transparent — renders on the white
+-- tile). See BrandLogo / homepage BrandStrip.
+ALTER TABLE brand_logos ADD COLUMN IF NOT EXISTS bg TEXT NOT NULL DEFAULT 'light';
 `;
 
 /**
