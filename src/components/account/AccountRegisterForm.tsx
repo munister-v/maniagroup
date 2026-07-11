@@ -71,7 +71,7 @@ export function AccountRegisterForm() {
         <span className={lbl}>Повторіть пароль *</span>
         <input type={showPassword ? "text" : "password"} name="password2" autoComplete="new-password" required value={form.password2} onChange={(e) => set("password2", e.target.value)} className={inp} placeholder="••••••" />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
       <button type="submit" disabled={loading}
         className="mt-2 h-11 w-full bg-ink text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-50">
         {loading ? "Реєструємо…" : "Створити акаунт"}

@@ -48,6 +48,27 @@ export async function deleteSession(token: string): Promise<void> {
   await q("DELETE FROM sessions WHERE token = $1", [token]);
 }
 
+/* ── Password reset ── */
+
+export async function createPasswordResetToken(accountId: number): Promise<string> {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+  await q("INSERT INTO password_reset_tokens (token, account_id, expires_at) VALUES ($1, $2, $3)", [token, accountId, expires]);
+  return token;
+}
+
+export async function getValidResetToken(token: string): Promise<{ account_id: number } | null> {
+  if (!token) return null;
+  return q1<{ account_id: number }>(
+    "SELECT account_id FROM password_reset_tokens WHERE token = $1 AND used = FALSE AND expires_at > now()",
+    [token],
+  );
+}
+
+export async function consumeResetToken(token: string): Promise<void> {
+  await q("UPDATE password_reset_tokens SET used = TRUE WHERE token = $1", [token]);
+}
+
 /* ── Account CRUD ── */
 
 export async function createAccount(

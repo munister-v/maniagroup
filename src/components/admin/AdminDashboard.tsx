@@ -2138,6 +2138,9 @@ function SettingsSection() {
   const [tg, setTg] = useState({ telegram_enabled: "", telegram_bot_token: "", telegram_chat_id: "" });
   const [tgStatus, setTgStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [tgTest, setTgTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
+  const [smtp, setSmtp] = useState({ smtp_enabled: "", smtp_host: "", smtp_port: "", smtp_user: "", smtp_pass: "", smtp_from: "" });
+  const [smtpStatus, setSmtpStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [smtpTest, setSmtpTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
   const [ai, setAi] = useState({ openrouter_api_key: "" });
   const [aiStatus, setAiStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [aiTest, setAiTest] = useState<{ state: "idle" | "testing"; msg: string }>({ state: "idle", msg: "" });
@@ -2185,6 +2188,10 @@ function SettingsSection() {
     fetch("/api/admin/settings").then((r) => r.json()).then((d) => {
       setStore({ free_ship_threshold: d.free_ship_threshold ?? "", store_phone: d.store_phone ?? "", store_email: d.store_email ?? "", low_stock_threshold: d.low_stock_threshold ?? "", require_product_photo: d.require_product_photo ?? "1" });
       setTg({ telegram_enabled: d.telegram_enabled ?? "", telegram_bot_token: d.telegram_bot_token ?? "", telegram_chat_id: d.telegram_chat_id ?? "" });
+      setSmtp({
+        smtp_enabled: d.smtp_enabled ?? "", smtp_host: d.smtp_host ?? "", smtp_port: d.smtp_port ?? "",
+        smtp_user: d.smtp_user ?? "", smtp_pass: d.smtp_pass ?? "", smtp_from: d.smtp_from ?? "",
+      });
       setAi({ openrouter_api_key: d.openrouter_api_key ?? "" });
     });
     loadPhotoSources();
@@ -2274,6 +2281,22 @@ function SettingsSection() {
     });
     const data = await res.json().catch(() => ({}));
     setTgTest({ state: "idle", msg: res.ok ? "✓ Повідомлення надіслано" : `✕ ${data.error ?? "Помилка"}` });
+  }
+
+  async function saveSmtp() {
+    setSmtpStatus("saving");
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(smtp) });
+    setSmtpStatus("saved");
+    setTimeout(() => setSmtpStatus("idle"), 2500);
+  }
+
+  async function testSmtp() {
+    setSmtpTest({ state: "testing", msg: "" });
+    // Save first — verifySmtp() reads from the DB, not from what's typed here.
+    await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(smtp) });
+    const res = await fetch("/api/admin/settings/test-smtp", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setSmtpTest({ state: "idle", msg: res.ok ? "✓ З'єднання успішне" : `✕ ${data.error ?? "Помилка"}` });
   }
 
   async function saveStore() {
@@ -2380,6 +2403,44 @@ function SettingsSection() {
             {tgTest.state === "testing" ? "Надсилаємо…" : "Тест"}
           </button>
           {tgTest.msg && <span className={`text-[12px] ${tgTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#e5484d]"}`}>{tgTest.msg}</span>}
+        </div>
+      </Card>
+
+      <Card title="Сповіщення · Email (SMTP)" subtitle="Лист-підтвердження замовлення, сповіщення про відправку та відновлення паролю">
+        <label className="mb-4 flex items-center gap-2.5">
+          <button onClick={() => setSmtp({ ...smtp, smtp_enabled: smtp.smtp_enabled ? "" : "1" })}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${smtp.smtp_enabled ? "bg-[#2b2d42]" : "bg-[#d5dbe0]"}`}
+            aria-label="Увімкнути">
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${smtp.smtp_enabled ? "left-[18px]" : "left-0.5"}`} />
+          </button>
+          <span className="text-[13px] text-[#2b2d42]">Надсилати листи</span>
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block"><span className={lbl}>SMTP-сервер</span>
+            <input className={inp} value={smtp.smtp_host} onChange={(e) => setSmtp({ ...smtp, smtp_host: e.target.value })} placeholder="smtp.gmail.com" /></label>
+          <label className="block"><span className={lbl}>Порт</span>
+            <input className={inp} value={smtp.smtp_port} onChange={(e) => setSmtp({ ...smtp, smtp_port: e.target.value })} placeholder="587" /></label>
+          <label className="block"><span className={lbl}>Логін</span>
+            <input className={inp} value={smtp.smtp_user} onChange={(e) => setSmtp({ ...smtp, smtp_user: e.target.value })} placeholder="you@gmail.com" /></label>
+          <label className="block"><span className={lbl}>Пароль</span>
+            <input type="password" autoComplete="new-password" className={inp} value={smtp.smtp_pass} onChange={(e) => setSmtp({ ...smtp, smtp_pass: e.target.value })} /></label>
+          <label className="block sm:col-span-2"><span className={lbl}>Відправник (From)</span>
+            <input className={inp} value={smtp.smtp_from} onChange={(e) => setSmtp({ ...smtp, smtp_from: e.target.value })} placeholder="noreply@maniagroup.com.ua" /></label>
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-[#8a94a0]">
+          Для Gmail потрібен <span className="text-[#2b2d42]">пароль додатку</span> (не звичайний пароль акаунта) —
+          створіть його в налаштуваннях безпеки Google. Без цих даних лист-підтвердження, сповіщення про відправку та
+          відновлення паролю клієнтами працювати не будуть.
+        </p>
+        <div className="mt-5 flex items-center gap-3">
+          <button onClick={saveSmtp} disabled={smtpStatus === "saving"} className={btn}>
+            {smtpStatus === "saving" ? "Зберігаємо…" : smtpStatus === "saved" ? "✓ Збережено" : "Зберегти"}
+          </button>
+          <button onClick={testSmtp} disabled={smtpTest.state === "testing" || !smtp.smtp_host || !smtp.smtp_user || !smtp.smtp_pass}
+            className="h-10 rounded-[3px] border border-[#2f9488] px-5 text-[11px] uppercase tracking-[0.12em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
+            {smtpTest.state === "testing" ? "Перевіряємо…" : "Тест"}
+          </button>
+          {smtpTest.msg && <span className={`text-[12px] ${smtpTest.msg.startsWith("✓") ? "text-[#2e7d32]" : "text-[#e5484d]"}`}>{smtpTest.msg}</span>}
         </div>
       </Card>
 

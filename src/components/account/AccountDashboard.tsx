@@ -77,7 +77,7 @@ export function AccountDashboard({
   useEffect(() => {
     fetch("/api/account/orders?page=1")
       .then((r) => r.json())
-      .then((d: DbOrder[]) => { if (Array.isArray(d)) setOrderCount(d.length >= 10 ? 10 : d.length); })
+      .then((d: { total?: number }) => { if (typeof d.total === "number") setOrderCount(d.total); })
       .catch(() => {});
   }, []);
 
@@ -244,8 +244,11 @@ function ProfileTab({ account, onUpdate }: { account: Account; onUpdate: (a: Acc
 }
 
 /* ════════════════════════════════ ORDERS ════════════════════════════════ */
+const ORDERS_PER_PAGE = 10;
+
 function OrdersTab() {
   const [orders, setOrders] = useState<DbOrder[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -254,8 +257,14 @@ function OrdersTab() {
     setLoading(true);
     fetch(`/api/account/orders?page=${page}`)
       .then((r) => r.json())
-      .then((d) => { setOrders(Array.isArray(d) ? d : []); setLoading(false); });
+      .then((d: { orders?: DbOrder[]; total?: number }) => {
+        setOrders(Array.isArray(d.orders) ? d.orders : []);
+        setTotal(typeof d.total === "number" ? d.total : 0);
+        setLoading(false);
+      });
   }, [page]);
+
+  const totalPages = Math.max(1, Math.ceil(total / ORDERS_PER_PAGE));
 
   if (loading) return (
     <div>
@@ -344,14 +353,15 @@ function OrdersTab() {
           })}
         </div>
       )}
-      {orders.length === 10 && (
-        <div className="mt-4 flex gap-3">
-          <button disabled={page === 1} onClick={() => setPage(p => p - 1)}
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center gap-3">
+          <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
             className="h-9 border border-line px-5 text-[11px] uppercase tracking-luxe text-ink disabled:opacity-30 hover:border-ink transition-colors">
             ← Назад
           </button>
-          <button onClick={() => setPage(p => p + 1)}
-            className="h-9 border border-line px-5 text-[11px] uppercase tracking-luxe text-ink hover:border-ink transition-colors">
+          <span className="text-[11px] uppercase tracking-luxe text-muted">Стор. {page} / {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+            className="h-9 border border-line px-5 text-[11px] uppercase tracking-luxe text-ink disabled:opacity-30 hover:border-ink transition-colors">
             Далі →
           </button>
         </div>

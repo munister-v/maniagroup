@@ -52,6 +52,8 @@ export async function GET(req: Request) {
   const qParam = searchParams.get("q") ?? "";
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
+  const sortBy = searchParams.get("sortBy") ?? undefined;
+  const sortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
 
   const { orders, total } = await listOrders({
     page, perPage,
@@ -59,6 +61,7 @@ export async function GET(req: Request) {
     q: qParam || undefined,
     from: from || undefined,
     to: to || undefined,
+    sortBy, sortDir,
   });
 
   return NextResponse.json({ total, orders: orders.map(serializeOrder) });

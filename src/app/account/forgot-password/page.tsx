@@ -12,10 +12,18 @@ export default function ForgotPasswordPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    // No email service yet — just show confirmation to not expose whether email exists
-    await new Promise((r) => setTimeout(r, 800));
-    setSent(true);
-    setLoading(false);
+    try {
+      await fetch("/api/account/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } finally {
+      // Always show the same confirmation, whether or not the email exists
+      // or the send actually succeeded — see the route for why.
+      setSent(true);
+      setLoading(false);
+    }
   }
 
   return (

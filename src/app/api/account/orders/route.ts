@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
 import { getSessionAccount } from "@/lib/accountAuth";
-import { getOrdersForCustomer } from "@/lib/orders";
+import { getOrdersForCustomer, countOrdersForCustomer } from "@/lib/orders";
+
+const PER_PAGE = 10;
 
 export async function GET(req: Request) {
   const account = await getSessionAccount();
   if (!account) return NextResponse.json({ error: "Не авторизовано" }, { status: 401 });
 
   const page = Number(new URL(req.url).searchParams.get("page") ?? "1");
-  const orders = await getOrdersForCustomer(account.id, account.email, page);
+  const [orders, total] = await Promise.all([
+    getOrdersForCustomer(account.id, account.email, page, PER_PAGE),
+    countOrdersForCustomer(account.id, account.email),
+  ]);
 
-  return NextResponse.json(
-    orders.map((o) => ({
+  return NextResponse.json({
+    total,
+    orders: orders.map((o) => ({
       id: o.id,
       number: o.number,
       status: o.status,
@@ -30,5 +36,5 @@ export async function GET(req: Request) {
         image: it.image_src ? { src: it.image_src } : undefined,
       })),
     })),
-  );
+  });
 }

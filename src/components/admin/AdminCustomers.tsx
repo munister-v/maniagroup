@@ -18,20 +18,26 @@ type Customer = {
 const PER_PAGE = 30;
 const uah = (v: number | string) => Number(v).toLocaleString("uk-UA") + " ₴";
 
+type SortKey = "name" | "email" | "orders_count" | "total_spent" | "wishlist_count" | "created_at";
+
 export function AdminCustomers() {
   const [rows, setRows] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [segment, setSegment] = useState("");
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortKey>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [active, setActive] = useState<Customer | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async (p: number, qv: string) => {
+  const load = useCallback(async (p: number, qv: string, seg: string, sb: SortKey, sd: "asc" | "desc") => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(p) });
+      const params = new URLSearchParams({ page: String(p), sortBy: sb, sortDir: sd });
       if (qv.trim()) params.set("q", qv.trim());
+      if (seg) params.set("segment", seg);
       const res = await fetch(`/api/admin/customers?${params}`);
       const data = await res.json();
       setRows(data.customers ?? []);
@@ -42,24 +48,55 @@ export function AdminCustomers() {
     }
   }, []);
 
-  useEffect(() => { load(1, ""); }, [load]);
+  useEffect(() => { load(1, "", "", "created_at", "desc"); }, [load]);
 
   function onSearch(v: string) {
     setSearch(v);
     if (debounce.current) clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => load(1, v), 350);
+    debounce.current = setTimeout(() => load(1, v, segment, sortBy, sortDir), 350);
+  }
+
+  function onSegment(v: string) {
+    setSegment(v);
+    load(1, search, v, sortBy, sortDir);
+  }
+
+  function toggleSort(key: SortKey) {
+    const dir = sortBy === key && sortDir === "desc" ? "asc" : sortBy === key ? "desc" : "desc";
+    setSortBy(key);
+    setSortDir(dir);
+    load(page, search, segment, key, dir);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const sortTh = (key: SortKey, label: string, align: "left" | "center" | "right" = "left", extraCls = "") => (
+    <th className={`px-4 py-3 text-${align} ${extraCls}`}>
+      <button onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 hover:text-[#2b2d42] ${align === "right" ? "flex-row-reverse" : ""}`}>
+        {label}
+        {sortBy === key && <span className="text-[#2f9488]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+      </button>
+    </th>
+  );
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[12px] text-[#8a94a0]">{total.toLocaleString("uk-UA")} клієнтів</p>
-        <div className="relative">
-          <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Імʼя, email, телефон…"
-            className="h-9 w-72 rounded-[3px] border border-[#e6eaec] bg-white pl-9 pr-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
-          <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#aab4bf]" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" /></svg>
+        <div className="flex items-center gap-2">
+          <select value={segment} onChange={(e) => onSegment(e.target.value)}
+            className="h-9 rounded-[3px] border border-[#e6eaec] bg-white px-2.5 text-[13px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
+            <option value="">Усі сегменти</option>
+            <option value="vip">VIP</option>
+            <option value="regular">Постійний</option>
+            <option value="dormant">Сплячий</option>
+            <option value="new">Новий</option>
+            <option value="lead">Без замовлень</option>
+          </select>
+          <div className="relative">
+            <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Імʼя, email, телефон…"
+              className="h-9 w-72 rounded-[3px] border border-[#e6eaec] bg-white pl-9 pr-3 text-[13px] focus:border-[#2b2d42] focus:outline-none" />
+            <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[#aab4bf]" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" strokeLinecap="round" /></svg>
+          </div>
         </div>
       </div>
 
@@ -72,11 +109,11 @@ export function AdminCustomers() {
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-[#eef2f3] text-[10px] uppercase tracking-wider text-[#8a94a0]">
-                <th className="px-4 py-3 text-left">Клієнт</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">Контакти</th>
-                <th className="px-4 py-3 text-center">Замовлень</th>
-                <th className="px-4 py-3 text-right">Витрачено</th>
-                <th className="px-4 py-3 text-left hidden sm:table-cell">З нами з</th>
+                {sortTh("name", "Клієнт")}
+                {sortTh("email", "Контакти", "left", "hidden md:table-cell")}
+                {sortTh("orders_count", "Замовлень", "center")}
+                {sortTh("total_spent", "Витрачено", "right")}
+                {sortTh("created_at", "З нами з", "left", "hidden sm:table-cell")}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f7f9fa]">
@@ -104,10 +141,10 @@ export function AdminCustomers() {
 
       {!loading && total > PER_PAGE && (
         <div className="flex items-center justify-end gap-2">
-          <button onClick={() => load(page - 1, search)} disabled={page <= 1}
+          <button onClick={() => load(page - 1, search, segment, sortBy, sortDir)} disabled={page <= 1}
             className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] disabled:opacity-30">‹</button>
           <span className="min-w-16 text-center text-[12px] text-[#8a94a0]">{page} / {totalPages}</span>
-          <button onClick={() => load(page + 1, search)} disabled={page >= totalPages}
+          <button onClick={() => load(page + 1, search, segment, sortBy, sortDir)} disabled={page >= totalPages}
             className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] disabled:opacity-30">›</button>
         </div>
       )}

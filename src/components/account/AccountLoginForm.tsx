@@ -91,7 +91,7 @@ export function AccountLoginForm({ redirectTo }: { redirectTo: string }) {
         <span className="text-[12px] text-muted">Запам'ятати мене на 30 днів</span>
       </label>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <button
         type="submit"

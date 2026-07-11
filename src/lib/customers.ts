@@ -38,8 +38,33 @@ export function customerSegment(c: { orders_count: number; total_spent: number; 
 
 const REVENUE_STATUSES = "('pending','processing','on-hold','completed')";
 
-export async function listCustomers(opts: { q?: string; page?: number; perPage?: number } = {}) {
-  const perPage = opts.perPage ?? 30;
+/** Same RFM-lite thresholds as customerSegment() above, as SQL — kept in sync
+ *  by hand since one's JS (detail-view badge) and the other's SQL (list filter). */
+const SEGMENT_CASE = `
+  CASE
+    WHEN orders_count = 0 THEN 'lead'
+    WHEN total_spent >= 20000 OR orders_count >= 5 THEN 'vip'
+    WHEN orders_count >= 1 AND (last_order IS NULL OR last_order < now() - interval '90 days') THEN 'dormant'
+    WHEN orders_count >= 2 THEN 'regular'
+    ELSE 'new'
+  END`;
+
+/** Whitelisted sort columns — never interpolate the raw client-supplied sortBy. */
+const CUSTOMER_SORT_COLUMNS: Record<string, string> = {
+  name: "(first_name || ' ' || last_name)",
+  email: "email",
+  orders_count: "orders_count",
+  total_spent: "total_spent",
+  wishlist_count: "wishlist_count",
+  last_order: "last_order",
+  created_at: "created_at",
+};
+
+export async function listCustomers(opts: {
+  q?: string; page?: number; perPage?: number;
+  sortBy?: string; sortDir?: "asc" | "desc"; segment?: CustomerSegment;
+} = {}) {
+  const perPage = Math.min(Math.max(opts.perPage ?? 30, 1), 100);
   const offset = ((opts.page ?? 1) - 1) * perPage;
   const conds: string[] = [];
   const bind: unknown[] = [];
@@ -50,18 +75,36 @@ export async function listCustomers(opts: { q?: string; page?: number; perPage?:
   }
   const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
 
-  const rows = await q<CustomerRow>(
-    `SELECT a.id::text AS id, a.email, a.first_name, a.last_name, a.phone, a.created_at,
+  const base = `
+    SELECT a.id::text AS id, a.email, a.first_name, a.last_name, a.phone, a.created_at,
         (SELECT count(*) FROM orders o WHERE o.account_id = a.id OR lower(o.email) = lower(a.email))::int AS orders_count,
         (SELECT COALESCE(sum(o.total),0) FROM orders o WHERE (o.account_id = a.id OR lower(o.email) = lower(a.email)) AND o.status IN ${REVENUE_STATUSES})::float AS total_spent,
+        (SELECT max(o.created_at) FROM orders o WHERE o.account_id = a.id OR lower(o.email) = lower(a.email)) AS last_order,
         (SELECT count(*) FROM wishlist w WHERE w.account_id = a.id)::int AS wishlist_count
      FROM accounts a
-     ${where}
-     ORDER BY a.created_at DESC
+     ${where}`;
+
+  // Segment filtering needs orders_count/total_spent/last_order already computed,
+  // which aren't visible to a WHERE on the same SELECT — so it's applied in an
+  // outer query over the base CTE instead (see SEGMENT_CASE above).
+  const segmentWhere = opts.segment ? `WHERE ${SEGMENT_CASE} = $${bind.length + 1}` : "";
+  if (opts.segment) bind.push(opts.segment);
+
+  const sortCol = CUSTOMER_SORT_COLUMNS[opts.sortBy ?? ""] ?? "created_at";
+  const sortDir = opts.sortDir === "asc" ? "ASC" : "DESC";
+
+  const rows = await q<CustomerRow>(
+    `WITH base AS (${base})
+     SELECT * FROM base
+     ${segmentWhere}
+     ORDER BY ${sortCol} ${sortDir}
      LIMIT ${perPage} OFFSET ${offset}`,
     bind,
   );
-  const countRow = await q1<{ cnt: string }>(`SELECT count(*)::text AS cnt FROM accounts a ${where}`, bind);
+  const countRow = await q1<{ cnt: string }>(
+    `WITH base AS (${base}) SELECT count(*)::text AS cnt FROM base ${segmentWhere}`,
+    bind,
+  );
   return { customers: rows, total: Number(countRow?.cnt ?? 0) };
 }
 

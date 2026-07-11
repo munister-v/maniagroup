@@ -73,19 +73,24 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
+  const [sortBy, setSortBy] = useState<"created_at" | "updated_at" | "status" | "total" | "number" | "customer">("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [active, setActive] = useState<AdminOrder | null>(null);
   const [creating, setCreating] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState(ALL_STATUSES[0]);
+  const [applyingBulk, setApplyingBulk] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const buildParams = useCallback((p: number) => {
-    const params = new URLSearchParams({ page: String(p), per_page: String(perPage) });
+    const params = new URLSearchParams({ page: String(p), per_page: String(perPage), sortBy, sortDir });
     const effStatus = docScope === "returns" ? "refunded" : status;
     if (effStatus) params.set("status", effStatus);
     if (search.trim()) params.set("q", search.trim());
     if (from) params.set("from", from);
     if (to) params.set("to", to);
     return params;
-  }, [status, docScope, search, from, to, perPage]);
+  }, [status, docScope, search, from, to, perPage, sortBy, sortDir]);
 
   const load = useCallback(async (p: number) => {
     setLoading(true);
@@ -95,17 +100,50 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
       setOrders(data.orders ?? []);
       setTotal(data.total ?? 0);
       setPage(p);
+      setSelected(new Set());
     } finally {
       setLoading(false);
     }
   }, [buildParams]);
 
-  useEffect(() => { load(1); }, [status, docScope, from, to, perPage, load]);
+  useEffect(() => { load(1); }, [status, docScope, from, to, perPage, sortBy, sortDir, load]);
 
   function onSearch(v: string) {
     setSearch(v);
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => load(1), 350);
+  }
+
+  function toggleSort(key: typeof sortBy) {
+    setSortDir((d) => (sortBy === key && d === "asc" ? "desc" : sortBy === key ? "asc" : "desc"));
+    setSortBy(key);
+  }
+
+  function toggleRow(id: number) {
+    setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleAll() {
+    setSelected((s) => (s.size === orders.length ? new Set() : new Set(orders.map((o) => o.id))));
+  }
+
+  async function applyBulkStatus() {
+    if (selected.size === 0) return;
+    setApplyingBulk(true);
+    try {
+      const res = await fetch("/api/admin/orders/bulk", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selected], status: bulkStatus }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onToast?.(`Оновлено: ${data.count}${data.errors ? `, помилок: ${data.errors}` : ""}`);
+        load(page);
+      } else {
+        onToast?.(data.error ?? "Помилка");
+      }
+    } finally {
+      setApplyingBulk(false);
+    }
   }
 
   async function changeStatus(order: AdminOrder, newStatus: string) {
@@ -125,6 +163,15 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
       onToast?.(`№${order.number}: ${STATUS_META[newStatus]?.label ?? newStatus}`);
     }
   }
+
+  const sortTh = (key: typeof sortBy, label: string, extraCls = "text-left") => (
+    <th className={`whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-[12px] font-semibold text-[#3a4250] ${extraCls}`}>
+      <button onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 hover:text-[#2f9488] ${extraCls.includes("right") ? "flex-row-reverse" : ""}`}>
+        {label}
+        {sortBy === key && <span className="text-[#2f9488]">{sortDir === "asc" ? "▲" : "▼"}</span>}
+      </button>
+    </th>
+  );
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const pageFrom = total === 0 ? 0 : (page - 1) * perPage + 1;
@@ -202,6 +249,21 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
         ))}
       </div>
 
+      {/* Bulk status bar — appears once rows are selected */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-[4px] border border-[#e6eaec] bg-white px-3 py-2 text-[11px] uppercase tracking-[0.1em]">
+          <span className="text-[#8a94a0]">Обрано {selected.size}</span>
+          <select value={bulkStatus} onChange={(e) => setBulkStatus(e.target.value)}
+            className="h-8 rounded-[3px] border border-[#e6eaec] bg-white px-2 text-[12px] normal-case tracking-normal text-[#2b2d42] focus:border-[#2f9488] focus:outline-none">
+            {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s]?.label ?? s}</option>)}
+          </select>
+          <button onClick={applyBulkStatus} disabled={applyingBulk}
+            className="h-8 rounded-[3px] border border-[#2f9488] px-4 text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
+            {applyingBulk ? "…" : "Застосувати"}
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-[3px] bg-[#eef2f3]" />)}</div>
       ) : orders.length === 0 ? (
@@ -211,9 +273,21 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
           <table className="w-full min-w-[1080px] text-sm">
             <thead>
               <tr>
-                {["ID документа", "Номер документа", "Батьківське замовлення", "Тип документа", "Договір", "Коментар продавця", "Статус документа", "Дата створення", "Дата оновлення", "Покупець", "Сума"].map((h, i) => (
-                  <th key={h} className={`whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-[12px] font-semibold text-[#3a4250] ${i === 10 ? "text-right" : "text-left"}`}>{h}</th>
-                ))}
+                <th className="w-10 border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5">
+                  <input type="checkbox" checked={selected.size > 0 && selected.size === orders.length} onChange={toggleAll}
+                    className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити всі" />
+                </th>
+                <th className="whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]">ID документа</th>
+                {sortTh("number", "Номер документа")}
+                <th className="whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]">Батьківське замовлення</th>
+                <th className="whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]">Тип документа</th>
+                <th className="whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]">Договір</th>
+                <th className="whitespace-nowrap border-b border-[#e6eaec] bg-[#eef2f3] px-3 py-2.5 text-left text-[12px] font-semibold text-[#3a4250]">Коментар продавця</th>
+                {sortTh("status", "Статус документа")}
+                {sortTh("created_at", "Дата створення")}
+                {sortTh("updated_at", "Дата оновлення")}
+                {sortTh("customer", "Покупець")}
+                {sortTh("total", "Сума", "text-right")}
               </tr>
             </thead>
             <tbody>
@@ -221,7 +295,11 @@ export function AdminOrders({ onToast }: { onToast?: (msg: string) => void }) {
                 const created = new Date(o.date_created).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
                 const modified = o.date_modified ? new Date(o.date_modified).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
                 return (
-                  <tr key={o.id} onClick={() => setActive(o)} className="cursor-pointer border-b border-[#eef2f3] transition-colors hover:bg-[#f7f9fa]">
+                  <tr key={o.id} onClick={() => setActive(o)} className={`cursor-pointer border-b border-[#eef2f3] transition-colors ${selected.has(o.id) ? "bg-[#eef7f6]" : "hover:bg-[#f7f9fa]"}`}>
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggleRow(o.id)}
+                        className="h-3.5 w-3.5 accent-[#2f9488]" aria-label="Виділити рядок" />
+                    </td>
                     <td className="whitespace-nowrap px-3 py-2.5 font-medium tabular-nums text-[#5a6472]">{o.id}</td>
                     <td className="whitespace-nowrap px-3 py-2.5">
                       <button onClick={(e) => { e.stopPropagation(); setActive(o); }} className="font-mono text-[12px] font-medium text-[#2f9488] hover:underline">{o.number}</button>

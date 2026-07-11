@@ -418,11 +418,34 @@ export async function getOrdersForCustomer(
   return hydrate(rows);
 }
 
+/** Total order count for a customer — lets the account dashboard show a real
+ *  count/page total instead of guessing from a single page's row count. */
+export async function countOrdersForCustomer(accountId: number, email: string): Promise<number> {
+  const row = await q1<{ cnt: string }>(
+    "SELECT count(*)::text AS cnt FROM orders WHERE account_id = $1 OR lower(email) = lower($2)",
+    [accountId, email],
+  );
+  return Number(row?.cnt ?? 0);
+}
+
+/** Whitelisted sort columns — never interpolate the raw client-supplied sortBy. */
+const ORDER_SORT_COLUMNS: Record<string, string> = {
+  created_at: "created_at",
+  updated_at: "updated_at",
+  status: "status",
+  total: "total",
+  number: "number",
+  customer: "(first_name || ' ' || last_name)",
+};
+
 /** Admin order list, optionally filtered by status. */
 export async function listOrders(
-  opts: { page?: number; perPage?: number; status?: string; q?: string; from?: string; to?: string } = {},
+  opts: {
+    page?: number; perPage?: number; status?: string; q?: string; from?: string; to?: string;
+    sortBy?: string; sortDir?: "asc" | "desc";
+  } = {},
 ): Promise<{ orders: Order[]; total: number }> {
-  const perPage = opts.perPage ?? 20;
+  const perPage = Math.min(Math.max(opts.perPage ?? 20, 1), 100);
   const offset = ((opts.page ?? 1) - 1) * perPage;
   const conds: string[] = [];
   const bind: unknown[] = [];
@@ -435,9 +458,11 @@ export async function listOrders(
   if (opts.from) { bind.push(opts.from); conds.push(`created_at >= $${bind.length}`); }
   if (opts.to)   { bind.push(opts.to);   conds.push(`created_at < ($${bind.length}::date + 1)`); }
   const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+  const sortCol = ORDER_SORT_COLUMNS[opts.sortBy ?? ""] ?? "created_at";
+  const sortDir = opts.sortDir === "asc" ? "ASC" : "DESC";
 
   const rows = await q(
-    `SELECT ${ORDER_SELECT} FROM orders ${where} ORDER BY created_at DESC LIMIT ${perPage} OFFSET ${offset}`,
+    `SELECT ${ORDER_SELECT} FROM orders ${where} ORDER BY ${sortCol} ${sortDir} LIMIT ${perPage} OFFSET ${offset}`,
     bind,
   );
   const countRow = await q1<{ cnt: string }>(`SELECT count(*)::text AS cnt FROM orders ${where}`, bind);
@@ -499,6 +524,21 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
   } finally {
     client.release();
   }
+}
+
+/** Bulk status change from the admin list's row-select bar. Loops the single-order
+ *  updateOrderStatus() (not a raw bulk UPDATE) so every order still gets its stock
+ *  release/re-reserve + event-log side effects — these lists are tens of rows, not
+ *  thousands, so per-row correctness matters more than the extra round-trips. */
+export async function bulkUpdateOrderStatus(
+  ids: number[], status: string,
+): Promise<{ count: number; errors: number }> {
+  let count = 0, errors = 0;
+  for (const id of ids) {
+    try { await updateOrderStatus(id, status); count++; }
+    catch { errors++; }
+  }
+  return { count, errors };
 }
 
 // Revenue counts orders that represent real sales (not cancelled/refunded).
