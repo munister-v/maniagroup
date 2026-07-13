@@ -61,14 +61,26 @@ type CellValue = string | number | boolean | null;
  */
 function siteStatus(row: Row): {
   label: string; dot: string; title: string;
-  fix?: { patch: Partial<Pick<Row, "status" | "show_without_photo">>; label: string };
+  fix?: { patch: Partial<Pick<Row, "status" | "moderation_status" | "show_without_photo">>; label: string };
 } {
-  if (row.status !== "publish")
+  if (row.status !== "publish") {
+    // Moderation-bypass guard — same rule as bulk «На модерацію» (lib/products.ts
+    // bulkProducts 'publish') and the product editor's «Опубліковано» checkbox:
+    // a never-reviewed/rejected product must go through the review queue, not
+    // straight to live. This one-click fix used to PATCH status='publish' alone,
+    // which made it genuinely live (lib/productSource.ts gates on status alone)
+    // without ever having been approved.
+    const approved = row.moderation_status === "approved";
     return {
       label: "Приховано", dot: "bg-[#8a94a0]",
-      title: "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується",
-      fix: { patch: { status: "publish" }, label: "Опублікувати" },
+      title: approved
+        ? "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується"
+        : "Товар знято з публікації і ще не підтверджений модерацією — на сайті не показується",
+      fix: approved
+        ? { patch: { status: "publish" }, label: "Опублікувати" }
+        : { patch: { moderation_status: "pending" }, label: "На модерацію" },
     };
+  }
   if (!row.is_in_stock)
     return { label: "Без залишку", dot: "bg-[#b6c0ca]", title: "Немає в наявності (0 на складі) — на сайті не показується" };
   if (!row.image_src && !row.show_without_photo)
@@ -182,6 +194,13 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   function openFullCard(id: string) { setCardsInitial({ kind: "edit", id }); setMode("cards"); }
 
   const dirtyCount = Object.keys(edits).length;
+  // load() (via useCallback deps) fires on every page/sort/filter change and
+  // unconditionally wipes `edits` — this ref lets the reload-effect below
+  // check for unsaved inline edits without adding `edits` to load()'s own
+  // deps (which would recreate it, and re-trigger the reload effect, on
+  // every keystroke in the inline editor).
+  const editsRef = useRef(edits);
+  useEffect(() => { editsRef.current = edits; }, [edits]);
 
   const load = useCallback(async () => {
     // Guard against out-of-order responses: if filters change quickly (e.g. a
@@ -205,7 +224,20 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   }, [page, perPage, sortBy, sortDir, filterParams]);
 
   // Reload rows on filter/sort/page changes and after an import (dataVersion).
-  useEffect(() => { if (mode !== "cards") load(); }, [load, mode, dataVersion]);
+  // Guard: load() unconditionally wipes unsaved inline edits (setEdits({})) —
+  // ask before silently discarding them instead of losing a price/stock
+  // correction the admin hasn't clicked "Зберегти" for yet.
+  useEffect(() => {
+    if (mode === "cards") return;
+    if (
+      Object.keys(editsRef.current).length > 0 &&
+      !confirm(`У вас є незбережені зміни (${Object.keys(editsRef.current).length}) в таблиці. Оновити список і втратити їх?`)
+    ) {
+      return;
+    }
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, mode, dataVersion]);
 
   // Filter facets (brands / categories / colors) — refresh after an import too,
   // so a newly imported brand shows up in the dropdowns.
@@ -276,7 +308,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   // One-click fix from the "На сайті" badge — publish, or show without a
   // photo — instead of making the admin hunt for the right column/toggle.
   const [fixingId, setFixingId] = useState<string | null>(null);
-  async function quickFix(id: string, patch: Partial<Pick<Row, "status" | "show_without_photo">>) {
+  async function quickFix(id: string, patch: Partial<Pick<Row, "status" | "moderation_status" | "show_without_photo">>) {
     setFixingId(id);
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
@@ -284,8 +316,12 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (res.ok) { onToast?.("Готово — товар на сайті"); await load(); }
-      else onToast?.("Помилка");
+      if (res.ok) {
+        // moderation_status:'pending' sends it to review, not straight to the
+        // site — don't claim "на сайті" for a fix that didn't actually publish.
+        onToast?.(patch.moderation_status === "pending" ? "Надіслано на модерацію" : "Готово — товар на сайті");
+        await load();
+      } else onToast?.("Помилка");
     } finally { setFixingId(null); }
   }
 

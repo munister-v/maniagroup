@@ -480,7 +480,12 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Виконано", cancelled: "Скасовано", refunded: "Повернуто",
 };
 
-export async function updateOrderStatus(id: number, status: string): Promise<void> {
+/** Returns whether the status actually changed — false for a no-op (already
+ *  in that status). Callers use this to decide whether to notify the customer:
+ *  re-applying the same status (e.g. a mixed bulk selection, or a double-click)
+ *  must not re-send a "your order shipped" email for an order that already had
+ *  that status. */
+export async function updateOrderStatus(id: number, status: string): Promise<boolean> {
   if (!ORDER_STATUSES.includes(status as (typeof ORDER_STATUSES)[number])) throw new Error("Невірний статус");
   const client = await pool.connect();
   try {
@@ -492,7 +497,7 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
     if (cur.rows.length === 0) throw new Error("Замовлення не знайдено");
     const prev = cur.rows[0].status as string;
     const applied = cur.rows[0].stock_applied as boolean;
-    if (prev === status) { await client.query("ROLLBACK"); return; }
+    if (prev === status) { await client.query("ROLLBACK"); return false; }
 
     const items = await client.query<{ product_id: string; quantity: number; variation: string }>(
       "SELECT product_id::text AS product_id, quantity, variation FROM order_items WHERE order_id = $1",
@@ -518,6 +523,7 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
       [id, `Статус: ${STATUS_LABELS[prev] ?? prev} → ${STATUS_LABELS[status] ?? status}`],
     );
     await client.query("COMMIT");
+    return true;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -529,16 +535,22 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
 /** Bulk status change from the admin list's row-select bar. Loops the single-order
  *  updateOrderStatus() (not a raw bulk UPDATE) so every order still gets its stock
  *  release/re-reserve + event-log side effects — these lists are tens of rows, not
- *  thousands, so per-row correctness matters more than the extra round-trips. */
+ *  thousands, so per-row correctness matters more than the extra round-trips.
+ *
+ *  `changedIds` — only the orders that ACTUALLY transitioned. A mixed selection
+ *  (some already in the target status) used to notify every id regardless, so
+ *  re-clicking "Відправлено" on a batch that included already-shipped orders
+ *  re-sent "your order shipped" to customers who'd already gotten that email. */
 export async function bulkUpdateOrderStatus(
   ids: number[], status: string,
-): Promise<{ count: number; errors: number }> {
-  let count = 0, errors = 0;
+): Promise<{ count: number; errors: number; changedIds: number[] }> {
+  let errors = 0;
+  const changedIds: number[] = [];
   for (const id of ids) {
-    try { await updateOrderStatus(id, status); count++; }
+    try { if (await updateOrderStatus(id, status)) changedIds.push(id); }
     catch { errors++; }
   }
-  return { count, errors };
+  return { count: changedIds.length, errors, changedIds };
 }
 
 // Revenue counts orders that represent real sales (not cancelled/refunded).

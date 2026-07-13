@@ -74,9 +74,14 @@ export async function PATCH(req: Request) {
     if (typeof body.ttn === "string") {
       await setOrderTracking(Number(body.id), body.ttn);
     } else if (body.status) {
-      await updateOrderStatus(Number(body.id), body.status);
-      const order = await getOrder(Number(body.id));
-      if (order) await notifyStatusChange(order, body.status);
+      // Only notify if the status actually changed — re-applying the same
+      // status (e.g. a stray double-click) must not re-send the customer
+      // notification for an order that already had that status.
+      const changed = await updateOrderStatus(Number(body.id), body.status);
+      if (changed) {
+        const order = await getOrder(Number(body.id));
+        if (order) await notifyStatusChange(order, body.status);
+      }
     } else {
       return NextResponse.json({ error: "Нічого оновлювати" }, { status: 400 });
     }

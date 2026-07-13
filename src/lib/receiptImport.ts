@@ -59,7 +59,7 @@ export async function previewReceiptFromFile(
   };
   if (!rows.length) return base;
 
-  const target = await resolveOfferTargets(rows);
+  const { target } = await resolveOfferTargets(rows);
   // Need product names/skus for matched ids.
   const ids = [...new Set(rows.map(target).filter((x): x is number => !!x))];
   const nameMap = new Map<number, { name: string; sku: string }>();

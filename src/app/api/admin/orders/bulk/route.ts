@@ -18,11 +18,14 @@ export async function POST(req: Request) {
   }
 
   const nums = ids.map(Number).filter(Number.isFinite);
-  const { count, errors } = await bulkUpdateOrderStatus(nums, status);
+  const { count, errors, changedIds } = await bulkUpdateOrderStatus(nums, status);
 
   // Same customer/admin notifications a single-order status change already
   // triggers via PATCH /api/admin/orders — best-effort, never blocks the response.
-  for (const id of nums) {
+  // Only for orders that ACTUALLY transitioned (changedIds): a mixed selection
+  // that included already-shipped orders, or one that hit an error, must not
+  // re-notify a customer whose status didn't really change.
+  for (const id of changedIds) {
     const order = await getOrder(id).catch(() => null);
     if (order) await notifyStatusChange(order, status).catch(() => {});
   }

@@ -573,6 +573,11 @@ export type ImportPreview = {
   totalRows: number;
   matchedRows: number;
   unmatchedRows: number;
+  /** Codes (barcode/article/sku/offer_code) that matched 2+ different
+   *  products in the DB and were skipped rather than guessed at — see
+   *  setUnlessAmbiguous in resolveOfferTargets. A non-zero count means the
+   *  supplier feed has duplicate/reused codes worth cleaning up. */
+  ambiguousKeys: number;
   affectedProducts: number;
   newProducts: number;
   newVariants: number;
@@ -607,7 +612,30 @@ async function loadProducts(ids: number[]) {
   return { byId, variantsByProduct };
 }
 
-/** Resolve every offer row → product id, using the matching chain. */
+/** Sets key→id in `map`, UNLESS the key already maps to a *different* id —
+ * a duplicate factory_article/sku/offer_code/barcode across two different
+ * products is a real data-quality problem (typo'd or reused code from the
+ * supplier feed), and picking whichever row the DB happened to return last
+ * would silently write stock/price changes to a possibly wrong product with
+ * no error or warning. Once a key is flagged ambiguous it's removed from the
+ * map entirely and never reconsidered, so lookups fall through to the next
+ * matching strategy in the chain (or land in "unmatched" if none resolve). */
+function setUnlessAmbiguous(map: Map<string, number>, ambiguous: Set<string>, key: string, id: number): void {
+  if (ambiguous.has(key)) return;
+  const existing = map.get(key);
+  if (existing !== undefined && existing !== id) {
+    map.delete(key);
+    ambiguous.add(key);
+    return;
+  }
+  map.set(key, id);
+}
+
+/** Resolve every offer row → product id, using the matching chain.
+ * `ambiguousKeys` — count of distinct codes that matched 2+ different
+ * products and were therefore skipped rather than guessed at (see
+ * setUnlessAmbiguous). Surfaced in ApplyResult so a duplicate barcode/article
+ * in the supplier feed shows up as a warning instead of a silent wrong write. */
 export async function resolveOfferTargets(rows: OfferRow[]) {
   const factoryArticles = [...new Set(rows.map((r) => r.factory_article).filter(Boolean))];
   // article ("Артикул" — Intertop's own internal product number) matches the
@@ -620,26 +648,27 @@ export async function resolveOfferTargets(rows: OfferRow[]) {
   const skuMap = new Map<string, number>();
   const offerMap = new Map<string, number>(); // offer_code → product_id
   const barcodeMap = new Map<string, number>();
+  const ambiguous = new Set<string>();
 
   if (factoryArticles.length) {
     for (const p of await q<{ id: string; factory_article: string }>(
       "SELECT id::text, factory_article FROM products WHERE factory_article = ANY($1) AND factory_article <> ''", [factoryArticles]))
-      faMap.set(p.factory_article, Number(p.id));
+      setUnlessAmbiguous(faMap, ambiguous, p.factory_article, Number(p.id));
   }
   if (externalIds.length) {
     for (const p of await q<{ id: string; sku: string }>(
       "SELECT id::text, sku FROM products WHERE sku = ANY($1) AND sku <> ''", [externalIds]))
-      skuMap.set(p.sku, Number(p.id));
+      setUnlessAmbiguous(skuMap, ambiguous, p.sku, Number(p.id));
   }
   if (offerCodes.length) {
     for (const v of await q<{ product_id: string; offer_code: string }>(
       "SELECT product_id::text, offer_code FROM product_variants WHERE offer_code = ANY($1) AND offer_code <> ''", [offerCodes]))
-      offerMap.set(v.offer_code, Number(v.product_id));
+      setUnlessAmbiguous(offerMap, ambiguous, v.offer_code, Number(v.product_id));
   }
   if (barcodes.length) {
     for (const v of await q<{ product_id: string; barcode: string }>(
       "SELECT product_id::text, barcode FROM product_variants WHERE barcode = ANY($1) AND barcode <> ''", [barcodes]))
-      barcodeMap.set(v.barcode, Number(v.product_id));
+      setUnlessAmbiguous(barcodeMap, ambiguous, v.barcode, Number(v.product_id));
   }
   const target = (r: OfferRow): number | null =>
     (r.offer_code && offerMap.get(r.offer_code)) ||
@@ -647,7 +676,7 @@ export async function resolveOfferTargets(rows: OfferRow[]) {
     (r.article && skuMap.get(r.article)) ||
     (r.factory_article && faMap.get(r.factory_article)) ||
     (r.external_id && skuMap.get(r.external_id)) || null;
-  return target;
+  return { target, ambiguousKeys: ambiguous.size };
 }
 
 /** Stable per-product grouping key for OFFERS rows — prefer factory_article
@@ -755,13 +784,14 @@ async function createProductFromOffer(
 export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
   const base: ImportPreview = {
     kind: parsed.kind, filename: parsed.filename, totalRows: parsed.rows.length,
-    matchedRows: 0, unmatchedRows: 0, affectedProducts: 0, newProducts: 0, newVariants: 0,
+    matchedRows: 0, unmatchedRows: 0, ambiguousKeys: 0, affectedProducts: 0, newProducts: 0, newVariants: 0,
     stockChanges: 0, priceChanges: 0, items: [], unmatched: [], sample: [], unmatchedSample: [],
   };
   if (parsed.kind === "unknown" || parsed.rows.length === 0) return base;
 
   const rows = parsed.rows;
-  const target = await resolveOfferTargets(rows);
+  const { target, ambiguousKeys } = await resolveOfferTargets(rows);
+  base.ambiguousKeys = ambiguousKeys;
   const matched = rows.map((r) => ({ r, pid: target(r) }));
   const ids = [...new Set(matched.map((m) => m.pid).filter((x): x is number => !!x))];
   const { byId, variantsByProduct } = await loadProducts(ids);
@@ -837,12 +867,12 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
 
 export type ApplyResult = {
   kind: ImportKind;
-  matchedRows: number; unmatchedRows: number;
+  matchedRows: number; unmatchedRows: number; ambiguousKeys: number;
   productsCreated: number; productsUpdated: number; variantsUpserted: number; stockMovements: number;
 };
 
 export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
-  const res: ApplyResult = { kind: parsed.kind, matchedRows: 0, unmatchedRows: 0, productsCreated: 0, productsUpdated: 0, variantsUpserted: 0, stockMovements: 0 };
+  const res: ApplyResult = { kind: parsed.kind, matchedRows: 0, unmatchedRows: 0, ambiguousKeys: 0, productsCreated: 0, productsUpdated: 0, variantsUpserted: 0, stockMovements: 0 };
   if (parsed.kind === "unknown" || parsed.rows.length === 0) return res;
   const importNote = `Імпорт: ${parsed.filename}`;
   const client = await pool.connect();
@@ -851,7 +881,8 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
     await client.query("BEGIN");
 
     const rows = parsed.rows;
-    const target = await resolveOfferTargets(rows);
+    const { target, ambiguousKeys } = await resolveOfferTargets(rows);
+    res.ambiguousKeys = ambiguousKeys;
     const targets = new Map<OfferRow, number | null>(rows.map((r) => [r, target(r)]));
 
     // Rows resolving to nothing but carrying product data (odezda-style)

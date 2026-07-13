@@ -714,12 +714,44 @@ export function AdminProducts({ onToast, initialOpen, onClose }: {
                     <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
                   </label>
                   <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
-                    <input type="checkbox" checked={draft.status === "publish"} onChange={(e) => setDraft({ ...draft, status: e.target.checked ? "publish" : "draft" })} /> Опубліковано
+                    <input
+                      type="checkbox"
+                      checked={draft.status === "publish"}
+                      onChange={(e) => {
+                        const wantPublish = e.target.checked;
+                        if (!current) {
+                          // New, unsaved product — no server-side moderation state
+                          // yet; createProduct() always starts it at moderation_status
+                          // 'draft' regardless, so there's nothing to bypass here.
+                          setDraft({ ...draft, status: wantPublish ? "publish" : "draft" });
+                          return;
+                        }
+                        if (wantPublish && current.moderation_status !== "approved") {
+                          // Moderation-bypass guard — same rule as bulk «На модерацію»
+                          // (lib/products.ts bulkProducts 'publish'): a never-reviewed
+                          // or rejected product must go through the review queue, not
+                          // straight to live. Previously this checkbox wrote
+                          // status='publish' directly, making the product genuinely
+                          // live to customers (lib/productSource.ts gates on status
+                          // alone) without ever having been approved.
+                          transition({ moderation_status: "pending" }, "Чернетка → На модерації");
+                          return;
+                        }
+                        if (!wantPublish && current.moderation_status !== "draft") {
+                          // Keep status and moderation_status in sync on the way down
+                          // too, so an approved product hidden this way doesn't strand
+                          // "Підтверджено" on its own card while the list shows it hidden.
+                          transition({ moderation_status: "draft", status: "draft" }, "→ Чернетка");
+                          return;
+                        }
+                        setDraft({ ...draft, status: wantPublish ? "publish" : "draft" });
+                      }}
+                    /> Опубліковано
                   </label>
                 </div>
                 {editorId !== "new" && (
                   <p className="mt-2 text-[11px] text-[#8a94a0]">
-                    Ручний перемикач для швидкого правлення — офіційний робочий процес модерації вище («Загальні дані») теж керує цим полем.
+                    Публікація вимагає підтвердження модерацією («Загальні дані» вище) — цей перемикач сам надішле товар на модерацію, якщо він ще не підтверджений.
                   </p>
                 )}
               </DetailCard>

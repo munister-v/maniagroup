@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
         result.productsUpdated ? `${result.productsUpdated} оновлено` : "",
         result.stockMovements ? `${result.stockMovements} рухів` : "",
         result.unmatchedRows ? `${result.unmatchedRows} не знайдено` : "",
+        result.ambiguousKeys ? `⚠ ${result.ambiguousKeys} неоднозначних` : "",
       ].filter(Boolean).join(" · ");
       const summary = parts || "без змін";
       await recordSourceRun(parsed.filename, tplIdStr, true, result.unmatchedRows, summary).catch(() => {});

@@ -1,4 +1,4 @@
-import { q, q1 } from "./pg";
+import { pool, q, q1 } from "./pg";
 import { applyImport, extractXmlCreatedAt, parseImportSmart, parseImportWithTemplate, parseXmlOffers, type Parsed } from "./stockImport";
 import { getImportTemplate } from "./importTemplates";
 
@@ -147,6 +147,32 @@ async function markRun(id: string, status: SourceStatus, errorCount: number, sum
  * by the admin's "Оновити зараз" button and by the cron-driven run-due route.
  */
 export async function runImportSource(id: string): Promise<RunSourceResult> {
+  // Cron (run-due route) and the admin's manual "Оновити зараз" button can
+  // both call this for the SAME source id at the same moment — without a
+  // lock, both would fetch+applyImport() independently, doubling every
+  // stock_movements row and stock adjustment, and racing on error_count with
+  // whichever write lands last silently overwriting the other's result. A
+  // Postgres advisory lock is process-independent (PM2 runs this app as 2
+  // cluster workers — an in-memory lock wouldn't be seen across them) and
+  // self-releases if the holding connection ever dies, so a crashed run
+  // can't wedge the source locked forever.
+  const lockKey = Number(id);
+  const lockClient = await pool.connect();
+  try {
+    const { rows: lockRows } = await lockClient.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock($1) AS locked", [lockKey],
+    );
+    if (!lockRows[0]?.locked) {
+      return { ok: true, skipped: true, reason: "Вже виконується іншим запуском — пропущено" };
+    }
+    return await runImportSourceLocked(id);
+  } finally {
+    await lockClient.query("SELECT pg_advisory_unlock($1)", [lockKey]).catch(() => {});
+    lockClient.release();
+  }
+}
+
+async function runImportSourceLocked(id: string): Promise<RunSourceResult> {
   const source = await getImportSource(id);
   if (!source) return { ok: false, error: "Джерело не знайдено" };
   if (source.feed_type !== "url" || !source.feed_url) {
@@ -191,7 +217,8 @@ export async function runImportSource(id: string): Promise<RunSourceResult> {
   }
 
   const result = await applyImport(parsed);
-  const summary = `Застосовано: ${result.matchedRows} поз., ${result.productsCreated} нових товарів, ${result.variantsUpserted} оновлено пропозицій`;
+  const summary = `Застосовано: ${result.matchedRows} поз., ${result.productsCreated} нових товарів, ${result.variantsUpserted} оновлено пропозицій`
+    + (result.ambiguousKeys ? ` · ⚠ ${result.ambiguousKeys} неоднозначних кодів пропущено` : "");
   await markRun(id, "ok", result.unmatchedRows, summary, newCreatedAt);
   return {
     ok: true, skipped: false, matchedRows: result.matchedRows, unmatchedRows: result.unmatchedRows,
