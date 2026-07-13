@@ -31,8 +31,13 @@ export function AdminCustomers() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [active, setActive] = useState<Customer | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadSeq = useRef(0);
 
   const load = useCallback(async (p: number, qv: string, seg: string, sb: SortKey, sd: "asc" | "desc") => {
+    // Guard against out-of-order responses: fast filter/sort switching can
+    // otherwise let an earlier, slower request resolve after a newer one and
+    // overwrite the table with stale rows — same pattern as CatalogGrid.load().
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(p), sortBy: sb, sortDir: sd });
@@ -40,11 +45,12 @@ export function AdminCustomers() {
       if (seg) params.set("segment", seg);
       const res = await fetch(`/api/admin/customers?${params}`);
       const data = await res.json();
+      if (seq !== loadSeq.current) return; // a newer request has since started
       setRows(data.customers ?? []);
       setTotal(data.total ?? 0);
       setPage(p);
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, []);
 
@@ -65,7 +71,7 @@ export function AdminCustomers() {
     const dir = sortBy === key && sortDir === "desc" ? "asc" : sortBy === key ? "desc" : "desc";
     setSortBy(key);
     setSortDir(dir);
-    load(page, search, segment, key, dir);
+    load(1, search, segment, key, dir);
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));

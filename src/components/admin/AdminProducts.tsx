@@ -447,7 +447,7 @@ export function AdminProducts({ onToast, initialOpen, onClose }: {
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[3px] border border-[#2b2d42] bg-[#2b2d42] px-3 py-2 text-white">
           <span className="text-[12px]">Обрано: {selected.size}</span>
           <span className="mx-1 h-4 w-px bg-white/20" />
-          <BulkBtn onClick={() => bulk("publish", "Опубліковано")}>Опублікувати</BulkBtn>
+          <BulkBtn onClick={() => bulk("publish", "Надіслано на модерацію")}>На модерацію</BulkBtn>
           <BulkBtn onClick={() => bulk("unpublish", "Знято з публікації")}>Сховати</BulkBtn>
           <BulkBtn onClick={() => bulk("in_stock", "В наявності")}>В наявності</BulkBtn>
           <BulkBtn onClick={() => bulk("out_of_stock", "Немає в наявності")}>Немає</BulkBtn>
@@ -710,9 +710,15 @@ export function AdminProducts({ onToast, initialOpen, onClose }: {
 
               <DetailCard title="Публікація">
                 <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
-                    <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
-                  </label>
+                  {current?.variants?.length ? (
+                    <label className="flex items-center gap-2 text-[13px] text-[#8a94a0]" title="Розраховується автоматично із залишків розмірів — редагуйте у вкладці «Розміри», а не тут">
+                      <input type="checkbox" checked={draft.is_in_stock} disabled className="cursor-not-allowed" /> В наявності
+                    </label>
+                  ) : (
+                    <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
+                      <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
+                    </label>
+                  )}
                   <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
                     <input
                       type="checkbox"

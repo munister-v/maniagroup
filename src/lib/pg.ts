@@ -738,6 +738,19 @@ ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS code       TEXT NOT NULL DEFAUL
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE products    ADD COLUMN IF NOT EXISTS size_chart_code TEXT NOT NULL DEFAULT '';
 
+-- A typo in size_chart_code must not silently bind a product to the wrong
+-- chart (see /api/size-chart's "WHERE code = $1 LIMIT 1" — with duplicate
+-- codes that pick is nondeterministic). Guard with a partial unique index;
+-- wrapped in a DO block so pre-existing duplicate data (if any) can't take
+-- down schema init for the whole app — createSizeChart/updateSizeChart also
+-- reject new duplicates at the application layer regardless.
+DO $$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS size_charts_code_uniq ON size_charts (code) WHERE code <> '';
+EXCEPTION WHEN unique_violation THEN
+  RAISE NOTICE 'size_charts.code has duplicate values — skipping unique index until data is deduped';
+END $$;
+
 -- Brand-logo background hint: many high-res Logo.dev icons are a solid dark
 -- fill (e.g. white "PINKO" text on black) which looks like a black box on the
 -- white brand strip. logoDownloader.ts samples each downloaded logo's corner

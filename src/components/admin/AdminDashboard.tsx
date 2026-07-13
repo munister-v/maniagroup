@@ -2130,6 +2130,13 @@ function BackupSection() {
 /* ─── Settings ─── */
 
 function SettingsSection() {
+  // store/tg/smtp/ai all start as empty-string placeholders and only get the
+  // REAL saved values once the GET below resolves. Every save* function PUTs
+  // whatever's currently in state — clicking "Зберегти" before that GET
+  // finishes (e.g. a fast double-click, or a slow network) silently wiped
+  // the real Telegram/SMTP/store settings with empty strings. Save buttons
+  // are disabled until settingsLoaded flips true.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [store, setStore] = useState({ free_ship_threshold: "", store_phone: "", store_email: "", low_stock_threshold: "", require_product_photo: "1" });
   const [storeStatus, setStoreStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [pwd, setPwd] = useState({ current: "", next: "", next2: "" });
@@ -2193,6 +2200,7 @@ function SettingsSection() {
         smtp_user: d.smtp_user ?? "", smtp_pass: d.smtp_pass ?? "", smtp_from: d.smtp_from ?? "",
       });
       setAi({ openrouter_api_key: d.openrouter_api_key ?? "" });
+      setSettingsLoaded(true);
     });
     loadPhotoSources();
   }, []);
@@ -2247,6 +2255,7 @@ function SettingsSection() {
   }
 
   async function saveAi() {
+    if (!settingsLoaded) return; // guards against the button-disabled race — see settingsLoaded comment above
     setAiStatus("saving");
     await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ai) });
     setAiStatus("saved");
@@ -2254,6 +2263,7 @@ function SettingsSection() {
   }
 
   async function testAi() {
+    if (!settingsLoaded) return;
     setAiTest({ state: "testing", msg: "" });
     // Save first — otherwise "Перевірити" would silently test whatever key
     // was saved last, not what's currently typed in the field.
@@ -2267,6 +2277,7 @@ function SettingsSection() {
   }
 
   async function saveTg() {
+    if (!settingsLoaded) return;
     setTgStatus("saving");
     await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(tg) });
     setTgStatus("saved");
@@ -2284,6 +2295,7 @@ function SettingsSection() {
   }
 
   async function saveSmtp() {
+    if (!settingsLoaded) return;
     setSmtpStatus("saving");
     await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(smtp) });
     setSmtpStatus("saved");
@@ -2291,6 +2303,7 @@ function SettingsSection() {
   }
 
   async function testSmtp() {
+    if (!settingsLoaded) return;
     setSmtpTest({ state: "testing", msg: "" });
     // Save first — verifySmtp() reads from the DB, not from what's typed here.
     await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(smtp) });
@@ -2300,6 +2313,7 @@ function SettingsSection() {
   }
 
   async function saveStore() {
+    if (!settingsLoaded) return;
     setStoreStatus("saving");
     await fetch("/api/admin/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(store) });
     setStoreStatus("saved");
@@ -2356,7 +2370,7 @@ function SettingsSection() {
           </label>
         </div>
 
-        <button onClick={saveStore} disabled={storeStatus === "saving"} className={`mt-5 ${btn}`}>
+        <button onClick={saveStore} disabled={storeStatus === "saving" || !settingsLoaded} className={`mt-5 ${btn}`}>
           {storeStatus === "saving" ? "Зберігаємо…" : storeStatus === "saved" ? "✓ Збережено" : "Зберегти"}
         </button>
       </Card>
@@ -2395,7 +2409,7 @@ function SettingsSection() {
           </p>
         </div>
         <div className="mt-5 flex items-center gap-3">
-          <button onClick={saveTg} disabled={tgStatus === "saving"} className={btn}>
+          <button onClick={saveTg} disabled={tgStatus === "saving" || !settingsLoaded} className={btn}>
             {tgStatus === "saving" ? "Зберігаємо…" : tgStatus === "saved" ? "✓ Збережено" : "Зберегти"}
           </button>
           <button onClick={testTg} disabled={tgTest.state === "testing" || !tg.telegram_bot_token || !tg.telegram_chat_id}
@@ -2433,7 +2447,7 @@ function SettingsSection() {
           відновлення паролю клієнтами працювати не будуть.
         </p>
         <div className="mt-5 flex items-center gap-3">
-          <button onClick={saveSmtp} disabled={smtpStatus === "saving"} className={btn}>
+          <button onClick={saveSmtp} disabled={smtpStatus === "saving" || !settingsLoaded} className={btn}>
             {smtpStatus === "saving" ? "Зберігаємо…" : smtpStatus === "saved" ? "✓ Збережено" : "Зберегти"}
           </button>
           <button onClick={testSmtp} disabled={smtpTest.state === "testing" || !smtp.smtp_host || !smtp.smtp_user || !smtp.smtp_pass}
@@ -2453,7 +2467,7 @@ function SettingsSection() {
           Це замінює потребу заходити на сервер через термінал.
         </p>
         <div className="mt-5 flex items-center gap-3">
-          <button onClick={saveAi} disabled={aiStatus === "saving"} className={btn}>
+          <button onClick={saveAi} disabled={aiStatus === "saving" || !settingsLoaded} className={btn}>
             {aiStatus === "saving" ? "Зберігаємо…" : aiStatus === "saved" ? "✓ Збережено" : "Зберегти"}
           </button>
           <button onClick={testAi} disabled={aiTest.state === "testing" || !ai.openrouter_api_key}

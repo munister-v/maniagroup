@@ -230,7 +230,9 @@ async function runImportSourceLocked(id: string): Promise<RunSourceResult> {
  *  every registered url-type source, best-effort (one bad feed shouldn't
  *  block the others). See /api/admin/import-sources/run-due. */
 export async function runDueUrlSources(): Promise<{ ran: number; errors: number }> {
-  const sources = await q<{ id: string }>("SELECT id::text FROM import_sources WHERE feed_type = 'url' AND feed_url <> ''");
+  const sources = await q<{ id: string }>(
+    "SELECT id::text FROM import_sources WHERE feed_type = 'url' AND feed_url <> '' AND (next_run_at IS NULL OR next_run_at <= now())",
+  );
   let errors = 0;
   for (const s of sources) {
     const r = await runImportSource(s.id).catch((e): RunSourceResult => ({ ok: false, error: e instanceof Error ? e.message : "Помилка" }));

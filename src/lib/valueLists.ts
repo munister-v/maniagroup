@@ -65,12 +65,20 @@ export async function updateValueList(id: string, input: ValueListInput): Promis
 }
 
 async function insertRows(listId: string, rows: ValueListInput["rows"]): Promise<void> {
+  // Two rows mapping the same seller_value would make lookups (loadValueListMaps)
+  // resolve to whichever happened to be read last — reject the duplicate up front
+  // instead of letting import behavior silently depend on row order.
+  const seen = new Set<string>();
   let order = 0;
   for (const r of rows) {
-    if (!r.seller_value.trim()) continue;
+    const sellerValue = r.seller_value.trim();
+    if (!sellerValue) continue;
+    const key = sellerValue.toLowerCase();
+    if (seen.has(key)) throw new Error(`Значення продавця «${sellerValue}» вказано декілька разів`);
+    seen.add(key);
     await q(
       "INSERT INTO value_list_items (list_id, seller_value, value, sort_order) VALUES ($1,$2,$3,$4)",
-      [Number(listId), r.seller_value.trim(), r.value.trim(), order++],
+      [Number(listId), sellerValue, r.value.trim(), order++],
     );
   }
 }
@@ -88,7 +96,7 @@ export async function loadValueListMaps(ids: string[]): Promise<Map<string, Map<
   const out = new Map<string, Map<string, string>>();
   if (ids.length === 0) return out;
   const rows = await q<{ list_id: string; seller_value: string; value: string }>(
-    `SELECT list_id::text, seller_value, value FROM value_list_items WHERE list_id = ANY($1)`,
+    `SELECT list_id::text, seller_value, value FROM value_list_items WHERE list_id = ANY($1) ORDER BY list_id, sort_order, id`,
     [ids.map(Number)],
   );
   for (const r of rows) {
