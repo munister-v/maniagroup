@@ -35,6 +35,15 @@ if [ $RC -ne 0 ]; then
   exit $RC
 fi
 echo "swap build in"
+# Carry the optimized-image cache across the swap. next/image writes resized
+# WebP variants into .next/cache/images, and the swap below throws the whole
+# .next away — so without this every deploy makes the box re-encode every
+# thumbnail the catalog asks for, on 2 cores, while serving traffic.
+if [ -d .next/cache/images ]; then
+  mkdir -p .next-build/cache
+  cp -a .next/cache/images .next-build/cache/ 2>/dev/null \
+    && echo "  carried over $(find .next-build/cache/images -type f | wc -l) cached image variants"
+fi
 rm -rf .next-old
 [ -d .next ] && mv .next .next-old
 mv .next-build .next
