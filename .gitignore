@@ -52,3 +52,15 @@ data/wp-import.json
 /public/uploads/
 # product photos migrated off WordPress (served at /catalog)
 /public/catalog/
+
+# server-side runtime artefacts (VPS working tree)
+/.next-old/
+/.next-build/
+/deploy-safe.log
+/import-sources.log
+# licensed font supplied on the server, not redistributable via this public repo
+/public/fonts/
+# stock/catalog spreadsheets dropped in for one-off imports
+/scripts/*.xls
+/scripts/*.xlsx
+/scripts/*.csv
