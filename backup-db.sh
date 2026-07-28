@@ -7,11 +7,21 @@ BACKUP_DIR=/opt/backups
 KEEP_DAYS=14
 STAMP=$(date +%Y%m%d-%H%M%S)
 OUT="$BACKUP_DIR/maniagroup-$STAMP.sql.gz"
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Credentials come from .env.local, the same file `next start` reads. They used
+# to be hardcoded right here — which put the live Postgres password into this
+# public repo, so never inline them again.
+DATABASE_URL=$(grep -m1 '^DATABASE_URL=' "$APP_DIR/.env.local" 2>/dev/null | cut -d= -f2-)
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo "[$(date)] BACKUP FAILED: no DATABASE_URL in $APP_DIR/.env.local"
+  exit 1
+fi
 
 mkdir -p "$BACKUP_DIR"
 echo "[$(date)] starting backup -> $OUT"
 
-if PGPASSWORD='6dddebe3b59cdf73539bb9afab8357aa4cfa0cca1b91f536' pg_dump -U maniagroup -h 127.0.0.1 -d maniagroup | gzip > "$OUT.tmp"; then
+if pg_dump "$DATABASE_URL" | gzip > "$OUT.tmp"; then
   mv "$OUT.tmp" "$OUT"
   SIZE=$(du -h "$OUT" | cut -f1)
   echo "[$(date)] backup OK: $OUT ($SIZE)"
