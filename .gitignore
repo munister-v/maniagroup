@@ -46,6 +46,7 @@ data/site-content.json
 data/*.db
 data/*.db-shm
 data/*.db-wal
+data/wp-import.json
 
 # user-uploaded product images (served at /uploads)
 /public/uploads/
