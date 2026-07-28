@@ -2,9 +2,7 @@
  * E6 — Live marketplace feeds by URL.
  *
  * Public endpoints the marketplace pulls on its own schedule (no admin auth):
- *   /feed/rozetka.xml   → Rozetka YML
  *   /feed/google.xml    → Google Merchant RSS
- *   /feed/prom.xlsx     → Prom.ua import XLSX
  *   /feed/price.csv     → generic CSV price list
  *   /feed/price.xlsx    → generic XLSX price list
  *
@@ -26,9 +24,7 @@ const TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // channel slug (after /feed/) → export format
 const CHANNEL_MAP: Record<string, ExportFormat> = {
-  "rozetka.xml": "rozetka",
   "google.xml": "google",
-  "prom.xlsx": "prom",
   "price.csv": "csv",
   "price.xlsx": "xlsx",
 };
