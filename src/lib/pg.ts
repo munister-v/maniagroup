@@ -643,6 +643,47 @@ CREATE TABLE IF NOT EXISTS import_sources (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_import_sources_name ON import_sources(name);
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS stock_mode TEXT NOT NULL DEFAULT 'patch';
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS stock_source_id BIGINT;
+CREATE INDEX IF NOT EXISTS idx_variants_stock_source ON product_variants(stock_source_id) WHERE stock_source_id IS NOT NULL;
+
+-- Every applied stock import is reversible until a later operation changes
+-- one of its variants. Items keep the exact before/after quantities, while
+-- the run row gives the admin a compact audit trail and snapshot statistics.
+CREATE TABLE IF NOT EXISTS inventory_import_runs (
+  id              BIGSERIAL PRIMARY KEY,
+  source_id       BIGINT REFERENCES import_sources(id) ON DELETE SET NULL,
+  source_name     TEXT NOT NULL DEFAULT '',
+  filename        TEXT NOT NULL DEFAULT '',
+  import_kind     TEXT NOT NULL DEFAULT 'offers',
+  stock_mode      TEXT NOT NULL DEFAULT 'patch',
+  status          TEXT NOT NULL DEFAULT 'applied', -- applied | rolled_back
+  total_rows      INTEGER NOT NULL DEFAULT 0,
+  matched_rows    INTEGER NOT NULL DEFAULT 0,
+  unmatched_rows  INTEGER NOT NULL DEFAULT 0,
+  changed_rows    INTEGER NOT NULL DEFAULT 0,
+  zeroed_rows     INTEGER NOT NULL DEFAULT 0,
+  products_created INTEGER NOT NULL DEFAULT 0,
+  products_updated INTEGER NOT NULL DEFAULT 0,
+  variants_upserted INTEGER NOT NULL DEFAULT 0,
+  stock_movements INTEGER NOT NULL DEFAULT 0,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  rolled_back_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_import_runs_created ON inventory_import_runs(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS inventory_import_items (
+  id          BIGSERIAL PRIMARY KEY,
+  run_id      BIGINT NOT NULL REFERENCES inventory_import_runs(id) ON DELETE CASCADE,
+  product_id  BIGINT NOT NULL,
+  variant_id  BIGINT NOT NULL,
+  size        TEXT NOT NULL DEFAULT '',
+  old_qty     INTEGER NOT NULL DEFAULT 0,
+  new_qty     INTEGER NOT NULL DEFAULT 0,
+  reason      TEXT NOT NULL DEFAULT 'row', -- row | missing_from_snapshot
+  UNIQUE (run_id, variant_id)
+);
+CREATE INDEX IF NOT EXISTS idx_inventory_import_items_run ON inventory_import_items(run_id);
 
 -- ── ERP: value lists (Intertop agora "Списки значень") ──
 -- Controlled vocabularies (e.g. valid colors, genders, seasons) an import
@@ -713,6 +754,16 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS ever_published BOOLEAN NOT NULL DE
 -- short human-readable outcome for the admin table.
 ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_feed_created_at TEXT;
 ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_run_summary TEXT NOT NULL DEFAULT '';
+-- Recurring feeds are independently schedulable and can be paused without
+-- deleting their mapping/history. running_at is a lightweight lease that
+-- prevents cron and a manual click from applying the same feed concurrently.
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS interval_minutes INTEGER NOT NULL DEFAULT 180;
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS running_at TIMESTAMPTZ;
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_feed_signature TEXT;
+ALTER TABLE import_sources ADD COLUMN IF NOT EXISTS last_duration_ms INTEGER;
+CREATE INDEX IF NOT EXISTS idx_import_sources_due
+  ON import_sources(next_run_at) WHERE feed_type = 'url' AND enabled;
 
 -- Intertop 2.9 guide ("Зіставлення властивостей"): a value list isn't just a
 -- flat vocabulary — it's scoped to ONE property and its rows are a raw→
@@ -737,19 +788,6 @@ ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS type       TEXT NOT NULL DEFAUL
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS code       TEXT NOT NULL DEFAULT '';
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE products    ADD COLUMN IF NOT EXISTS size_chart_code TEXT NOT NULL DEFAULT '';
-
--- A typo in size_chart_code must not silently bind a product to the wrong
--- chart (see /api/size-chart's "WHERE code = $1 LIMIT 1" — with duplicate
--- codes that pick is nondeterministic). Guard with a partial unique index;
--- wrapped in a DO block so pre-existing duplicate data (if any) can't take
--- down schema init for the whole app — createSizeChart/updateSizeChart also
--- reject new duplicates at the application layer regardless.
-DO $$
-BEGIN
-  CREATE UNIQUE INDEX IF NOT EXISTS size_charts_code_uniq ON size_charts (code) WHERE code <> '';
-EXCEPTION WHEN unique_violation THEN
-  RAISE NOTICE 'size_charts.code has duplicate values — skipping unique index until data is deduped';
-END $$;
 
 -- Brand-logo background hint: many high-res Logo.dev icons are a solid dark
 -- fill (e.g. white "PINKO" text on black) which looks like a black box on the

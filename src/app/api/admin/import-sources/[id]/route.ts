@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { getImportSource, updateImportSource, deleteImportSource, type ImportSourceInput } from "@/lib/importSources";
+import { IMPORT_INTERVALS, getImportSource, updateImportSource, deleteImportSource, type ImportSourceInput } from "@/lib/importSources";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
@@ -15,6 +15,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const body = (await req.json()) as ImportSourceInput;
   if (!body?.name?.trim()) return NextResponse.json({ error: "Вкажіть назву джерела" }, { status: 400 });
+  if (body.feed_type === "url" && !body.feed_url?.trim()) return NextResponse.json({ error: "Вкажіть пряме посилання на фід" }, { status: 400 });
+  if (body.interval_minutes != null && !(IMPORT_INTERVALS as readonly number[]).includes(Number(body.interval_minutes)))
+    return NextResponse.json({ error: "Оберіть доступний інтервал оновлення" }, { status: 400 });
   try {
     await updateImportSource(id, body);
     return NextResponse.json({ ok: true });

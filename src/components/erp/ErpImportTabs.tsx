@@ -34,7 +34,7 @@ export function ErpImportTabs({
   onImported?: (msg: string) => void;
   onGoToCatalog?: () => void;
 } = {}) {
-  const [tab, setTab] = useState<ImportTab>("sources");
+  const [tab, setTab] = useState<ImportTab>("operations");
 
   function downloadCatalog(format: "csv" | "xlsx") {
     const a = document.createElement("a");
@@ -57,8 +57,8 @@ export function ErpImportTabs({
       <div className={isModal ? "max-h-[70vh] overflow-y-auto p-6" : undefined}>
         <SubTabs
           tabs={[
-            { id: "sources", label: "Джерела даних" },
-            { id: "operations", label: "Операції" },
+            { id: "operations", label: "Імпорт із файлу" },
+            { id: "sources", label: "Автооновлення" },
           ]}
           active={tab}
           onChange={setTab}
@@ -68,9 +68,6 @@ export function ErpImportTabs({
 
         {tab === "operations" && (
           <>
-            <p className="mb-4 text-[13px] text-[#8a94a0]">
-              <b className="text-[#2b2d42]">Оберіть файл</b> — таблиця ОСТАТКИ (.csv) оновлює наявність і ціни, а рядок без товару в каталозі сам створює нову картку.
-            </p>
             <ErpImport onBack={onClose} onImported={onImported} onGoToCatalog={onGoToCatalog} />
 
             <div className="mt-6 flex items-center gap-3 border-t border-[#e6eaec] pt-4 text-[12px] text-[#8a94a0]">

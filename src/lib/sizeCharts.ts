@@ -1,4 +1,4 @@
-import { q, q1 } from "./pg";
+import { q } from "./pg";
 
 /**
  * Size charts (Intertop 2.10 guide "Розмірні сітки") — typed charts, each
@@ -84,17 +84,7 @@ export async function listSizeCharts(): Promise<SizeChart[]> {
   return q<SizeChart>(`SELECT id::text, code, type, brand, name, gender, chart, created_at::text, updated_at::text FROM size_charts ORDER BY updated_at DESC`);
 }
 
-async function assertCodeFree(code: string, excludeId?: number): Promise<void> {
-  if (!code) return; // empty code = unbound, duplicates allowed
-  const dupe = await q1<{ id: string }>(
-    `SELECT id::text FROM size_charts WHERE code = $1 AND id <> $2 LIMIT 1`,
-    [code, excludeId ?? -1],
-  );
-  if (dupe) throw new Error(`Код «${code}» вже використовується іншою розмірною сіткою`);
-}
-
 export async function createSizeChart(input: SizeChartInput): Promise<{ id: string }> {
-  await assertCodeFree(input.code);
   const rows = await q<{ id: string }>(
     `INSERT INTO size_charts (code, type, brand, name, gender, chart) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id::text`,
     [input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart)],
@@ -103,7 +93,6 @@ export async function createSizeChart(input: SizeChartInput): Promise<{ id: stri
 }
 
 export async function updateSizeChart(id: number, input: SizeChartInput): Promise<void> {
-  await assertCodeFree(input.code, id);
   await q(
     `UPDATE size_charts SET code = $2, type = $3, brand = $4, name = $5, gender = $6, chart = $7, updated_at = now() WHERE id = $1`,
     [id, input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart)],

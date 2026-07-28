@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { bulkProducts, bulkUpdateProducts, type BulkAction, type AdminProductInput } from "@/lib/products";
+import { bulkProducts, bulkUpdateProducts, publishAllProducts, type BulkAction, type AdminProductInput } from "@/lib/products";
 import { logActivity } from "@/lib/activity";
 
 const ACTION_LABEL: Record<string, string> = {
@@ -20,12 +20,21 @@ const SKIP_REASON: Record<string, string> = {
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const { ids, action } = (await req.json()) as { ids: string[]; action: BulkAction };
+  const { ids, action } = (await req.json()) as { ids?: string[]; action: BulkAction | "publish_all" };
+  if (action === "publish_all") {
+    try {
+      const count = await publishAllProducts();
+      await logActivity("save", `Опубліковано весь каталог без обмеження за фото — ${count} товарів`, count);
+      return NextResponse.json({ ok: true, count, skipped: 0 });
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 400 });
+    }
+  }
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: "Не обрано товарів" }, { status: 400 });
   }
   try {
-    const { count, skipped } = await bulkProducts(ids, action);
+    const { count, skipped } = await bulkProducts(ids, action as BulkAction);
     const summary = `Масова дія: ${ACTION_LABEL[action] ?? action} — ${count} товарів` + (skipped ? ` (${skipped} пропущено — ${SKIP_REASON[action] ?? "не підходять"})` : "");
     await logActivity(action === "delete" ? "delete" : "save", summary, count);
     return NextResponse.json({ ok: true, count, skipped });

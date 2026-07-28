@@ -99,38 +99,6 @@ export async function listAdminVariants(
   return { variants: variants as AdminVariant[], total: Number(countRow?.cnt ?? 0) };
 }
 
-/**
- * Recompute products.is_in_stock = SUM(active variant stock) > 0 for the
- * given product ids — the single source of truth every call site below
- * shares (was 3 separate copy-pasted UPDATEs before this fix).
- *
- * Correctness note: this MUST touch every id in `productIds`, not just ids
- * that happen to still have an active variant row. The previous version did
- * `UPDATE products p FROM (SELECT ... WHERE active GROUP BY product_id) sub
- * WHERE p.id = sub.product_id` — an inner join against a subquery that
- * simply has no row for a product with zero active variants (e.g. every
- * size just got deactivated). That product's id never matched `sub`, so the
- * UPDATE silently skipped it and is_in_stock stayed stuck at its previous
- * (often TRUE) value forever — the product kept showing "в наявності" and
- * stayed live with no real purchasable offers. A per-id scalar subquery has
- * no such gap: it evaluates (and writes) for every id in WHERE p.id = ANY(),
- * defaulting to FALSE via COALESCE when there's no active variant at all.
- */
-async function recomputeStockMirror(productIds: number[]): Promise<void> {
-  const ids = [...new Set(productIds)];
-  if (ids.length === 0) return;
-  await q(
-    `UPDATE products p
-        SET is_in_stock = COALESCE(
-              (SELECT SUM(v.stock_qty) FROM product_variants v WHERE v.product_id = p.id AND v.active) > 0,
-              FALSE
-            ),
-            updated_at = now()
-      WHERE p.id = ANY($1)`,
-    [ids],
-  );
-}
-
 export type VariantPatch = {
   stock_qty?: number;
   price?: number | null;
@@ -171,12 +139,18 @@ export async function bulkUpdateVariants(ids: string[], patch: VariantPatch): Pr
   sets.push(`updated_at = now()`, `updated_by = 'admin'`);
 
   bind.push(idNums);
-  const touched = await q<{ product_id: string }>(
-    `UPDATE product_variants SET ${sets.join(", ")} WHERE id = ANY($${bind.length}) RETURNING product_id::text`, bind,
-  );
+  await q(`UPDATE product_variants SET ${sets.join(", ")} WHERE id = ANY($${bind.length})`, bind);
 
   // Recompute the stock mirror on the parent products of the edited variants.
-  await recomputeStockMirror(touched.map((r) => Number(r.product_id)));
+  await q(
+    `UPDATE products p
+        SET is_in_stock = (sub.total > 0), updated_at = now()
+       FROM (SELECT product_id, COALESCE(SUM(stock_qty), 0) AS total
+               FROM product_variants WHERE active GROUP BY product_id) sub
+      WHERE p.id = sub.product_id
+        AND p.id IN (SELECT product_id FROM product_variants WHERE id = ANY($1))`,
+    [idNums],
+  );
   return idNums.length;
 }
 
@@ -211,7 +185,14 @@ export async function updateVariantsIndividually(updates: { id: string; patch: V
     if (res.length) { n++; touchedProducts.add(Number(res[0].product_id)); }
   }
   if (touchedProducts.size) {
-    await recomputeStockMirror([...touchedProducts]);
+    await q(
+      `UPDATE products p
+          SET is_in_stock = (sub.total > 0), updated_at = now()
+         FROM (SELECT product_id, COALESCE(SUM(stock_qty), 0) AS total
+                 FROM product_variants WHERE active GROUP BY product_id) sub
+        WHERE p.id = sub.product_id AND p.id = ANY($1)`,
+      [[...touchedProducts]],
+    );
   }
   return n;
 }
@@ -267,7 +248,14 @@ export async function createVariants(productId: number, inputs: NewVariantInput[
     if (row) created++;
   }
   if (created > 0) {
-    await recomputeStockMirror([productId]);
+    await q(
+      `UPDATE products p
+          SET is_in_stock = (sub.total > 0), updated_at = now()
+         FROM (SELECT product_id, COALESCE(SUM(stock_qty), 0) AS total
+                 FROM product_variants WHERE active GROUP BY product_id) sub
+        WHERE p.id = sub.product_id AND p.id = $1`,
+      [productId],
+    );
   }
   return { created, skippedExisting: inputs.length - created };
 }

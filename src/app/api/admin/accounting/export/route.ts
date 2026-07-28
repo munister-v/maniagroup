@@ -109,15 +109,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (format === "pdf") {
-      // Same fix as accounting/route.ts: only exclude cancelled/refunded by
-      // default — appending it unconditionally self-contradicted for an
-      // explicit status='cancelled'/'refunded' filter (always 0 rows) while
-      // the exported table itself still showed the real matching orders.
       const summRow = await q1<{ revenue: string; orders: string; discounts: string }>(
         `SELECT COALESCE(SUM(total),0)::int::text AS revenue,
-                COUNT(*)::text AS orders,
+                COUNT(*) FILTER (WHERE status NOT IN ('cancelled','refunded'))::text AS orders,
                 COALESCE(SUM(discount),0)::int::text AS discounts
-         FROM orders o WHERE ${conds.join(" AND ")}${status ? "" : " AND status NOT IN ('cancelled','refunded')"}`,
+         FROM orders o WHERE ${conds.join(" AND ")} AND status NOT IN ('cancelled','refunded')`,
         bind,
       );
       const tRows = rows.map((r) => `

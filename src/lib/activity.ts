@@ -49,10 +49,10 @@ export async function logActivity(
   }
 }
 
-export async function recentActivity(limit = KEEP_ROWS): Promise<ActivityRow[]> {
+export async function recentActivity(limit = 40): Promise<ActivityRow[]> {
   return q<ActivityRow>(
     "SELECT id::text, action, summary, count, author, created_at::text FROM admin_activity ORDER BY id DESC LIMIT $1",
-    [Math.min(KEEP_ROWS, Math.max(1, limit))],
+    [Math.min(200, Math.max(1, limit))],
   );
 }
 

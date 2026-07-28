@@ -28,18 +28,10 @@ export async function GET(req: NextRequest) {
   // ── Dashboard KPIs (revenue, COGS, gross/net profit, margin) ──────────────
   if (report === "dashboard") {
     const { where, bind } = dateConds();
-    // Revenue comes from orders.total (post-discount), matching AdminAccounting —
-    // computed in its own query since joining order_items for COGS would
-    // otherwise duplicate the order total once per line item.
-    const revRow = await q1<{ revenue: string; orders: string }>(
-      `SELECT COALESCE(SUM(total),0)::float::text AS revenue,
-              COUNT(*)::text                      AS orders
-       FROM orders o
-       WHERE ${SOLD}${where}`,
-      bind,
-    );
-    const cogsRow = await q1<{ cogs: string }>(
-      `SELECT COALESCE(SUM(${cogs} * oi.quantity),0)::float::text AS cogs
+    const rev = await q1<{ revenue: string; orders: string; cogs: string }>(
+      `SELECT COALESCE(SUM(oi.line_total),0)::float::text       AS revenue,
+              COUNT(DISTINCT o.id)::text                         AS orders,
+              COALESCE(SUM(${cogs} * oi.quantity),0)::float::text AS cogs
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN products p ON p.id = oi.product_id
@@ -52,14 +44,14 @@ export async function GET(req: NextRequest) {
        WHERE 1=1${from ? " AND spent_on >= $1" : ""}${to ? ` AND spent_on <= $${from ? 2 : 1}` : ""}`,
       [from, to].filter(Boolean),
     );
-    const revenue = Number(revRow?.revenue ?? 0);
-    const cogsVal = Number(cogsRow?.cogs ?? 0);
+    const revenue = Number(rev?.revenue ?? 0);
+    const cogsVal = Number(rev?.cogs ?? 0);
     const expenses = Number(expRow?.total ?? 0);
     const gross = revenue - cogsVal;
     const net = gross - expenses;
     return NextResponse.json({
       revenue, cogs: cogsVal, gross, expenses, net,
-      orders: Number(revRow?.orders ?? 0),
+      orders: Number(rev?.orders ?? 0),
       grossMargin: revenue > 0 ? gross / revenue : 0,
       netMargin: revenue > 0 ? net / revenue : 0,
       settings,
@@ -69,19 +61,9 @@ export async function GET(req: NextRequest) {
   // ── Profit & Loss by month for a year ─────────────────────────────────────
   if (report === "pnl") {
     const year = parseInt(sp.get("year") ?? String(new Date().getFullYear()), 10);
-    // Revenue is aggregated from orders.total (post-discount) separately from
-    // the order_items join used for COGS — see the dashboard report above.
-    const revRows = await q<{ month: string; revenue: string }>(
-      `SELECT TO_CHAR(created_at AT TIME ZONE 'Europe/Kiev','YYYY-MM') AS month,
-              COALESCE(SUM(total),0)::float::text                     AS revenue
-       FROM orders o
-       WHERE ${SOLD} AND created_at >= $1 AND created_at < $2
-       GROUP BY 1`,
-      [`${year}-01-01`, `${year + 1}-01-01`],
-    );
-    const revByMonth = new Map(revRows.map((r) => [r.month, Number(r.revenue)]));
-    const rows = await q<{ month: string; cogs: string }>(
+    const rows = await q<{ month: string; revenue: string; cogs: string }>(
       `SELECT TO_CHAR(o.created_at AT TIME ZONE 'Europe/Kiev','YYYY-MM') AS month,
+              COALESCE(SUM(oi.line_total),0)::float::text        AS revenue,
               COALESCE(SUM(${cogs} * oi.quantity),0)::float::text AS cogs
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
@@ -98,7 +80,7 @@ export async function GET(req: NextRequest) {
     );
     const expByMonth = new Map(exp.map((e) => [e.month, Number(e.total)]));
     const months = rows.map((r) => {
-      const revenue = revByMonth.get(r.month) ?? 0, cogsV = Number(r.cogs);
+      const revenue = Number(r.revenue), cogsV = Number(r.cogs);
       const expenses = expByMonth.get(r.month) ?? 0;
       const gross = revenue - cogsV;
       return { month: r.month, revenue, cogs: cogsV, gross, expenses, net: gross - expenses };

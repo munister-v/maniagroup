@@ -4,7 +4,6 @@ import type { Metadata } from "next";
 import { Reveal } from "@/components/Reveal";
 import { formatPrice } from "@/lib/catalog";
 import { AddToCartButton } from "@/components/AddToCartButton";
-import { SizeChartButton } from "@/components/SizeChartModal";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductMedia } from "@/components/ProductMedia";
 import { ProductGallery } from "@/components/ProductGallery";
@@ -53,6 +52,7 @@ export default async function ProductPage({
   return <ProductView detail={detail} related={related} />;
 }
 
+
 function ProductView({
   detail,
   related,
@@ -60,7 +60,8 @@ function ProductView({
   detail: DbProductDetail;
   related: DbProductDetail["product"][];
 }) {
-  const { product, images, sizes, sizeVariants, composition, color, season, country, inStock, sizeChartCode } = detail;
+  const { product, images, sizes, sizeVariants, composition, color, season, country, inStock } = detail;
+
   const gallery = images.map((img, i) => ({
     id: i,
     src: img.src,
@@ -148,12 +149,6 @@ function ProductView({
                 </span>
               )}
             </div>
-
-            {sizes.length > 0 && (
-              <div className="mt-6">
-                <SizeChartButton brand={product.brand} gender={product.gender} sizeChartCode={sizeChartCode} />
-              </div>
-            )}
 
             {inStock ? (
               <AddToCartButton inStock={inStock} productId={product.id} sizes={sizes} sizeVariants={sizeVariants} />

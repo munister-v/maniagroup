@@ -74,7 +74,7 @@ export async function GET() {
     lastImport = Array.isArray(arr) && arr.length ? arr[0] : null;
   } catch { /* none */ }
 
-  const activity = await recentActivity().catch(() => []);
+  const activity = await recentActivity(40).catch(() => []);
 
   return NextResponse.json({
     db,

@@ -470,6 +470,24 @@ export async function wipeAllProducts(): Promise<number> {
 
 export type BulkAction = "publish" | "unpublish" | "in_stock" | "out_of_stock" | "feature" | "unfeature" | "show_without_photo" | "hide_without_photo" | "delete" | "archive";
 
+/**
+ * Makes the complete catalog visible in one deliberate admin action. Products
+ * without images receive the existing per-product storefront override, so the
+ * global photo requirement can stay enabled for future products.
+ */
+export async function publishAllProducts(): Promise<number> {
+  const rows = await q(
+    `UPDATE products
+        SET status = 'publish',
+            moderation_status = 'approved',
+            show_without_photo = TRUE,
+            ever_published = TRUE,
+            updated_at = now()
+      RETURNING id`,
+  );
+  return rows.length;
+}
+
 /** Guide 2.7: bulk archiving is capped at 100 cards per call. */
 const BULK_ARCHIVE_LIMIT = 100;
 

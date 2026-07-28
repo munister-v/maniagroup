@@ -8,7 +8,7 @@ import { logActivity } from "@/lib/activity";
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
   const { id } = await params;
-  const result = await runImportSource(id);
+  const result = await runImportSource(id, { manual: true });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   if (!result.skipped) {
     logActivity("save", `Джерело #${id}: ${result.matchedRows} поз., ${result.productsCreated} нових товарів`, result.matchedRows);

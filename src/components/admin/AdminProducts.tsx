@@ -447,7 +447,7 @@ export function AdminProducts({ onToast, initialOpen, onClose }: {
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[3px] border border-[#2b2d42] bg-[#2b2d42] px-3 py-2 text-white">
           <span className="text-[12px]">Обрано: {selected.size}</span>
           <span className="mx-1 h-4 w-px bg-white/20" />
-          <BulkBtn onClick={() => bulk("publish", "Надіслано на модерацію")}>На модерацію</BulkBtn>
+          <BulkBtn onClick={() => bulk("publish", "Опубліковано")}>Опублікувати</BulkBtn>
           <BulkBtn onClick={() => bulk("unpublish", "Знято з публікації")}>Сховати</BulkBtn>
           <BulkBtn onClick={() => bulk("in_stock", "В наявності")}>В наявності</BulkBtn>
           <BulkBtn onClick={() => bulk("out_of_stock", "Немає в наявності")}>Немає</BulkBtn>
@@ -710,54 +710,16 @@ export function AdminProducts({ onToast, initialOpen, onClose }: {
 
               <DetailCard title="Публікація">
                 <div className="flex items-center gap-4">
-                  {current?.variants?.length ? (
-                    <label className="flex items-center gap-2 text-[13px] text-[#8a94a0]" title="Розраховується автоматично із залишків розмірів — редагуйте у вкладці «Розміри», а не тут">
-                      <input type="checkbox" checked={draft.is_in_stock} disabled className="cursor-not-allowed" /> В наявності
-                    </label>
-                  ) : (
-                    <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
-                      <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
-                    </label>
-                  )}
                   <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
-                    <input
-                      type="checkbox"
-                      checked={draft.status === "publish"}
-                      onChange={(e) => {
-                        const wantPublish = e.target.checked;
-                        if (!current) {
-                          // New, unsaved product — no server-side moderation state
-                          // yet; createProduct() always starts it at moderation_status
-                          // 'draft' regardless, so there's nothing to bypass here.
-                          setDraft({ ...draft, status: wantPublish ? "publish" : "draft" });
-                          return;
-                        }
-                        if (wantPublish && current.moderation_status !== "approved") {
-                          // Moderation-bypass guard — same rule as bulk «На модерацію»
-                          // (lib/products.ts bulkProducts 'publish'): a never-reviewed
-                          // or rejected product must go through the review queue, not
-                          // straight to live. Previously this checkbox wrote
-                          // status='publish' directly, making the product genuinely
-                          // live to customers (lib/productSource.ts gates on status
-                          // alone) without ever having been approved.
-                          transition({ moderation_status: "pending" }, "Чернетка → На модерації");
-                          return;
-                        }
-                        if (!wantPublish && current.moderation_status !== "draft") {
-                          // Keep status and moderation_status in sync on the way down
-                          // too, so an approved product hidden this way doesn't strand
-                          // "Підтверджено" on its own card while the list shows it hidden.
-                          transition({ moderation_status: "draft", status: "draft" }, "→ Чернетка");
-                          return;
-                        }
-                        setDraft({ ...draft, status: wantPublish ? "publish" : "draft" });
-                      }}
-                    /> Опубліковано
+                    <input type="checkbox" checked={draft.is_in_stock} onChange={(e) => setDraft({ ...draft, is_in_stock: e.target.checked })} /> В наявності
+                  </label>
+                  <label className="flex items-center gap-2 text-[13px] text-[#2b2d42]">
+                    <input type="checkbox" checked={draft.status === "publish"} onChange={(e) => setDraft({ ...draft, status: e.target.checked ? "publish" : "draft" })} /> Опубліковано
                   </label>
                 </div>
                 {editorId !== "new" && (
                   <p className="mt-2 text-[11px] text-[#8a94a0]">
-                    Публікація вимагає підтвердження модерацією («Загальні дані» вище) — цей перемикач сам надішле товар на модерацію, якщо він ще не підтверджений.
+                    Ручний перемикач для швидкого правлення — офіційний робочий процес модерації вище («Загальні дані») теж керує цим полем.
                   </p>
                 )}
               </DetailCard>

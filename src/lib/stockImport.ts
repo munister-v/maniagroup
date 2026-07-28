@@ -105,12 +105,49 @@ export type UnmatchedItem = {
 // sticks to the first header cell ("﻿external_Id") so that column never
 // matches a synonym and silently parses as empty (broke SKU matching).
 const norm = (v: unknown) => String(v ?? "").replace(/﻿/g, "").trim().toLowerCase();
+
+/**
+ * Supplier spreadsheets rarely keep header spelling stable: spaces become
+ * underscores, dots appear after abbreviations, and Ukrainian/Russian labels
+ * are mixed in the same export. Keep value normalization conservative, but
+ * compare headers through one punctuation-insensitive representation.
+ */
+const headerNorm = (v: unknown) => norm(v)
+  .replace(/[’']/g, "")
+  .replace(/[.\-\/\\]+/g, " ")
+  .replace(/[()[\]{}]/g, " ")
+  .replace(/\s+/g, "_")
+  .replace(/_+/g, "_")
+  .replace(/^_|_$/g, "");
+
+const headerMatches = (cell: string, aliases: string[]) =>
+  aliases.some((alias) => cell === headerNorm(alias));
+
 function num(v: unknown): number {
-  const n = Number(String(v ?? "").replace(/\s/g, "").replace(",", "."));
+  let raw = String(v ?? "")
+    .replace(/[\s\u00a0\u202f]/g, "")
+    .replace(/[^0-9,.-]/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  if (comma >= 0 && dot >= 0) {
+    const decimal = comma > dot ? "," : ".";
+    const thousands = decimal === "," ? /\./g : /,/g;
+    raw = raw.replace(thousands, "").replace(decimal, ".");
+  } else if (comma >= 0) {
+    const digitsAfter = raw.length - comma - 1;
+    raw = digitsAfter === 3 && raw.indexOf(",") === comma
+      ? raw.replace(",", "")
+      : raw.replace(",", ".");
+  } else if (dot >= 0) {
+    const digitsAfter = raw.length - dot - 1;
+    if (digitsAfter === 3 && raw.indexOf(".") === dot) raw = raw.replace(".", "");
+  }
+  const n = Number(raw);
   return Number.isFinite(n) ? n : 0;
 }
 
-export function readGrid(buf: Buffer, filename: string): unknown[][] {
+export function readGrids(buf: Buffer, filename: string): unknown[][][] {
   const isXls = /\.xls$/i.test(filename);
   // Strip a leading UTF-8 BOM (EF BB BF). SheetJS with codepage 65001 mishandles
   // it on CSVs and eats the first 2 chars of cell 0 ("external_Id" → "ternal_Id"),
@@ -119,8 +156,13 @@ export function readGrid(buf: Buffer, filename: string): unknown[][] {
     buf = buf.subarray(3);
   }
   const wb = XLSX.read(buf, { type: "buffer", codepage: isXls ? 1251 : 65001 });
-  const sh = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json<unknown[]>(sh, { header: 1, defval: "", blankrows: false });
+  return wb.SheetNames.map((name) =>
+    XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: "", blankrows: false }),
+  ).filter((grid) => grid.length > 0);
+}
+
+export function readGrid(buf: Buffer, filename: string): unknown[][] {
+  return readGrids(buf, filename)[0] ?? [];
 }
 
 // Column synonyms for the OFFERS format's required fields (machine keys +
@@ -144,17 +186,17 @@ export function readGrid(buf: Buffer, filename: string): unknown[][] {
 // we actually store it in.
 type OfferReqKey = Exclude<keyof OfferRow, "product">;
 const OFFER_SYN: Record<OfferReqKey, string[]> = {
-  external_id:     ["external_id", "код товару", "external_code"],
-  factory_article: ["factory_article", "заводський артикул"],
-  article:         ["article", "артикул"],
-  barcode:         ["barcode", "штрихкод"],
-  size:            ["size", "розмір"],
-  clother_size:    ["clother_size", "розмір одягу"],
-  offer_code:      ["offer_code", "код оффера"],
-  quantity:        ["quantity", "кількість", "наявність", "qty"],
-  base_price:      ["base_price", "базова ціна", "ціна"],
-  discount_price:  ["discount_price", "акційна ціна"],
-  active:          ["active", "активність", "активность"],
+  external_id:     ["external_id", "external id", "код товару", "код продукта", "product id", "external_code", "id товару"],
+  factory_article: ["factory_article", "factory article", "заводський артикул", "заводской артикул", "артикул постачальника", "артикул поставщика", "vendor code"],
+  article:         ["article", "sku", "артикул", "код моделі", "код модели", "model code"],
+  barcode:         ["barcode", "штрихкод", "штрих код", "ean", "ean13", "gtin"],
+  size:            ["size", "розмір", "размер", "розмір товару", "размер товара", "sku size"],
+  clother_size:    ["clother_size", "clother size", "розмір одягу", "размер одежды"],
+  offer_code:      ["offer_code", "offer code", "код оферу", "код оффера", "код пропозиції", "код предложения", "sku пропозиції"],
+  quantity:        ["quantity", "кількість", "количество", "наявність", "остаток", "залишок", "stock", "stock qty", "qty"],
+  base_price:      ["base_price", "base price", "базова ціна", "базовая цена", "ціна", "цена", "regular price", "price"],
+  discount_price:  ["discount_price", "discount price", "акційна ціна", "акционная цена", "ціна зі знижкою", "sale price", "promo price"],
+  active:          ["active", "активність", "активность", "enabled", "status"],
 };
 
 // Descriptive columns odezda-style rich OFFERS files carry — optional, only
@@ -169,25 +211,25 @@ const OFFER_SYN: Record<OfferReqKey, string[]> = {
 // "group" by mistake, which would have silently written the constant "Одяг"
 // into every auto-created product's category instead of its real one.
 const PRODUCT_SYN: Record<keyof OfferProductInfo, string[]> = {
-  name_uk:          ["product_name[uk]", "назва (укр)", "назва (укр.)"],
-  name_ru:          ["product_name[ru]", "назва (рос)", "назва (рос.)"],
-  description_uk:   ["product_description[uk]", "опис (укр)", "опис (укр.)"],
-  description_ru:   ["product_description[ru]", "опис (рос)", "опис (рос.)"],
-  brand:            ["brand", "бренд"],
-  category:         ["good_type", "вид товара"],
-  color:            ["color", "колір"],
-  country:          ["country", "країна"],
-  gender:           ["gender_sap", "гендер sap"],
+  name_uk:          ["product_name[uk]", "product name uk", "назва (укр)", "назва товару", "название укр"],
+  name_ru:          ["product_name[ru]", "product name ru", "назва (рос)", "название товара", "название рус"],
+  description_uk:   ["product_description[uk]", "description uk", "опис (укр)", "опис товару"],
+  description_ru:   ["product_description[ru]", "description ru", "опис (рос)", "описание товара"],
+  brand:            ["brand", "бренд", "виробник", "производитель"],
+  category:         ["good_type", "вид товара", "категорія", "категория", "product type"],
+  color:            ["color", "колір", "цвет"],
+  country:          ["country", "країна", "страна", "country of origin"],
+  gender:           ["gender_sap", "gender sap", "гендер sap", "стать", "пол", "gender"],
   composition_uk:   ["composition[uk]", "склад(укр.)", "склад (укр.)"],
   composition_ru:   ["composition[ru]", "склад(рос.)", "склад (рос.)"],
-  material:         ["material", "матеріал верху"],
-  subtype:          ["podvid", "підвид"],
+  material:         ["material", "матеріал верху", "материал верха"],
+  subtype:          ["podvid", "підвид", "подвид"],
 };
 
 function offerColumns(cells: string[]): Record<OfferReqKey, number> | null {
   const idx = {} as Record<OfferReqKey, number>;
   (Object.keys(OFFER_SYN) as OfferReqKey[]).forEach((k) => {
-    idx[k] = cells.findIndex((c) => OFFER_SYN[k].includes(c));
+    idx[k] = cells.findIndex((c) => headerMatches(c, OFFER_SYN[k]));
   });
   // Most real feeds are per-size (fashion), but some categories genuinely have
   // no size (e.g. beauty/cosmetics — Intertop's own agora template for that
@@ -204,7 +246,7 @@ function offerColumns(cells: string[]): Record<OfferReqKey, number> | null {
 function productColumns(cells: string[]): Record<keyof OfferProductInfo, number> {
   const idx = {} as Record<keyof OfferProductInfo, number>;
   (Object.keys(PRODUCT_SYN) as (keyof OfferProductInfo)[]).forEach((k) => {
-    idx[k] = cells.findIndex((c) => PRODUCT_SYN[k].includes(c));
+    idx[k] = cells.findIndex((c) => headerMatches(c, PRODUCT_SYN[k]));
   });
   return idx;
 }
@@ -279,34 +321,40 @@ export function parseImport(buf: Buffer, filename: string): Parsed {
     const rows = parseXmlOffers(buf.toString("utf8"));
     return rows.length > 0 ? { kind: "offers", filename, rows } : { kind: "unknown", filename, rows: [] };
   }
-  const grid = readGrid(buf, filename);
-  const head = grid.slice(0, 12);
+  const grids = readGrids(buf, filename);
 
-  // WP (WooCommerce export): has Type column with variable/variation values.
-  for (let i = 0; i < head.length; i++) {
-    const cells = (grid[i] ?? []).map(norm);
-    if (cells.includes("type") && cells.some((c) => c === "sku" || c === "id") && cells.some((c) => c.includes("attribute"))) {
-      const rows = parseWp(grid, i);
-      if (rows.length > 0) return { kind: "offers", filename, rows };
+  // Check every sheet. Supplier workbooks often open on an instruction/cover
+  // sheet while the real table lives on sheet 2 or 3. Forty leading rows are
+  // enough for branded report headers without scanning an entire workbook.
+  for (const grid of grids) {
+    const head = grid.slice(0, 40);
+
+    // WP (WooCommerce export): has Type column with variable/variation values.
+    for (let i = 0; i < head.length; i++) {
+      const cells = (grid[i] ?? []).map(headerNorm);
+      if (cells.includes("type") && cells.some((c) => c === "sku" || c === "id") && cells.some((c) => c.includes("attribute"))) {
+        const rows = parseWp(grid, i);
+        if (rows.length > 0) return { kind: "offers", filename, rows };
+      }
     }
-  }
-  // OFFERS: a header row with size + price/quantity columns. odezda.xlsx has
-  // a SECOND header row right under it (machine keys) — check that one too,
-  // since either row may carry the labels that actually match our synonyms,
-  // and grab descriptive columns from whichever row matches.
-  for (let i = 0; i < head.length; i++) {
-    const cells = (grid[i] ?? []).map(norm);
-    const idx = offerColumns(cells);
-    if (idx) {
-      const prodIdx = productColumns(cells);
-      const altCells = (grid[i + 1] ?? []).map(norm);
-      const altProdIdx = productColumns(altCells);
-      // Merge: prefer this row's match, fall back to the row right below it.
-      (Object.keys(prodIdx) as (keyof OfferProductInfo)[]).forEach((k) => {
-        if (prodIdx[k] < 0 && altProdIdx[k] >= 0) prodIdx[k] = altProdIdx[k];
-      });
-      const dataStart = altCells.some((c) => c === "size" || c === "clother_size" || c === "article") ? i + 2 : i + 1;
-      return { kind: "offers", filename, rows: parseOffers(grid, dataStart, idx, prodIdx) };
+
+    // OFFERS: a header row with an identifier + price/quantity columns.
+    for (let i = 0; i < head.length; i++) {
+      const cells = (grid[i] ?? []).map(headerNorm);
+      const idx = offerColumns(cells);
+      if (idx) {
+        const prodIdx = productColumns(cells);
+        const altCells = (grid[i + 1] ?? []).map(headerNorm);
+        const altProdIdx = productColumns(altCells);
+        // Merge: prefer this row's match, fall back to the row right below it.
+        (Object.keys(prodIdx) as (keyof OfferProductInfo)[]).forEach((k) => {
+          if (prodIdx[k] < 0 && altProdIdx[k] >= 0) prodIdx[k] = altProdIdx[k];
+        });
+        const machineHeaders = ["size", "clother_size", "article", "factory_article", "quantity", "base_price"];
+        const dataStart = altCells.some((c) => machineHeaders.includes(c)) ? i + 2 : i + 1;
+        const rows = parseOffers(grid, dataStart, idx, prodIdx);
+        if (rows.length > 0) return { kind: "offers", filename, rows };
+      }
     }
   }
   return { kind: "unknown", filename, rows: [] };
@@ -314,8 +362,8 @@ export function parseImport(buf: Buffer, filename: string): Parsed {
 
 /** Parse WooCommerce product export (variable/variation rows) into OfferRow[]. */
 function parseWp(grid: unknown[][], headerRow: number): OfferRow[] {
-  const cells = (grid[headerRow] ?? []).map(norm);
-  const ci = (names: string[]) => cells.findIndex((c) => names.some((n) => c === n || c.replace(/\s/g, "_") === n));
+  const cells = (grid[headerRow] ?? []).map(headerNorm);
+  const ci = (names: string[]) => cells.findIndex((c) => names.some((n) => c === headerNorm(n)));
   const typeCol = ci(["type"]);
   const idCol = ci(["id"]);
   const skuCol = ci(["sku"]);
@@ -411,7 +459,13 @@ export async function parseImportSmart(buf: Buffer, filename: string): Promise<P
   const fast = parseImport(buf, filename);
   if (fast.kind !== "unknown") return fast;
 
-  const grid = readGrid(buf, filename);
+  const grids = readGrids(buf, filename);
+  // If deterministic recognition failed, give AI the sheet most likely to be
+  // a data table rather than blindly passing the workbook's cover sheet.
+  const grid = grids.sort((a, b) => {
+    const score = (g: unknown[][]) => g.slice(0, 40).reduce((best, row) => Math.max(best, row.filter((v) => String(v ?? "").trim()).length), 0) * Math.min(g.length, 5000);
+    return score(b) - score(a);
+  })[0] ?? [];
   const mapping = await aiDetectImport(grid);
   if (!mapping) return fast;
 
@@ -447,14 +501,19 @@ export type StockImportTemplate = {
  * unchanged) before rows are built.
  */
 export async function parseImportWithTemplate(buf: Buffer, filename: string, template: StockImportTemplate): Promise<Parsed> {
-  const grid = readGrid(buf, filename);
   const headerRowIdx = Math.max(0, template.header_row - 1);
+  const grids = readGrids(buf, filename);
+  // Prefer the sheet where the saved template labels actually exist. This
+  // keeps templates working when suppliers prepend a cover sheet later.
+  const grid = grids.sort((a, b) => {
+    const labels = template.columns.map((c) => headerNorm(c.raw_label));
+    const score = (g: unknown[][]) => (g[headerRowIdx] ?? []).map(headerNorm).filter((c) => labels.includes(c)).length;
+    return score(b) - score(a);
+  })[0] ?? [];
   const cells = (grid[headerRowIdx] ?? []).map((c) => String(c ?? "").trim());
   const findCol = (label: string): number => {
-    const exact = cells.findIndex((c) => c === label);
-    if (exact >= 0) return exact;
-    const lower = label.toLowerCase();
-    return cells.findIndex((c) => c.toLowerCase() === lower);
+    const normalized = headerNorm(label);
+    return cells.findIndex((c) => headerNorm(c) === normalized);
   };
 
   const idx = {} as Record<OfferReqKey, number>;
@@ -571,18 +630,22 @@ export type ImportPreview = {
   kind: ImportKind;
   filename: string;
   totalRows: number;
+  /** Rows that can actually affect the selected fields after empty rows and
+   * duplicate offer/size records are removed. */
+  processedRows: number;
+  /** Repeated offer/size rows collapsed before preview and apply. The last
+   * row in the supplier file wins, matching spreadsheet expectations. */
+  duplicateRows: number;
+  /** Rows with neither quantity nor price for the selected import mode. */
+  skippedRows: number;
   matchedRows: number;
   unmatchedRows: number;
-  /** Codes (barcode/article/sku/offer_code) that matched 2+ different
-   *  products in the DB and were skipped rather than guessed at — see
-   *  setUnlessAmbiguous in resolveOfferTargets. A non-zero count means the
-   *  supplier feed has duplicate/reused codes worth cleaning up. */
-  ambiguousKeys: number;
   affectedProducts: number;
   newProducts: number;
   newVariants: number;
   stockChanges: number;
   priceChanges: number;
+  zeroedRows: number;
   items: PreviewItem[];
   unmatched: UnmatchedItem[];
   /** @deprecated kept for old consumers — mirrors first 12 items as text */
@@ -590,6 +653,95 @@ export type ImportPreview = {
   /** @deprecated kept for old consumers — first 8 unmatched as strings */
   unmatchedSample: string[];
 };
+
+export type StockImportMode = "patch" | "snapshot";
+export type ImportOptions = {
+  stockMode?: StockImportMode;
+  sourceId?: number | null;
+  sourceName?: string;
+  updateStock?: boolean;
+  updatePrices?: boolean;
+  createMissingProducts?: boolean;
+  blankQuantity?: "ignore" | "zero";
+};
+
+const wantsStock = (options: ImportOptions) => options.updateStock !== false;
+const wantsPrices = (options: ImportOptions) => options.updatePrices !== false;
+const effectiveQty = (row: OfferRow, options: ImportOptions): number | null => {
+  if (!wantsStock(options)) return null;
+  if (row.quantity == null && options.blankQuantity === "zero") return 0;
+  return row.quantity;
+};
+
+const matchNorm = (value: string) => value.trim().toLocaleLowerCase("uk-UA");
+const barcodeNorm = (value: string) => value.trim();
+
+function rowHasSelectedValues(row: OfferRow, options: ImportOptions): boolean {
+  const hasStock = wantsStock(options) && effectiveQty(row, options) != null;
+  const hasPrice = wantsPrices(options) && (row.base_price > 0 || row.discount_price > 0);
+  return hasStock || hasPrice;
+}
+
+/**
+ * Supplier files often contain the same offer more than once after exports
+ * are joined or copied between sheets. Running every duplicate makes the
+ * outcome depend on loop order and inflates the preview. Collapse to one
+ * actionable row using the strongest variant key available; the last row in
+ * the file wins, as it does in most spreadsheet update workflows.
+ */
+function prepareOfferRows(rows: OfferRow[], options: ImportOptions): {
+  rows: OfferRow[]; duplicateRows: number; skippedRows: number;
+} {
+  const unique = new Map<string, OfferRow>();
+  let duplicateRows = 0;
+  let skippedRows = 0;
+
+  rows.forEach((row, index) => {
+    if (!rowHasSelectedValues(row, options)) {
+      skippedRows++;
+      return;
+    }
+    const offerKey = row.offer_code ? `offer:${matchNorm(row.offer_code)}` : "";
+    const barcodeKey = row.barcode ? `barcode:${barcodeNorm(row.barcode)}` : "";
+    const productKey = row.article || row.factory_article || row.external_id;
+    const fallbackKey = productKey
+      ? `product:${matchNorm(productKey)}|size:${matchNorm(row.size || "ОД")}`
+      : `row:${index}`;
+    const key = offerKey || barcodeKey || fallbackKey;
+    if (unique.has(key)) duplicateRows++;
+    unique.set(key, row);
+  });
+
+  return { rows: [...unique.values()], duplicateRows, skippedRows };
+}
+
+type SnapshotCandidate = {
+  id: number; product_id: string; size: string; stock_qty: number;
+  name: string; sku: string; price: number | null;
+};
+
+async function loadSnapshotCandidates(
+  sourceId: number, affectedProducts: number[], importedVariantIds: number[],
+  client?: import("pg").PoolClient,
+): Promise<SnapshotCandidate[]> {
+  if (!affectedProducts.length && !sourceId) return [];
+  const sql = `
+    SELECT v.id, v.product_id::text, v.size, v.stock_qty,
+           p.name, p.sku, COALESCE(v.price, p.regular_price)::float AS price
+      FROM product_variants v
+      JOIN products p ON p.id = v.product_id
+     WHERE v.active AND v.stock_qty <> 0
+       AND NOT (v.id = ANY($3::bigint[]))
+       AND (
+         v.stock_source_id = $1
+         OR (v.product_id = ANY($2::bigint[]) AND (v.stock_source_id IS NULL OR v.stock_source_id = $1))
+       )`;
+  if (client) {
+    const rows = await client.query<SnapshotCandidate>(sql, [sourceId, affectedProducts, importedVariantIds]);
+    return rows.rows;
+  }
+  return q<SnapshotCandidate>(sql, [sourceId, affectedProducts, importedVariantIds]);
+}
 
 type VariantLite = { id: number; size: string; stock_qty: number; price: number | null; sale_price: number | null; barcode: string; offer_code: string };
 
@@ -612,71 +764,47 @@ async function loadProducts(ids: number[]) {
   return { byId, variantsByProduct };
 }
 
-/** Sets key→id in `map`, UNLESS the key already maps to a *different* id —
- * a duplicate factory_article/sku/offer_code/barcode across two different
- * products is a real data-quality problem (typo'd or reused code from the
- * supplier feed), and picking whichever row the DB happened to return last
- * would silently write stock/price changes to a possibly wrong product with
- * no error or warning. Once a key is flagged ambiguous it's removed from the
- * map entirely and never reconsidered, so lookups fall through to the next
- * matching strategy in the chain (or land in "unmatched" if none resolve). */
-function setUnlessAmbiguous(map: Map<string, number>, ambiguous: Set<string>, key: string, id: number): void {
-  if (ambiguous.has(key)) return;
-  const existing = map.get(key);
-  if (existing !== undefined && existing !== id) {
-    map.delete(key);
-    ambiguous.add(key);
-    return;
-  }
-  map.set(key, id);
-}
-
-/** Resolve every offer row → product id, using the matching chain.
- * `ambiguousKeys` — count of distinct codes that matched 2+ different
- * products and were therefore skipped rather than guessed at (see
- * setUnlessAmbiguous). Surfaced in ApplyResult so a duplicate barcode/article
- * in the supplier feed shows up as a warning instead of a silent wrong write. */
+/** Resolve every offer row → product id, using the matching chain. */
 export async function resolveOfferTargets(rows: OfferRow[]) {
-  const factoryArticles = [...new Set(rows.map((r) => r.factory_article).filter(Boolean))];
+  const factoryArticles = [...new Set(rows.map((r) => matchNorm(r.factory_article)).filter(Boolean))];
   // article ("Артикул" — Intertop's own internal product number) matches the
   // same products.sku column external_id does; merged into one lookup.
-  const externalIds = [...new Set(rows.flatMap((r) => [r.external_id, r.article]).filter(Boolean))];
-  const offerCodes = [...new Set(rows.map((r) => r.offer_code).filter(Boolean))];
-  const barcodes = [...new Set(rows.map((r) => r.barcode).filter(Boolean))];
+  const externalIds = [...new Set(rows.flatMap((r) => [r.external_id, r.article]).map(matchNorm).filter(Boolean))];
+  const offerCodes = [...new Set(rows.map((r) => matchNorm(r.offer_code)).filter(Boolean))];
+  const barcodes = [...new Set(rows.map((r) => barcodeNorm(r.barcode)).filter(Boolean))];
 
   const faMap = new Map<string, number>();
   const skuMap = new Map<string, number>();
   const offerMap = new Map<string, number>(); // offer_code → product_id
   const barcodeMap = new Map<string, number>();
-  const ambiguous = new Set<string>();
 
   if (factoryArticles.length) {
     for (const p of await q<{ id: string; factory_article: string }>(
-      "SELECT id::text, factory_article FROM products WHERE factory_article = ANY($1) AND factory_article <> ''", [factoryArticles]))
-      setUnlessAmbiguous(faMap, ambiguous, p.factory_article, Number(p.id));
+      "SELECT id::text, factory_article FROM products WHERE lower(btrim(factory_article)) = ANY($1::text[]) AND btrim(factory_article) <> ''", [factoryArticles]))
+      faMap.set(matchNorm(p.factory_article), Number(p.id));
   }
   if (externalIds.length) {
     for (const p of await q<{ id: string; sku: string }>(
-      "SELECT id::text, sku FROM products WHERE sku = ANY($1) AND sku <> ''", [externalIds]))
-      setUnlessAmbiguous(skuMap, ambiguous, p.sku, Number(p.id));
+      "SELECT id::text, sku FROM products WHERE lower(btrim(sku)) = ANY($1::text[]) AND btrim(sku) <> ''", [externalIds]))
+      skuMap.set(matchNorm(p.sku), Number(p.id));
   }
   if (offerCodes.length) {
     for (const v of await q<{ product_id: string; offer_code: string }>(
-      "SELECT product_id::text, offer_code FROM product_variants WHERE offer_code = ANY($1) AND offer_code <> ''", [offerCodes]))
-      setUnlessAmbiguous(offerMap, ambiguous, v.offer_code, Number(v.product_id));
+      "SELECT product_id::text, offer_code FROM product_variants WHERE lower(btrim(offer_code)) = ANY($1::text[]) AND btrim(offer_code) <> ''", [offerCodes]))
+      offerMap.set(matchNorm(v.offer_code), Number(v.product_id));
   }
   if (barcodes.length) {
     for (const v of await q<{ product_id: string; barcode: string }>(
-      "SELECT product_id::text, barcode FROM product_variants WHERE barcode = ANY($1) AND barcode <> ''", [barcodes]))
-      setUnlessAmbiguous(barcodeMap, ambiguous, v.barcode, Number(v.product_id));
+      "SELECT product_id::text, barcode FROM product_variants WHERE btrim(barcode) = ANY($1::text[]) AND btrim(barcode) <> ''", [barcodes]))
+      barcodeMap.set(barcodeNorm(v.barcode), Number(v.product_id));
   }
   const target = (r: OfferRow): number | null =>
-    (r.offer_code && offerMap.get(r.offer_code)) ||
-    (r.barcode && barcodeMap.get(r.barcode)) ||
-    (r.article && skuMap.get(r.article)) ||
-    (r.factory_article && faMap.get(r.factory_article)) ||
-    (r.external_id && skuMap.get(r.external_id)) || null;
-  return { target, ambiguousKeys: ambiguous.size };
+    (r.offer_code && offerMap.get(matchNorm(r.offer_code))) ||
+    (r.barcode && barcodeMap.get(barcodeNorm(r.barcode))) ||
+    (r.article && skuMap.get(matchNorm(r.article))) ||
+    (r.factory_article && faMap.get(matchNorm(r.factory_article))) ||
+    (r.external_id && skuMap.get(matchNorm(r.external_id))) || null;
+  return target;
 }
 
 /** Stable per-product grouping key for OFFERS rows — prefer factory_article
@@ -781,26 +909,37 @@ async function createProductFromOffer(
   return ins.rows.length ? Number(ins.rows[0].id) : id;
 }
 
-export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
+export async function previewImport(parsed: Parsed, options: ImportOptions = {}): Promise<ImportPreview> {
   const base: ImportPreview = {
     kind: parsed.kind, filename: parsed.filename, totalRows: parsed.rows.length,
-    matchedRows: 0, unmatchedRows: 0, ambiguousKeys: 0, affectedProducts: 0, newProducts: 0, newVariants: 0,
-    stockChanges: 0, priceChanges: 0, items: [], unmatched: [], sample: [], unmatchedSample: [],
+    processedRows: 0, duplicateRows: 0, skippedRows: 0,
+    matchedRows: 0, unmatchedRows: 0, affectedProducts: 0, newProducts: 0, newVariants: 0,
+    stockChanges: 0, priceChanges: 0, zeroedRows: 0, items: [], unmatched: [], sample: [], unmatchedSample: [],
   };
   if (parsed.kind === "unknown" || parsed.rows.length === 0) return base;
 
-  const rows = parsed.rows;
-  const { target, ambiguousKeys } = await resolveOfferTargets(rows);
-  base.ambiguousKeys = ambiguousKeys;
+  const prepared = prepareOfferRows(parsed.rows, options);
+  const rows = prepared.rows;
+  base.processedRows = rows.length;
+  base.duplicateRows = prepared.duplicateRows;
+  base.skippedRows = prepared.skippedRows;
+  const target = await resolveOfferTargets(rows);
   const matched = rows.map((r) => ({ r, pid: target(r) }));
   const ids = [...new Set(matched.map((m) => m.pid).filter((x): x is number => !!x))];
   const { byId, variantsByProduct } = await loadProducts(ids);
   const affected = new Set<number>();
+  const importedVariantIds = new Set<number>();
 
   // Rows that resolved to nothing but carry enough product data get grouped
   // into "will auto-create" instead of dumped in `unmatched` — see
   // groupNewProductRows. Everything else is genuinely unmatched.
-  const { toCreate, stillUnmatched } = groupNewProductRows(matched.filter((m) => !m.pid).map((m) => m.r));
+  const grouped = groupNewProductRows(matched.filter((m) => !m.pid).map((m) => m.r));
+  const toCreate = options.createMissingProducts === false
+    ? new Map<string, { product: OfferProductInfo; rows: OfferRow[] }>()
+    : grouped.toCreate;
+  const stillUnmatched = options.createMissingProducts === false
+    ? [...grouped.stillUnmatched, ...[...grouped.toCreate.values()].flatMap((g) => g.rows)]
+    : grouped.stillUnmatched;
   base.newProducts = toCreate.size;
   for (const [key, g] of toCreate) {
     const name = g.product.name_uk || g.product.name_ru || key;
@@ -809,8 +948,9 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
     base.newVariants += g.rows.length;
     if (base.items.length < 120) base.items.push({
       name, sku: g.rows[0].external_id || undefined, size: g.rows.map((r) => r.size).join(", "),
-      oldQty: null, newQty: g.rows.reduce((s, r) => s + (r.quantity ?? 0), 0),
-      oldPrice: null, newPrice: g.rows[0].base_price || null, discountPrice: g.rows[0].discount_price || null,
+      oldQty: null, newQty: wantsStock(options) ? g.rows.reduce((s, r) => s + (effectiveQty(r, options) ?? 0), 0) : null,
+      oldPrice: null, newPrice: wantsPrices(options) ? g.rows[0].base_price || null : null,
+      discountPrice: wantsPrices(options) ? g.rows[0].discount_price || null : null,
       isNew: true, moderationNote: willModerate ? "pending" : "draft",
     });
     if (base.sample.length < 12) base.sample.push({
@@ -840,26 +980,44 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
     const p = byId.get(String(pid));
     const variants = variantsByProduct.get(String(pid)) ?? [];
     const v = variants.find((x) => x.size === r.size);
+    if (v) importedVariantIds.add(Number(v.id));
     if (!v) base.newVariants++;
-    if (r.quantity != null && (!v || v.stock_qty !== r.quantity)) base.stockChanges++;
+    const rowQty = effectiveQty(r, options);
+    if (rowQty != null && (!v || v.stock_qty !== rowQty)) base.stockChanges++;
     const curPrice = v?.price ?? Number(p?.regular_price ?? 0);
-    if (r.base_price > 0 && Math.abs(r.base_price - (curPrice || 0)) > 1) base.priceChanges++;
+    if (wantsPrices(options) && r.base_price > 0 && Math.abs(r.base_price - (curPrice || 0)) > 1) base.priceChanges++;
     if (base.items.length < 120) {
       base.items.push({
         name: p?.name ?? String(pid), sku: p?.sku,
         size: r.size,
         oldQty: v ? v.stock_qty : null,
-        newQty: r.quantity,
+        newQty: rowQty,
         oldPrice: curPrice || null,
-        newPrice: r.base_price > 0 ? r.base_price : null,
-        discountPrice: r.discount_price > 0 ? r.discount_price : null,
+        newPrice: wantsPrices(options) && r.base_price > 0 ? r.base_price : null,
+        discountPrice: wantsPrices(options) && r.discount_price > 0 ? r.discount_price : null,
         isNew: !v,
       });
     }
     if (base.sample.length < 12) base.sample.push({
       name: p?.name ?? String(pid), size: r.size,
-      detail: `${r.base_price > 0 ? `${Math.round(r.base_price)}₴` : ""}${r.discount_price > 0 ? ` (акц. ${Math.round(r.discount_price)}₴)` : ""}${r.quantity != null ? ` · ${r.quantity} од` : ""}`,
+      detail: `${wantsPrices(options) && r.base_price > 0 ? `${Math.round(r.base_price)}₴` : ""}${wantsPrices(options) && r.discount_price > 0 ? ` (акц. ${Math.round(r.discount_price)}₴)` : ""}${rowQty != null ? ` · ${rowQty} од` : ""}`,
     });
+  }
+  if (wantsStock(options) && options.stockMode === "snapshot" && options.sourceId) {
+    const missing = await loadSnapshotCandidates(options.sourceId, [...affected], [...importedVariantIds]);
+    base.zeroedRows = missing.length;
+    base.stockChanges += missing.length;
+    for (const v of missing) {
+      affected.add(Number(v.product_id));
+      if (base.items.length < 120) base.items.push({
+        name: v.name, sku: v.sku, size: v.size,
+        oldQty: Number(v.stock_qty), newQty: 0,
+        oldPrice: v.price, newPrice: null, discountPrice: null, isNew: false,
+      });
+      if (base.sample.length < 12) base.sample.push({
+        name: v.name, size: v.size, detail: `${v.stock_qty} → 0 од · відсутня у повному файлі`,
+      });
+    }
   }
   base.affectedProducts = affected.size;
   return base;
@@ -867,28 +1025,55 @@ export async function previewImport(parsed: Parsed): Promise<ImportPreview> {
 
 export type ApplyResult = {
   kind: ImportKind;
-  matchedRows: number; unmatchedRows: number; ambiguousKeys: number;
+  matchedRows: number; unmatchedRows: number;
   productsCreated: number; productsUpdated: number; variantsUpserted: number; stockMovements: number;
+  runId: string | null; zeroedRows: number; stockMode: StockImportMode;
 };
 
-export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
-  const res: ApplyResult = { kind: parsed.kind, matchedRows: 0, unmatchedRows: 0, ambiguousKeys: 0, productsCreated: 0, productsUpdated: 0, variantsUpserted: 0, stockMovements: 0 };
+export async function applyImport(parsed: Parsed, options: ImportOptions = {}): Promise<ApplyResult> {
+  const stockMode = options.stockMode ?? "patch";
+  if (stockMode === "snapshot" && !options.sourceId) throw new Error("Для повного знімка виберіть джерело даних");
+  if (stockMode === "snapshot" && !wantsStock(options)) throw new Error("Повний знімок потребує оновлення залишків");
+  if (!wantsStock(options) && !wantsPrices(options)) throw new Error("Виберіть хоча б одне поле для оновлення");
+  const res: ApplyResult = {
+    kind: parsed.kind, matchedRows: 0, unmatchedRows: 0, productsCreated: 0,
+    productsUpdated: 0, variantsUpserted: 0, stockMovements: 0,
+    runId: null, zeroedRows: 0, stockMode,
+  };
   if (parsed.kind === "unknown" || parsed.rows.length === 0) return res;
+  const prepared = prepareOfferRows(parsed.rows, options);
+  // Especially important for snapshot mode: an empty/irrelevant file must
+  // never be interpreted as "the supplier has zero stock everywhere".
+  if (prepared.rows.length === 0) return res;
   const importNote = `Імпорт: ${parsed.filename}`;
   const client = await pool.connect();
   const affected = new Set<number>();
+  const importedVariantIds = new Set<number>();
   try {
     await client.query("BEGIN");
 
-    const rows = parsed.rows;
-    const { target, ambiguousKeys } = await resolveOfferTargets(rows);
-    res.ambiguousKeys = ambiguousKeys;
+    const run = await client.query<{ id: string }>(
+      `INSERT INTO inventory_import_runs
+         (source_id, source_name, filename, import_kind, stock_mode, total_rows)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id::text`,
+      [options.sourceId ?? null, options.sourceName ?? "", parsed.filename, parsed.kind, stockMode, parsed.rows.length],
+    );
+    res.runId = run.rows[0].id;
+
+    const rows = prepared.rows;
+    const target = await resolveOfferTargets(rows);
     const targets = new Map<OfferRow, number | null>(rows.map((r) => [r, target(r)]));
 
     // Rows resolving to nothing but carrying product data (odezda-style)
     // get grouped into ONE new product per group (see groupNewProductRows),
     // instead of N duplicate products for N sizes of the same new item.
-    const { toCreate, stillUnmatched } = groupNewProductRows(rows.filter((r) => !targets.get(r)));
+    const grouped = groupNewProductRows(rows.filter((r) => !targets.get(r)));
+    const toCreate = options.createMissingProducts === false
+      ? new Map<string, { product: OfferProductInfo; rows: OfferRow[] }>()
+      : grouped.toCreate;
+    const stillUnmatched = options.createMissingProducts === false
+      ? [...grouped.stillUnmatched, ...[...grouped.toCreate.values()].flatMap((g) => g.rows)]
+      : grouped.stillUnmatched;
     for (const [key, g] of toCreate) {
       const pid = await createProductFromOffer(client, key, g.product, g.rows[0]);
       res.productsCreated++;
@@ -900,16 +1085,60 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
       const pid = targets.get(r);
       if (!pid) continue; // counted in stillUnmatched above
       res.matchedRows++; affected.add(pid);
-      const sale = r.discount_price > 0 && (!r.base_price || r.discount_price < r.base_price) ? r.discount_price : null;
-      res.stockMovements += await upsertVariantStock(
-        client, pid, r.size, r.quantity, r.base_price > 0 ? r.base_price : null, sale,
-        { barcode: r.barcode || undefined, offer_code: r.offer_code || undefined, active: r.active },
+      const sale = wantsPrices(options)
+        ? (r.discount_price > 0 && (!r.base_price || r.discount_price < r.base_price) ? r.discount_price : null)
+        : undefined;
+      const changed = await upsertVariantStock(
+        client, pid, r.size, effectiveQty(r, options), wantsPrices(options) && r.base_price > 0 ? r.base_price : null, sale,
+        {
+          barcode: r.barcode || undefined, offer_code: r.offer_code || undefined,
+          active: r.active, stock_source_id: wantsStock(options) ? options.sourceId ?? undefined : undefined,
+        },
         importNote,
       );
+      res.stockMovements += changed.movement;
+      if (changed.variantId) importedVariantIds.add(changed.variantId);
+      if (changed.quantityChanged && res.runId) {
+        await client.query(
+          `INSERT INTO inventory_import_items (run_id, product_id, variant_id, size, old_qty, new_qty, reason)
+           VALUES ($1,$2,$3,$4,$5,$6,'row')
+           ON CONFLICT (run_id, variant_id) DO UPDATE SET new_qty=EXCLUDED.new_qty`,
+          [Number(res.runId), pid, changed.variantId, r.size.trim(), changed.before, changed.after],
+        );
+      }
       res.variantsUpserted++;
       // backfill factory_article on the product if we have it and it's empty
       if (r.factory_article) {
         await client.query("UPDATE products SET factory_article = $2 WHERE id = $1 AND factory_article = ''", [pid, r.factory_article]);
+      }
+    }
+
+    if (wantsStock(options) && stockMode === "snapshot" && options.sourceId) {
+      const missing = await loadSnapshotCandidates(options.sourceId, [...affected], [...importedVariantIds], client);
+      for (const v of missing) {
+        const pid = Number(v.product_id);
+        const before = Number(v.stock_qty);
+        await client.query(
+          `UPDATE product_variants SET stock_qty=0, stock_source_id=$2,
+             updated_at=now(), updated_by='import' WHERE id=$1`,
+          [v.id, options.sourceId],
+        );
+        await client.query(
+          `INSERT INTO stock_movements (product_id, variant_id, size, type, delta, qty_after, note, author)
+           VALUES ($1,$2,$3,'import',$4,0,$5,'import')`,
+          [pid, v.id, v.size, -before, `${importNote} · відсутня у повному знімку`],
+        );
+        if (res.runId) {
+          await client.query(
+            `INSERT INTO inventory_import_items (run_id, product_id, variant_id, size, old_qty, new_qty, reason)
+             VALUES ($1,$2,$3,$4,$5,0,'missing_from_snapshot')
+             ON CONFLICT (run_id, variant_id) DO UPDATE SET new_qty=0, reason='missing_from_snapshot'`,
+            [Number(res.runId), pid, v.id, v.size, before],
+          );
+        }
+        res.zeroedRows++;
+        res.stockMovements++;
+        affected.add(pid);
       }
     }
 
@@ -929,8 +1158,84 @@ export async function applyImport(parsed: Parsed): Promise<ApplyResult> {
         [[...affected]],
       );
     }
+    res.productsUpdated = Math.max(0, affected.size - res.productsCreated);
+    if (res.runId) {
+      await client.query(
+        `UPDATE inventory_import_runs SET
+           matched_rows=$2, unmatched_rows=$3, changed_rows=$4, zeroed_rows=$5,
+           products_created=$6, products_updated=$7, variants_upserted=$8, stock_movements=$9
+         WHERE id=$1`,
+        [Number(res.runId), res.matchedRows, res.unmatchedRows, res.stockMovements,
+         res.zeroedRows, res.productsCreated, res.productsUpdated, res.variantsUpserted, res.stockMovements],
+      );
+    }
     await client.query("COMMIT");
     return res;
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export type RollbackResult = { runId: string; restoredVariants: number; affectedProducts: number };
+
+/** Restore a run only while all affected variants still contain the values
+ * written by that run. This prevents a rollback from erasing later sales,
+ * receipts or manual corrections. */
+export async function rollbackImportRun(runId: string): Promise<RollbackResult> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const run = await client.query<{ id: string; status: string; filename: string }>(
+      "SELECT id::text, status, filename FROM inventory_import_runs WHERE id=$1 FOR UPDATE", [Number(runId)],
+    );
+    if (!run.rows.length) throw new Error("Імпорт не знайдено");
+    if (run.rows[0].status !== "applied") throw new Error("Цей імпорт уже скасовано");
+    const items = await client.query<{
+      product_id: string; variant_id: string; size: string;
+      old_qty: number; new_qty: number; current_qty: number;
+    }>(
+      `SELECT i.product_id::text, i.variant_id::text, i.size, i.old_qty, i.new_qty,
+              COALESCE(v.stock_qty, -1) AS current_qty
+         FROM inventory_import_items i
+         LEFT JOIN product_variants v ON v.id=i.variant_id
+        WHERE i.run_id=$1 ORDER BY i.id`,
+      [Number(runId)],
+    );
+    const drift = items.rows.filter((i) => Number(i.current_qty) !== Number(i.new_qty));
+    if (drift.length) throw new Error(`Відкат заблоковано: ${drift.length} позицій уже змінено після імпорту`);
+
+    const affected = new Set<number>();
+    for (const item of items.rows) {
+      const pid = Number(item.product_id);
+      const oldQty = Number(item.old_qty);
+      const newQty = Number(item.new_qty);
+      await client.query(
+        "UPDATE product_variants SET stock_qty=$2, updated_at=now(), updated_by='import_rollback' WHERE id=$1",
+        [Number(item.variant_id), oldQty],
+      );
+      await client.query(
+        `INSERT INTO stock_movements (product_id, variant_id, size, type, delta, qty_after, note, author)
+         VALUES ($1,$2,$3,'adjust',$4,$5,$6,'import_rollback')`,
+        [pid, Number(item.variant_id), item.size, oldQty - newQty, oldQty, `Відкат імпорту: ${run.rows[0].filename}`],
+      );
+      affected.add(pid);
+    }
+    if (affected.size) {
+      await client.query(
+        `UPDATE products p SET stock_qty=sub.total, is_in_stock=(sub.total > 0), updated_at=now()
+           FROM (SELECT pid AS product_id,
+                 COALESCE((SELECT SUM(stock_qty) FROM product_variants v WHERE v.product_id=pid AND v.active),0) AS total
+                 FROM unnest($1::bigint[]) AS pid) sub
+          WHERE p.id=sub.product_id`,
+        [[...affected]],
+      );
+    }
+    await client.query("UPDATE inventory_import_runs SET status='rolled_back', rolled_back_at=now() WHERE id=$1", [Number(runId)]);
+    await client.query("COMMIT");
+    return { runId, restoredVariants: items.rows.length, affectedProducts: affected.size };
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
@@ -951,10 +1256,10 @@ async function upsertVariantStock(
   client: import("pg").PoolClient,
   productId: number, size: string, qty: number | null,
   price: number | null, sale?: number | null,
-  meta?: { barcode?: string; offer_code?: string; active?: boolean },
+  meta?: { barcode?: string; offer_code?: string; active?: boolean; stock_source_id?: number },
   importNote = "Імпорт цін/залишків",
-): Promise<number> {
-  if (!size.trim()) return 0;
+): Promise<{ movement: number; variantId: number; before: number; after: number; quantityChanged: boolean }> {
+  if (!size.trim()) return { movement: 0, variantId: 0, before: 0, after: 0, quantityChanged: false };
   const cur = await client.query<{ id: string; stock_qty: number }>(
     "SELECT id::text, stock_qty FROM product_variants WHERE product_id = $1 AND size = $2", [productId, size.trim()],
   );
@@ -977,9 +1282,11 @@ async function upsertVariantStock(
   if (meta?.barcode) add("barcode", meta.barcode);
   if (meta?.offer_code) add("offer_code", meta.offer_code);
   if (meta?.active !== undefined) add("active", meta.active);
+  if (meta?.stock_source_id !== undefined) add("stock_source_id", meta.stock_source_id);
   let movement = 0;
+  let after = before;
   if (qty != null) {
-    const after = Math.max(0, Math.round(qty));
+    after = Math.max(0, Math.round(qty));
     add("stock_qty", after);
     if (after !== before) {
       await client.query(
@@ -991,5 +1298,5 @@ async function upsertVariantStock(
     }
   }
   await client.query(`UPDATE product_variants SET ${sets.join(", ")} WHERE id = $1`, bind);
-  return movement;
+  return { movement, variantId, before, after, quantityChanged: qty != null && after !== before };
 }

@@ -1,40 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/adminAuth";
-import { parseImportSmart, parseImportWithTemplate, previewImport, applyImport, type ApplyResult, type ImportKind } from "@/lib/stockImport";
-import { getMeta, setMeta } from "@/lib/db";
+import { parseImportSmart, parseImportWithTemplate, previewImport, applyImport, type ImportKind, type StockImportMode } from "@/lib/stockImport";
 import { logActivity } from "@/lib/activity";
 import { getImportTemplate } from "@/lib/importTemplates";
-import { recordSourceRun } from "@/lib/importSources";
+import { getImportSource, recordSourceRun } from "@/lib/importSources";
+import { q } from "@/lib/pg";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export type ImportHistoryEntry = {
-  filename: string; kind: ImportKind; at: string;
+  id: string; filename: string; kind: ImportKind; at: string;
   productsCreated: number; productsUpdated: number; variantsUpserted: number;
   stockMovements: number; matchedRows: number; unmatchedRows: number;
+  stockMode: StockImportMode; zeroedRows: number; status: "applied" | "rolled_back";
+  sourceName: string;
 };
-
-const HISTORY_KEY = "erp_import_history";
-const HISTORY_MAX = 20;
-
-async function recordHistory(filename: string, result: ApplyResult): Promise<void> {
-  const entry: ImportHistoryEntry = {
-    filename, kind: result.kind, at: new Date().toISOString(),
-    productsCreated: result.productsCreated, productsUpdated: result.productsUpdated,
-    variantsUpserted: result.variantsUpserted, stockMovements: result.stockMovements,
-    matchedRows: result.matchedRows, unmatchedRows: result.unmatchedRows,
-  };
-  let prev: ImportHistoryEntry[] = [];
-  try { prev = JSON.parse((await getMeta(HISTORY_KEY)) || "[]"); } catch {}
-  await setMeta(HISTORY_KEY, JSON.stringify([entry, ...prev].slice(0, HISTORY_MAX)));
-}
 
 /** GET — last import sessions, with per-session created/updated/movements breakdown. */
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  let history: ImportHistoryEntry[] = [];
-  try { history = JSON.parse((await getMeta(HISTORY_KEY)) || "[]"); } catch {}
+  const history = await q<ImportHistoryEntry>(
+    `SELECT id::text, filename, import_kind AS kind, created_at::text AS at,
+            products_created AS "productsCreated", products_updated AS "productsUpdated",
+            variants_upserted AS "variantsUpserted", stock_movements AS "stockMovements",
+            matched_rows AS "matchedRows", unmatched_rows AS "unmatchedRows",
+            stock_mode AS "stockMode", zeroed_rows AS "zeroedRows", status,
+            source_name AS "sourceName"
+       FROM inventory_import_runs ORDER BY created_at DESC LIMIT 30`,
+  );
   return NextResponse.json({ history });
 }
 
@@ -54,7 +49,20 @@ export async function POST(req: NextRequest) {
   const file = form.get("file");
   const mode = String(form.get("mode") ?? "preview");
   const templateId = form.get("templateId");
+  const sourceIdRaw = String(form.get("sourceId") ?? "").trim();
+  const sourceId = sourceIdRaw ? Number(sourceIdRaw) : null;
+  const stockMode = String(form.get("stockMode") ?? "patch") as StockImportMode;
+  const updateStock = String(form.get("updateStock") ?? "true") !== "false";
+  const updatePrices = String(form.get("updatePrices") ?? "true") !== "false";
+  const createMissingProducts = String(form.get("createMissingProducts") ?? "true") !== "false";
+  const blankQuantity = String(form.get("blankQuantity") ?? "ignore") === "zero" ? "zero" : "ignore";
   if (!(file instanceof File)) return NextResponse.json({ error: "Файл не надіслано" }, { status: 400 });
+  if (!(["patch", "snapshot"] as string[]).includes(stockMode)) return NextResponse.json({ error: "Некоректний режим залишків" }, { status: 400 });
+  if (stockMode === "snapshot" && !sourceId) return NextResponse.json({ error: "Для повного знімка виберіть джерело даних" }, { status: 400 });
+  if (stockMode === "snapshot" && !updateStock) return NextResponse.json({ error: "Повний знімок потребує оновлення залишків" }, { status: 400 });
+  if (!updateStock && !updatePrices) return NextResponse.json({ error: "Виберіть залишки, ціни або обидва поля" }, { status: 400 });
+  const source = sourceId ? await getImportSource(String(sourceId)) : null;
+  if (sourceId && !source) return NextResponse.json({ error: "Джерело даних не знайдено" }, { status: 400 });
 
   const buf = Buffer.from(await file.arrayBuffer());
   let parsed: import("@/lib/stockImport").Parsed & { ai?: boolean };
@@ -74,27 +82,33 @@ export async function POST(req: NextRequest) {
 
   const aiUsed = !!parsed.ai;
   const tplIdStr = templateId ? String(templateId) : null;
+  const importOptions = {
+    stockMode, sourceId, sourceName: source?.name ?? parsed.filename,
+    updateStock, updatePrices, createMissingProducts, blankQuantity,
+  } as const;
   try {
     if (mode === "apply") {
-      const result = await applyImport(parsed);
-      await recordHistory(parsed.filename, result);
+      const result = await applyImport(parsed, importOptions);
       const parts = [
         result.productsCreated ? `+${result.productsCreated} нових` : "",
         result.productsUpdated ? `${result.productsUpdated} оновлено` : "",
         result.stockMovements ? `${result.stockMovements} рухів` : "",
+        result.zeroedRows ? `${result.zeroedRows} обнулено` : "",
         result.unmatchedRows ? `${result.unmatchedRows} не знайдено` : "",
-        result.ambiguousKeys ? `⚠ ${result.ambiguousKeys} неоднозначних` : "",
       ].filter(Boolean).join(" · ");
       const summary = parts || "без змін";
-      await recordSourceRun(parsed.filename, tplIdStr, true, result.unmatchedRows, summary).catch(() => {});
+      await recordSourceRun(source?.name ?? parsed.filename, tplIdStr, true, result.unmatchedRows, summary).catch(() => {});
       await logActivity("import", `${parsed.filename} — ${summary}`, result.matchedRows);
+      revalidatePath("/");
+      revalidatePath("/catalog");
+      revalidatePath("/product/[slug]", "page");
       return NextResponse.json({ ok: true, mode, result, aiUsed });
     }
-    const preview = await previewImport(parsed);
+    const preview = await previewImport(parsed, importOptions);
     return NextResponse.json({ ok: true, mode: "preview", preview: { ...preview, aiUsed } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Помилка обробки";
-    if (mode === "apply") await recordSourceRun(file.name, tplIdStr, false, 1, msg.slice(0, 200)).catch(() => {});
+    if (mode === "apply") await recordSourceRun(source?.name ?? file.name, tplIdStr, false, 1, msg.slice(0, 200)).catch(() => {});
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

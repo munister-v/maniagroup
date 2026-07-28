@@ -204,13 +204,7 @@ export function AdminSizeCharts() {
           </label>
           <label className="block">
             <span className="mb-1 block text-[12px] text-[#8a94a0]">Тип розмірної сітки</span>
-            <select value={form.type} onChange={(e) => {
-              const nextType = e.target.value as SizeChartType;
-              // Each type has its own property set (activeProps below) — carrying
-              // over the previous type's row values would save stale keys the new
-              // type's columns never show, silently corrupting the chart data.
-              setForm((f) => (f.type === nextType ? f : { ...f, type: nextType, chart: [emptyRow()] }));
-            }}
+            <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as SizeChartType }))}
               className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none">
               {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>

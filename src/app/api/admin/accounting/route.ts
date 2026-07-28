@@ -61,18 +61,12 @@ export async function GET(req: NextRequest) {
       bind,
     );
 
-    // The "exclude cancelled/refunded" business rule only makes sense as a
-    // default when no specific status is picked — with status=$N already in
-    // `where`, appending "AND status NOT IN (...)" self-contradicted for
-    // status='cancelled' (or 'refunded'), always yielding 0 rows for the KPI
-    // cards while the table below (which doesn't have this extra clause)
-    // correctly showed the real cancelled orders.
     const summRow = await q1<{ revenue: string; orders: string; avg: string; discounts: string }>(
       `SELECT COALESCE(SUM(total),0)::int::text AS revenue,
               COUNT(*)::text AS orders,
               COALESCE(AVG(total) FILTER (WHERE total > 0),0)::int::text AS avg,
               COALESCE(SUM(discount),0)::int::text AS discounts
-       FROM orders o WHERE ${where}${status ? "" : " AND status NOT IN ('cancelled','refunded')"}`,
+       FROM orders o WHERE ${where} AND status NOT IN ('cancelled','refunded')`,
       bind,
     );
 

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AdminProducts } from "./AdminProducts";
 import { SocialPostButton } from "./AiAssistant";
-import { BulkPhotoMatcher } from "./BulkPhotoMatcher";
 import { SubTabs } from "./intertop/primitives";
 
 type Row = {
@@ -61,26 +60,14 @@ type CellValue = string | number | boolean | null;
  */
 function siteStatus(row: Row): {
   label: string; dot: string; title: string;
-  fix?: { patch: Partial<Pick<Row, "status" | "moderation_status" | "show_without_photo">>; label: string };
+  fix?: { patch: Partial<Pick<Row, "status" | "show_without_photo">>; label: string };
 } {
-  if (row.status !== "publish") {
-    // Moderation-bypass guard — same rule as bulk «На модерацію» (lib/products.ts
-    // bulkProducts 'publish') and the product editor's «Опубліковано» checkbox:
-    // a never-reviewed/rejected product must go through the review queue, not
-    // straight to live. This one-click fix used to PATCH status='publish' alone,
-    // which made it genuinely live (lib/productSource.ts gates on status alone)
-    // without ever having been approved.
-    const approved = row.moderation_status === "approved";
+  if (row.status !== "publish")
     return {
       label: "Приховано", dot: "bg-[#8a94a0]",
-      title: approved
-        ? "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується"
-        : "Товар знято з публікації і ще не підтверджений модерацією — на сайті не показується",
-      fix: approved
-        ? { patch: { status: "publish" }, label: "Опублікувати" }
-        : { patch: { moderation_status: "pending" }, label: "На модерацію" },
+      title: "Товар знято з публікації (статус ≠ Опубл.) — на сайті не показується",
+      fix: { patch: { status: "publish" }, label: "Опублікувати" },
     };
-  }
   if (!row.is_in_stock)
     return { label: "Без залишку", dot: "bg-[#b6c0ca]", title: "Немає в наявності (0 на складі) — на сайті не показується" };
   if (!row.image_src && !row.show_without_photo)
@@ -131,7 +118,8 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [bulkPhotoOpen, setBulkPhotoOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [publishAllBusy, setPublishAllBusy] = useState(false);
   const [wipeOpen, setWipeOpen] = useState(false);
   const [cardsInitial, setCardsInitial] = useState<{ kind: "new" } | { kind: "edit"; id: string } | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -194,13 +182,6 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   function openFullCard(id: string) { setCardsInitial({ kind: "edit", id }); setMode("cards"); }
 
   const dirtyCount = Object.keys(edits).length;
-  // load() (via useCallback deps) fires on every page/sort/filter change and
-  // unconditionally wipes `edits` — this ref lets the reload-effect below
-  // check for unsaved inline edits without adding `edits` to load()'s own
-  // deps (which would recreate it, and re-trigger the reload effect, on
-  // every keystroke in the inline editor).
-  const editsRef = useRef(edits);
-  useEffect(() => { editsRef.current = edits; }, [edits]);
 
   const load = useCallback(async () => {
     // Guard against out-of-order responses: if filters change quickly (e.g. a
@@ -224,20 +205,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   }, [page, perPage, sortBy, sortDir, filterParams]);
 
   // Reload rows on filter/sort/page changes and after an import (dataVersion).
-  // Guard: load() unconditionally wipes unsaved inline edits (setEdits({})) —
-  // ask before silently discarding them instead of losing a price/stock
-  // correction the admin hasn't clicked "Зберегти" for yet.
-  useEffect(() => {
-    if (mode === "cards") return;
-    if (
-      Object.keys(editsRef.current).length > 0 &&
-      !confirm(`У вас є незбережені зміни (${Object.keys(editsRef.current).length}) в таблиці. Оновити список і втратити їх?`)
-    ) {
-      return;
-    }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, mode, dataVersion]);
+  useEffect(() => { if (mode !== "cards") load(); }, [load, mode, dataVersion]);
 
   // Filter facets (brands / categories / colors) — refresh after an import too,
   // so a newly imported brand shows up in the dropdowns.
@@ -308,7 +276,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   // One-click fix from the "На сайті" badge — publish, or show without a
   // photo — instead of making the admin hunt for the right column/toggle.
   const [fixingId, setFixingId] = useState<string | null>(null);
-  async function quickFix(id: string, patch: Partial<Pick<Row, "status" | "moderation_status" | "show_without_photo">>) {
+  async function quickFix(id: string, patch: Partial<Pick<Row, "status" | "show_without_photo">>) {
     setFixingId(id);
     try {
       const res = await fetch(`/api/admin/products/${id}`, {
@@ -316,12 +284,8 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
-      if (res.ok) {
-        // moderation_status:'pending' sends it to review, not straight to the
-        // site — don't claim "на сайті" for a fix that didn't actually publish.
-        onToast?.(patch.moderation_status === "pending" ? "Надіслано на модерацію" : "Готово — товар на сайті");
-        await load();
-      } else onToast?.("Помилка");
+      if (res.ok) { onToast?.("Готово — товар на сайті"); await load(); }
+      else onToast?.("Помилка");
     } finally { setFixingId(null); }
   }
 
@@ -354,6 +318,27 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     }
   }
 
+  async function publishAll() {
+    if (!confirm(`Опублікувати всі ${total.toLocaleString("uk-UA")} товарів на сайті, включно з товарами без фото?`)) return;
+    setPublishAllBusy(true);
+    try {
+      const res = await fetch("/api/admin/products/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "publish_all" }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        onToast?.(`Опубліковано на сайті: ${Number(data?.count ?? 0).toLocaleString("uk-UA")} товарів`);
+        await load();
+      } else {
+        onToast?.(data?.error ?? "Помилка публікації");
+      }
+    } finally {
+      setPublishAllBusy(false);
+    }
+  }
+
   function toggleRow(id: string) {
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
@@ -379,43 +364,17 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
   async function doExport() {
     const format = exportFormat;
     const params = buildExportParams(format);
-    if (format === "pdf") {
-      // PDF prints the full scope: fetch the json rows, then build a print view.
-      params.set("format", "json");
-      const res = await fetch(`/api/admin/products/export?${params}`);
-      const data: Record<string, string | number>[] = await res.json();
-      printRows(data);
-    } else {
+    setExportBusy(true);
+    try {
       const a = document.createElement("a");
       a.href = `/api/admin/products/export?${params}`;
+      a.download = "";
       a.click();
+      onToast?.(`Експорт ${format.toUpperCase()} готується до завантаження`);
+      setExportOpen(false);
+    } finally {
+      window.setTimeout(() => setExportBusy(false), 600);
     }
-    setExportOpen(false);
-  }
-
-  function printRows(data: Record<string, string | number>[]) {
-    const cols = EXPORT_COLUMNS.filter((c) => !exportCols.size || exportCols.has(c));
-    const esc = (s: unknown) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c] as string));
-    const head = cols.map((h) => `<th>${esc(h)}</th>`).join("");
-    const body = data
-      .map((r) => `<tr>${cols.map((c) => `<td>${esc(r[c])}</td>`).join("")}</tr>`)
-      .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Каталог Mania Group</title>
-      <style>
-        body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#2b2d42;padding:24px}
-        h1{font-size:18px;margin:0 0 4px} p{color:#888;font-size:12px;margin:0 0 16px}
-        table{width:100%;border-collapse:collapse;font-size:11px}
-        th,td{border:1px solid #ddd;padding:5px 7px;text-align:left;vertical-align:top}
-        th{background:#f7f9fa;text-transform:uppercase;font-size:9px;letter-spacing:.04em}
-        tr:nth-child(even){background:#f7f9fa}
-      </style></head><body>
-      <h1>Каталог Mania Group</h1>
-      <p>${data.length} позицій · ${new Date().toLocaleString("uk-UA")}</p>
-      <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
-      <script>window.onload=function(){window.print()}</script>
-      </body></html>`;
-    const w = window.open("", "_blank");
-    if (w) { w.document.write(html); w.document.close(); }
   }
 
   // The AdminProducts editor overlay — entered only via openFullNew/
@@ -425,7 +384,6 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
       <div>
         <AdminProducts onToast={onToast} initialOpen={cardsInitial}
           onClose={() => { setMode("list"); setCardsInitial(null); load(); }} />
-        {bulkPhotoOpen && <BulkPhotoMatcher onClose={() => setBulkPhotoOpen(false)} onToast={onToast} />}
       </div>
     );
   }
@@ -436,7 +394,7 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
     <div className="flex flex-col">
       {/* Intertop-clone header — big title + selection count + the exact
           action-button cluster (Створити/Завантажити + selection-gated
-          Деактивувати/На модерацію/В чернетку/В архів + Фото масово/
+          Деактивувати/На модерацію/В чернетку/В архів + масова публікація/
           Редагувати комірки/preview/export/filter icon buttons). This is
           now the ONLY browsing view — see the mode comment above for why
           this used to be split into 3 separate tabs. */}
@@ -480,8 +438,10 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
                 title="Тільки товари, які ще ніколи не були на сайті — інші треба архівувати" className={`${gated} !text-red-600 hover:!border-red-600`}>
                 Видалити
               </button>
-              <button onClick={() => setBulkPhotoOpen(true)} title="Масово прив'язати фото за назвою файлу (SKU/артикул)" className={gated}>
-                Фото масово
+              <button disabled={publishAllBusy || total === 0} onClick={publishAll}
+                title="Опублікувати весь каталог, дозволивши показ товарів без фото"
+                className={primary}>
+                {publishAllBusy ? "Публікуємо…" : "Опублікувати все на сайті"}
               </button>
               <button onClick={() => setEditMode((v) => !v)} title="Редагувати ціну/залишок/статус прямо в таблиці"
                 className={editMode ? "flex h-9 items-center gap-1.5 rounded-[4px] border border-[#2f9488] bg-[#2f9488] px-3.5 text-[11px] font-medium uppercase tracking-[0.06em] text-white" : gated}>
@@ -615,11 +575,10 @@ export function CatalogGrid({ onToast, onImport, dataVersion = 0, focus = null }
           cols={exportCols} setCols={setExportCols}
           total={total} filteredHint={activeFilters > 0 || !!search}
           selectedCount={selected.size} pageCount={rows.length}
+          busy={exportBusy}
           onExport={doExport}
         />
       )}
-
-      {bulkPhotoOpen && <BulkPhotoMatcher onClose={() => { setBulkPhotoOpen(false); load(); }} onToast={onToast} />}
 
       {/* Sticky save bar when dirty */}
       {dirtyCount > 0 && (
@@ -1006,7 +965,7 @@ function WipeAllDialog({ onClose, total, onDone }: { onClose: () => void; total:
 // ── Export settings dialog ───────────────────────────────────────────────────
 function ExportDialog({
   onClose, scope, setScope, format, setFormat, cols, setCols,
-  total, filteredHint, selectedCount, pageCount, onExport,
+  total, filteredHint, selectedCount, pageCount, busy, onExport,
 }: {
   onClose: () => void;
   scope: "all" | "filtered" | "selected" | "page";
@@ -1014,6 +973,7 @@ function ExportDialog({
   format: string; setFormat: (f: string) => void;
   cols: Set<string>; setCols: (s: Set<string>) => void;
   total: number; filteredHint: boolean; selectedCount: number; pageCount: number;
+  busy: boolean;
   onExport: () => void;
 }) {
   const scopes: { id: typeof scope; label: string; hint: string; disabled?: boolean }[] = [
@@ -1023,23 +983,48 @@ function ExportDialog({
     { id: "page", label: "Поточна сторінка", hint: `${pageCount} рядків` },
   ];
   const formats = [
-    { id: "xlsx", label: "Excel (.xlsx)" },
-    { id: "csv", label: "CSV (.csv)" },
-    { id: "json", label: "JSON (.json)" },
-    { id: "pdf", label: "PDF (друк)" },
+    { id: "xlsx", label: "Excel", hint: "для редагування й передачі менеджеру" },
+    { id: "csv", label: "CSV", hint: "для фідів, CRM і масових таблиць" },
+    { id: "pdf", label: "PDF", hint: "готовий файл для перегляду/відправки" },
+    { id: "json", label: "JSON", hint: "для інтеграцій і технічної перевірки" },
   ];
+  const presets = [
+    { id: "basic", label: "Базовий", cols: ["ID", "SKU", "Назва", "Бренд", "Категорія", "Ціна", "Акційна", "В наявності", "Статус"] },
+    { id: "stock", label: "Залишки", cols: ["ID", "SKU", "Назва", "Бренд", "Розміри", "В наявності", "Статус"] },
+    { id: "price", label: "Прайс", cols: ["ID", "SKU", "Назва", "Бренд", "Ціна", "Акційна", "Підсумкова", "Slug"] },
+    { id: "content", label: "Контент", cols: ["ID", "SKU", "Назва", "Бренд", "Категорія", "Колір", "Сезон", "Склад", "Країна", "Матеріал", "Фото"] },
+  ];
+  const rowHint = scope === "selected" ? selectedCount : scope === "page" ? pageCount : total;
+  const formatHint = formats.find((f) => f.id === format)?.hint ?? "";
+  const pdfNote = format === "pdf" && cols.size > 10
+    ? "PDF компактний: у файл потраплять перші 10 вибраних колонок. Для повного набору краще Excel."
+    : "";
   function toggleCol(c: string) {
     const n = new Set(cols);
     n.has(c) ? n.delete(c) : n.add(c);
     setCols(n);
   }
+  function applyPreset(list: string[]) {
+    setCols(new Set(list.filter((c) => EXPORT_COLUMNS.includes(c))));
+  }
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/40" onClick={onClose} />
-      <div className="relative z-10 max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-[6px] border border-[#e6eaec] bg-white p-5 shadow-xl">
+      <div className="relative z-10 max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[6px] border border-[#e6eaec] bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-medium text-[#2b2d42]">Експорт каталогу</h3>
-          <button onClick={onClose} className="text-[#8a94a0] hover:text-[#2b2d42]" aria-label="Закрити">✕</button>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-[#8a94a0]">Вивантаження даних</p>
+            <h3 className="mt-0.5 text-base font-medium text-[#2b2d42]">Експорт каталогу</h3>
+          </div>
+          <button onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]" aria-label="Закрити">✕</button>
+        </div>
+
+        <div className="mb-4 rounded-[5px] border border-[#dfe7ea] bg-[#f8fbfb] p-3">
+          <p className="text-[12px] font-medium text-[#2b2d42]">
+            Буде створено файл: <span className="uppercase">{format}</span> · приблизно {rowHint.toLocaleString("uk-UA")} рядків · {cols.size} колонок
+          </p>
+          <p className="mt-1 text-[11px] leading-4 text-[#6f7884]">{formatHint}</p>
+          {pdfNote && <p className="mt-1 text-[11px] leading-4 text-amber-700">{pdfNote}</p>}
         </div>
 
         <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Що експортувати</p>
@@ -1056,13 +1041,14 @@ function ExportDialog({
         </div>
 
         <p className="mb-2 text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Формат</p>
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 grid gap-2 sm:grid-cols-2">
           {formats.map((f) => (
             <button key={f.id} onClick={() => setFormat(f.id)}
-              className={`rounded-[4px] border px-3 py-1.5 text-[12px] ${
+              className={`rounded-[4px] border px-3 py-2 text-left text-[12px] ${
                 format === f.id ? "border-[#2b2d42] bg-[#f7f9fa] text-[#2b2d42]" : "border-[#e6eaec] text-[#5a6472] hover:border-[#b6c0ca]"
               }`}>
-              {f.label}
+              <span className="block font-medium">{f.label}</span>
+              <span className="mt-0.5 block text-[10px] leading-4 text-[#8a94a0]">{f.hint}</span>
             </button>
           ))}
         </div>
@@ -1074,20 +1060,32 @@ function ExportDialog({
             <button onClick={() => setCols(new Set())} className="text-[#8a94a0] hover:underline">Зняти</button>
           </div>
         </div>
-        <div className="mb-5 grid max-h-44 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto sm:grid-cols-3">
+        <div className="mb-3 flex flex-wrap gap-2">
+          {presets.map((preset) => (
+            <button key={preset.id} onClick={() => applyPreset(preset.cols)}
+              className="rounded-full border border-[#e6eaec] px-3 py-1.5 text-[11px] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <div className="mb-5 grid max-h-44 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto rounded-[5px] border border-[#edf1f2] bg-[#fbfcfc] p-3 sm:grid-cols-3">
           {EXPORT_COLUMNS.map((c) => (
-            <label key={c} className="flex items-center gap-1.5 text-[12px] text-[#2b2d42]">
-              <input type="checkbox" checked={cols.has(c)} onChange={() => toggleCol(c)} />
+            <label key={c} className="flex min-h-8 cursor-pointer items-center gap-1.5 rounded px-1.5 text-[12px] text-[#2b2d42] hover:bg-white">
+              <input type="checkbox" checked={cols.has(c)} onChange={() => toggleCol(c)} className="h-4 w-4 accent-[#2f9488]" />
               {c}
             </label>
           ))}
         </div>
 
+        <div className="mb-4 rounded-[5px] bg-[#fff8e6] px-3 py-2 text-[11px] leading-4 text-amber-800">
+          XLSX і CSV завантажуються напряму. PDF тепер теж завантажується файлом, без порожньої вкладки друку.
+        </div>
+
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-[4px] border border-[#e6eaec] px-4 py-2 text-[12px] text-[#5a6472] hover:border-[#2b2d42]">Скасувати</button>
-          <button onClick={onExport} disabled={cols.size === 0}
+          <button onClick={onExport} disabled={cols.size === 0 || busy}
             className="rounded-[4px] border border-[#2f9488] px-5 py-2 text-[12px] uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
-            Експортувати
+            {busy ? "Готуємо…" : "Скачати файл"}
           </button>
         </div>
       </div>

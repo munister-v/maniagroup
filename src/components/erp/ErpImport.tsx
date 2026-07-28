@@ -17,9 +17,9 @@ type UnmatchedItem = {
 };
 type ImportPreview = {
   kind: "offers" | "unknown";
-  filename: string; totalRows: number;
+  filename: string; totalRows: number; processedRows: number; duplicateRows: number; skippedRows: number;
   matchedRows: number; unmatchedRows: number;
-  affectedProducts: number; newProducts: number; newVariants: number; stockChanges: number; priceChanges: number;
+  affectedProducts: number; newProducts: number; newVariants: number; stockChanges: number; priceChanges: number; zeroedRows: number;
   items: PreviewItem[];
   unmatched: UnmatchedItem[];
   aiUsed?: boolean;
@@ -27,21 +27,28 @@ type ImportPreview = {
 type ApplyResult = {
   kind: string; matchedRows: number; unmatchedRows: number;
   productsCreated: number; productsUpdated: number; variantsUpserted: number; stockMovements: number;
+  runId: string | null; zeroedRows: number; stockMode: StockMode;
 };
 type HistoryEntry = {
-  filename: string; kind: "offers" | "unknown"; at: string;
+  id: string; filename: string; kind: "offers" | "unknown"; at: string;
   productsCreated: number; productsUpdated: number; variantsUpserted: number;
   stockMovements: number; matchedRows: number; unmatchedRows: number;
+  stockMode: StockMode; zeroedRows: number; status: "applied" | "rolled_back"; sourceName: string;
 };
+type StockMode = "patch" | "snapshot";
+type BlankQuantity = "ignore" | "zero";
+type PresetId = "standard" | "stock" | "prices" | "existing" | "custom";
+type ImportSource = { id: string; name: string; stock_mode: StockMode; feed_type: "file" | "url" };
 type FileStatus = "idle" | "previewing" | "ready" | "error" | "applying" | "done";
 type FileItem = {
-  id: string; file: File; status: FileStatus; templateId: string;
+  id: string; file: File; status: FileStatus; templateId: string; stockMode: StockMode; sourceId: string;
+  updateStock: boolean; updatePrices: boolean; createMissingProducts: boolean; blankQuantity: BlankQuantity;
   preview: ImportPreview | null; result: ApplyResult | null; error: string;
 };
 
 /* ── constants ────────────────────────────────────────────────────────────── */
 const KIND_LABEL: Record<string, string> = {
-  offers: "Таблиця ОСТАТКИ (.csv)",
+  offers: "Товари / торгові позиції",
   unknown: "Невідомий",
 };
 const KIND_COLOR: Record<string, string> = {
@@ -101,6 +108,34 @@ function StatChip({ label, value, accent }: { label: string; value: number | str
         {typeof value === "number" ? value.toLocaleString("uk-UA") : value}
       </p>
     </div>
+  );
+}
+
+function ImportSteps({ step }: { step: 1 | 2 | 3 }) {
+  const steps = [
+    { n: 1, title: "Оберіть файл", hint: "CSV або Excel" },
+    { n: 2, title: "Перевірте зміни", hint: "Без запису в каталог" },
+    { n: 3, title: "Підтвердіть", hint: "Застосуйте імпорт" },
+  ] as const;
+
+  return (
+    <ol className="mb-5 grid overflow-hidden rounded-[6px] border border-[#DDE3E5] bg-white sm:grid-cols-3">
+      {steps.map((item) => {
+        const complete = step > item.n;
+        const active = step === item.n;
+        return (
+          <li key={item.n} className={`relative flex min-h-[64px] items-center gap-3 px-4 py-3 ${item.n < 3 ? "border-b border-[#E7EBED] sm:border-b-0 sm:border-r" : ""} ${active ? "bg-[#F1F8F7]" : ""}`}>
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${complete ? "bg-[#2f9488] text-white" : active ? "border-2 border-[#2f9488] bg-white text-[#2f9488]" : "bg-[#EEF1F2] text-[#8a94a0]"}`}>
+              {complete ? "✓" : item.n}
+            </span>
+            <span>
+              <b className={`block text-[13px] ${active || complete ? "text-[#1f2733]" : "text-[#8a94a0]"}`}>{item.title}</b>
+              <span className="mt-0.5 block text-[11px] text-[#9AA3AC]">{item.hint}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -382,6 +417,9 @@ function FileCard({
   const kind = item.preview?.kind ?? "unknown";
   const showPreview = item.preview && (item.status === "ready" || item.status === "done" || item.status === "applying");
   const canApply = item.status === "ready" && (item.preview?.matchedRows ?? 0) > 0;
+  const processedRows = item.preview?.processedRows ?? 0;
+  const coverage = processedRows > 0 ? Math.round(((item.preview?.matchedRows ?? 0) / processedRows) * 100) : 0;
+  const quality = coverage >= 95 ? "good" : coverage >= 80 ? "warn" : "bad";
 
   return (
     <div className={`rounded-[5px] border-2 bg-white transition-colors ${
@@ -407,6 +445,9 @@ function FileCard({
               {KIND_LABEL[kind]}
             </span>
           )}
+          <span className={`shrink-0 rounded-[3px] border px-2 py-0.5 text-[10px] ${item.stockMode === "snapshot" ? "border-amber-300 bg-amber-50 text-amber-800" : "border-[#E0E0E0] text-[#8a94a0]"}`}>
+            {item.stockMode === "snapshot" ? "Повний знімок" : "Точкове"}
+          </span>
         </button>
 
         {/* one-line verdict — this replaces having to expand to know what's going on */}
@@ -417,11 +458,12 @@ function FileCard({
             ✓ {item.result.productsCreated > 0 && `+${item.result.productsCreated} нових · `}
             {item.result.productsUpdated > 0 && `${item.result.productsUpdated} оновлено · `}
             {item.result.stockMovements} рухів
+            {item.result.zeroedRows > 0 && ` · ${item.result.zeroedRows} обнулено`}
           </span>
         )}
         {item.status === "ready" && item.preview && (
-          <span className="shrink-0 text-[12px] text-[#5a6472]">
-            {item.preview.newProducts > 0 ? `${item.preview.newProducts} нових товарів` : `${item.preview.matchedRows.toLocaleString("uk-UA")} знайдено`}
+          <span className={`shrink-0 text-[12px] font-medium ${quality === "bad" ? "text-amber-700" : "text-[#2f9488]"}`}>
+            {quality === "bad" ? "!" : "✓"} {coverage}% покриття · {item.preview.newProducts > 0 ? `${item.preview.newProducts} нових товарів` : `${item.preview.matchedRows.toLocaleString("uk-UA")} рядків`}
           </span>
         )}
 
@@ -429,7 +471,7 @@ function FileCard({
         {canApply && (
           <button onClick={(e) => { e.stopPropagation(); onApply(); }}
             className="h-9 shrink-0 rounded-[4px] border border-[#2f9488] px-5 text-[11px] font-medium uppercase tracking-[0.1em] text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
-            Застосувати
+            Підтвердити імпорт
           </button>
         )}
         {item.status === "error" && (
@@ -463,6 +505,31 @@ function FileCard({
         <div className="border-t border-[#F5F5F5] px-4 py-4 space-y-4">
           {showPreview && item.preview && (
             <>
+              <div className={`flex flex-col gap-3 rounded-[4px] border px-4 py-3 sm:flex-row sm:items-center ${
+                quality === "good" ? "border-green-200 bg-green-50" :
+                quality === "warn" ? "border-amber-200 bg-amber-50" :
+                "border-red-200 bg-red-50"
+              }`}>
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border bg-white text-[15px] font-semibold tabular-nums ${
+                  quality === "good" ? "border-green-300 text-green-700" :
+                  quality === "warn" ? "border-amber-300 text-amber-800" :
+                  "border-red-300 text-red-700"
+                }`}>{coverage}%</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-semibold text-[#1f2733]">
+                    {quality === "good" ? "Файл готовий до імпорту" : quality === "warn" ? "Можна імпортувати після перевірки" : "Спочатку перевірте коди товарів"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-5 text-[#66717f]">
+                    Система обробить {item.preview.processedRows.toLocaleString("uk-UA")} з {item.preview.totalRows.toLocaleString("uk-UA")} рядків:
+                    {" "}{item.preview.matchedRows.toLocaleString("uk-UA")} зіставлено, {item.preview.unmatchedRows.toLocaleString("uk-UA")} не знайдено.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-x-5 gap-y-1 text-[10px] text-[#66717f] sm:text-right">
+                  <span>Дублі</span><b className="font-medium text-[#1f2733]">{item.preview.duplicateRows.toLocaleString("uk-UA")}</b>
+                  <span>Без змін</span><b className="font-medium text-[#1f2733]">{item.preview.skippedRows.toLocaleString("uk-UA")}</b>
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                 <StatChip label="Знайдено"     value={item.preview.matchedRows}   accent="text-green-700" />
                 {item.preview.newProducts > 0
@@ -471,8 +538,45 @@ function FileCard({
                 <StatChip label="Товарів"      value={item.preview.affectedProducts + item.preview.newProducts} />
                 <StatChip label="Нові розміри" value={item.preview.newVariants} />
                 <StatChip label="Зміни залишку" value={item.preview.stockChanges} />
-                <StatChip label="Зміни ціни"   value={item.preview.priceChanges} />
+                <StatChip label={item.preview.zeroedRows ? "До нуля" : "Зміни ціни"} value={item.preview.zeroedRows || item.preview.priceChanges} accent={item.preview.zeroedRows ? "text-amber-700" : undefined} />
               </div>
+
+              {item.stockMode === "snapshot" && (
+                <p className="rounded-[4px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                  Повний знімок: {item.preview.zeroedRows
+                    ? `${item.preview.zeroedRows} активних торгових позицій відсутні у файлі й будуть обнулені.`
+                    : "відсутніх активних позицій не знайдено."}
+                  {" "}Після застосування імпорт можна скасувати з історії, доки залишки не змінені іншою операцією.
+                </p>
+              )}
+
+              {item.preview.aiUsed && (
+                <p className="rounded-[4px] border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
+                  Назви колонок були нестандартними, тому система визначила їх автоматично. Перед підтвердженням перегляньте кілька рядків нижче;
+                  якщо значення потрапили не у свої колонки, виберіть збережену схему в «Додаткових параметрах» і перевірте файл ще раз.
+                </p>
+              )}
+
+              {item.preview.duplicateRows > 0 && (
+                <p className="rounded-[4px] border border-blue-200 bg-blue-50 px-3 py-2 text-[12px] text-blue-800">
+                  Знайдено {item.preview.duplicateRows.toLocaleString("uk-UA")} повторних рядків з однаковою торговою позицією та розміром.
+                  Вони не будуть застосовані двічі: система використає останнє значення з файлу.
+                </p>
+              )}
+
+              {item.preview.skippedRows > 0 && (
+                <p className="rounded-[4px] border border-[#E0E0E0] bg-[#F8F9FA] px-3 py-2 text-[12px] text-[#66717f]">
+                  Пропущено {item.preview.skippedRows.toLocaleString("uk-UA")} рядків без залишку або ціни для вибраного режиму.
+                  Вони нічого не змінять у каталозі.
+                </p>
+              )}
+
+              {item.preview.processedRows > 0 && item.preview.unmatchedRows / item.preview.processedRows >= 0.2 && (
+                <p className="rounded-[4px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                  Не знайдено {Math.round(item.preview.unmatchedRows / item.preview.processedRows * 100)}% робочих рядків. Імпорт застосує лише розпізнані позиції,
+                  але перед підтвердженням краще завантажити список «Не знайдено» та перевірити артикули, SKU і штрихкоди.
+                </p>
+              )}
 
               {item.preview.matchedRows === 0 && item.preview.newProducts === 0 && (
                 <p className="rounded-[4px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
@@ -550,18 +654,202 @@ function GuideInfoCard({ icon, iconBg, title, children }: { icon: ReactNode; ico
   );
 }
 
-function DownloadExample({ label }: { label: string }) {
+function DownloadExample({ label, href, tone = "plain" }: { label: string; href: string; tone?: "primary" | "plain" }) {
   return (
-    <a href="/api/erp/import/template?kind=offers" download
-      className="mt-3 inline-flex items-center gap-1.5 rounded-[3px] border border-[#BDBDBD] bg-white px-3 py-1.5 text-[11px] font-medium text-[#3a4250] transition-colors hover:border-[#2f9488] hover:text-[#2f9488]">
+    <a href={href} download
+      className={`inline-flex items-center gap-1.5 rounded-[3px] border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+        tone === "primary"
+          ? "border-[#2f9488] bg-[#2f9488] text-white hover:bg-[#25786f]"
+          : "border-[#BDBDBD] bg-white text-[#3a4250] hover:border-[#2f9488] hover:text-[#2f9488]"
+      }`}>
       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeLinecap="round" strokeLinejoin="round" /></svg>
       {label}
     </a>
   );
 }
 
-/** Static "з чого почати" panel — shown until the first file is added.
- *  Only one supported format (Intertop ОСТАТКИ), so there's nothing to pick. */
+const PRESET_HELP: Record<PresetId, {
+  title: string;
+  body: string;
+  chips: string[];
+  required: string[];
+  template: "full" | "stock";
+}> = {
+  standard: {
+    title: "Повний імпорт товарів",
+    body: "Найкращий режим для таблиць, де є картки товарів і торгові позиції: назва, бренд, категорія, SKU, заводський артикул, штрихкод, розмір, залишок і ціни.",
+    chips: ["оновить залишки", "оновить ціни", "створить нові картки"],
+    required: ["SKU або заводський артикул", "назва", "бренд", "категорія", "розмір", "кількість або ціна"],
+    template: "full",
+  },
+  stock: {
+    title: "Оновлення залишків",
+    body: "Для файлів від складу або постачальника. Достатньо SKU, заводського артикулу, штрихкоду або коду оферу, плюс розмір і кількість. Ціни не зміняться.",
+    chips: ["тільки кількість", "без зміни цін", "без нових карток"],
+    required: ["SKU / штрихкод / код оферу", "розмір", "кількість"],
+    template: "stock",
+  },
+  prices: {
+    title: "Оновлення цін",
+    body: "Для прайс-листів. Система шукає товар за SKU, артикулом, штрихкодом або кодом оферу й оновлює базову та акційну ціну. Залишки не зміняться.",
+    chips: ["тільки ціни", "залишки не чіпає", "без нових карток"],
+    required: ["SKU / штрихкод / код оферу", "базова ціна або акційна ціна"],
+    template: "stock",
+  },
+  existing: {
+    title: "Тільки існуючий каталог",
+    body: "Безпечний режим для масового оновлення: усе, що не знайдено в каталозі, піде у список перевірки. Нові картки не створюються автоматично.",
+    chips: ["оновить знайдене", "не створює нові", "не знайдене виведе окремо"],
+    required: ["надійний ключ товару", "поля, які треба оновити"],
+    template: "stock",
+  },
+  custom: {
+    title: "Ручне налаштування",
+    body: "Ви змінили додаткові параметри. Перевірте джерело, режим залишків і порожні значення перед превʼю, особливо якщо увімкнене обнулення відсутніх позицій.",
+    chips: ["перевірити джерело", "перевірити обнулення", "зробити превʼю"],
+    required: ["ключ товару", "обрані поля оновлення", "перевірене джерело"],
+    template: "full",
+  },
+};
+
+function ModeAdvisor({
+  preset,
+  stockMode,
+  sourceName,
+  blankQuantity,
+}: {
+  preset: PresetId;
+  stockMode: StockMode;
+  sourceName: string;
+  blankQuantity: BlankQuantity;
+}) {
+  const help = PRESET_HELP[preset] ?? PRESET_HELP.custom;
+  const templateHref = help.template === "full"
+    ? "/api/erp/import/template?type=full"
+    : "/api/erp/import/template?type=stock";
+  const riskySnapshot = stockMode === "snapshot";
+  return (
+    <div className={`mt-3 rounded-[5px] border p-3 ${riskySnapshot ? "border-amber-300 bg-amber-50" : "border-[#DDE3E5] bg-[#FAFBFB]"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-[12px] font-semibold text-[#1f2733]">{help.title}</p>
+            {sourceName && (
+              <span className="rounded-[3px] bg-white px-2 py-0.5 text-[10px] text-[#5a6472] ring-1 ring-[#DDE3E5]">
+                Джерело: {sourceName}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 max-w-[760px] text-[11px] leading-5 text-[#5a6472]">{help.body}</p>
+        </div>
+        <DownloadExample href={templateHref} label={help.template === "full" ? "Скачати повний XLSX" : "Скачати короткий XLSX"} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {help.chips.map((chip) => (
+          <span key={chip} className="rounded-full bg-white px-2 py-1 text-[10px] font-medium text-[#3a4250] ring-1 ring-[#DDE3E5]">
+            {chip}
+          </span>
+        ))}
+        {blankQuantity === "zero" && (
+          <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-medium text-red-700 ring-1 ring-red-200">
+            порожній залишок стане 0
+          </span>
+        )}
+        {riskySnapshot && (
+          <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-amber-800 ring-1 ring-amber-300">
+            відсутні у файлі позиції джерела будуть обнулені
+          </span>
+        )}
+      </div>
+      <div className="mt-3 grid gap-2 border-t border-[#E7EBED] pt-3 sm:grid-cols-[120px_1fr]">
+        <p className="text-[10px] uppercase tracking-[0.12em] text-[#8a94a0]">Має бути у файлі</p>
+        <div className="flex flex-wrap gap-1.5">
+          {help.required.map((item) => (
+            <span key={item} className="rounded-[3px] bg-white px-2 py-1 text-[10px] text-[#5a6472] ring-1 ring-[#DDE3E5]">
+              {item}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StockImportInstruction() {
+  const steps = [
+    {
+      title: "1. Підготуйте Excel XLSX",
+      text: "Один розмір — один рядок. SKU та заводський артикул не змінюйте, кількість вказуйте цілим числом без слова «шт.». Значення 0 обнулить саме цей розмір.",
+    },
+    {
+      title: "2. Виберіть безпечні параметри",
+      text: "Режим «Лише залишки» → «Лише з файла». У додаткових параметрах: «Залишки» увімкнено, «Ціни» та «Нові товари» вимкнено, «Порожня кількість» = «Не змінювати».",
+    },
+    {
+      title: "3. Завантажте й перевірте превʼю",
+      text: "До застосування переконайтеся: «Не знайдено» = 0, «Нові товари» = 0, дублі = 0, кількість оброблених рядків збігається з Excel, а старі та нові залишки показані правильно.",
+    },
+    {
+      title: "4. Застосуйте та звірте",
+      text: "Натисніть «Підтвердити імпорт», потім відкрийте «Товари → Торгові пропозиції», знайдіть 2–3 SKU з файла й звірте кожен розмір та кількість.",
+    },
+  ];
+  return (
+    <div className="mt-3 overflow-hidden rounded-[6px] border border-[#BFD8D4] bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 bg-[#F1F8F7] px-4 py-3">
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-[#2f756d]">Покрокова інструкція</p>
+          <h3 className="mt-0.5 text-[14px] font-semibold text-[#1f2733]">Як правильно оновити лише залишки</h3>
+          <p className="mt-1 text-[11px] leading-4 text-[#5a6472]">Цей режим не змінює ціни та не створює нові картки товарів.</p>
+        </div>
+        <DownloadExample href="/api/erp/import/template?type=stock" label="Скачати шаблон XLSX" />
+      </div>
+
+      <div className="p-4">
+        <ExampleTable
+          header={["SKU", "Заводський артикул", "Розмір", "Кількість"]}
+          row={["26241", "LIPSIAN051.L85-999", "M", "4"]}
+          accent="bg-[#F1F8F7] text-[#1f2733]"
+        />
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {steps.map((step) => (
+            <div key={step.title} className="rounded-[5px] border border-[#E0E7E5] bg-[#FBFCFC] p-3">
+              <p className="text-[11px] font-semibold text-[#1f2733]">{step.title}</p>
+              <p className="mt-1 text-[11px] leading-5 text-[#5a6472]">{step.text}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 grid gap-2 rounded-[5px] border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900 sm:grid-cols-2">
+          <p><b>Розмір відсутній у файлі:</b> його поточний залишок не зміниться в режимі «Лише з файла».</p>
+          <p><b>Потрібно обнулити розмір:</b> додайте його окремим рядком і вкажіть кількість 0.</p>
+          <p><b>Порожня кількість:</b> залишайте режим «Не змінювати», щоб порожня клітинка випадково не стала нулем.</p>
+          <p><b>Є рядки «Не знайдено»:</b> не застосовуйте імпорт — перевірте SKU, артикул і написання розміру.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SafeImportChecklist() {
+  const rules = [
+    { title: "1. Завантажити", text: "Файл тільки читається, у каталог ще нічого не пишеться." },
+    { title: "2. Перевірити", text: "Превʼю покаже знайдені, нові й проблемні рядки окремо." },
+    { title: "3. Застосувати", text: "Зміни записуються лише після підтвердження кнопкою." },
+  ];
+  return (
+    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+      {rules.map((rule) => (
+        <div key={rule.title} className="rounded-[5px] border border-[#E0E0E0] bg-white p-3">
+          <p className="text-[10px] uppercase tracking-[0.12em] text-[#2f9488]">{rule.title}</p>
+          <p className="mt-1 text-[11px] leading-4 text-[#5a6472]">{rule.text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Static "з чого почати" panel — shown until the first file is added. */
 function StartGuide() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   return (
@@ -572,62 +860,71 @@ function StartGuide() {
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M20 11A8 8 0 006 5.3L3 8m0 0V3m0 5h5m-5 5a8 8 0 0014 5.7l3-2.7m0 0v5m0-5h-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </span>
           <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-[#9E9E9E]">Формат</p>
-            <h2 className="mt-0.5 text-[15px] font-medium text-[#1f2733]">Таблиця ОСТАТКИ <span className="text-[#9E9E9E] font-normal">(.csv)</span></h2>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-[#9E9E9E]">Коротка інструкція</p>
+            <h2 className="mt-0.5 text-[15px] font-medium text-[#1f2733]">Як підготувати й безпечно завантажити таблицю</h2>
           </div>
         </div>
         <button onClick={() => setDetailsOpen((v) => !v)}
           className="shrink-0 rounded-[3px] border border-[#E0E0E0] px-3 py-1.5 text-[11px] uppercase tracking-[0.08em] text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
-          {detailsOpen ? "Згорнути деталі" : "Як саме працює перевірка? →"}
+          {detailsOpen ? "Згорнути інструкцію" : "Детальна інструкція →"}
         </button>
       </div>
 
       <div className="mt-4 relative rounded-[5px] border border-blue-200 bg-blue-50/40 p-4">
         <p className="text-[12px] leading-relaxed text-[#5a6472]">
-          Що <b>реально є зараз</b> + актуальні ціни. <b>Оновлює наявність і ціни</b> у вже створених товарах, зіставляючи по <b>factory_article + розмір</b>
-          (а рядок без збігу, якщо несе назву товару, <b>сам створює нову картку</b> — окремий MG-файл для цього більше не потрібен). Роздільник — <b>крапка з комою</b>.
+          Один файл може створити або оновити картки товарів, торгові позиції, <b>залишки, базові й акційні ціни</b>.
+          Найзручніший формат — <b>Excel XLSX</b>: він не перетворює SKU та штрихкоди на дивні числа.
+          CSV теж підтримується, якщо постачальник віддає саме його.
         </p>
         <ExampleTable
-          header={["external_Id", "factory_article", "barcode", "size", "quantity", "base_price", "discount_price"]}
-          row={["ART-10001", "ART-10001", "48200000...", "S", "2", "4200.00", "3360.00"]}
+          header={["SKU", "Назва (укр.)", "Бренд", "Категорія", "Заводський артикул", "Штрихкод", "Розмір", "Кількість", "Базова ціна", "Акційна ціна"]}
+          row={["900000880", "Плавальні шорти", "HARMONT&BLAINE", "Плавальні", "YRN095090280_099", "4820000010011", "L", "2", "7140.00", "5712.00"]}
           accent="bg-blue-50 text-blue-900"
         />
-        <DownloadExample label="Завантажити приклад ОСТАТКИ.csv" />
+        <p className="mt-2 text-[11px] leading-4 text-[#6f7884]">
+          Для нової картки потрібні хоча б <b>SKU/артикул, назва, бренд, категорія</b> і ціна або залишок.
+          Для оновлення вже існуючих товарів достатньо надійного ключа: SKU, заводський артикул, штрихкод або код оферу.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <DownloadExample href="/api/erp/import/template?type=full" label="Повний приклад товарів XLSX" tone="primary" />
+          <DownloadExample href="/api/erp/import/template?type=stock" label="Лише залишки й ціни XLSX" />
+          <DownloadExample href="/api/erp/import/template?type=stock&format=csv" label="CSV для фідів" />
+        </div>
+        <SafeImportChecklist />
       </div>
 
       <div className="mt-4 grid gap-2 rounded-[5px] bg-[#FAFAFA] p-3 text-[11px] text-[#5a6472] sm:grid-cols-2">
         <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Спершу <b>превʼю</b> — нічого не змінюється, поки не натиснете «Застосувати»</span>
         <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Рядок без свого товару, але з назвою — <b>сам стане новою карткою</b> при застосуванні</span>
         <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Рядок зовсім без даних для створення потрапить у <b>«не знайдено»</b> — створіть товар прямо звідти, одним кліком</span>
-        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Незнайомий формат колонок <b>розпізнає ШІ</b> автоматично</span>
+        <span className="flex items-start gap-1.5"><span className="mt-0.5 text-[#2f9488]">✓</span> Книга Excel може мати обкладинку чи інструкцію: система знайде <b>потрібний лист і рядок заголовків</b></span>
       </div>
 
       {detailsOpen && (
         <div className="mt-4 rounded-[5px] border border-[#E0E0E0] bg-[#FAFAFA] p-4">
           {/* numbered, connected timeline — mirrors the actual preview→apply sequence */}
           <div>
-            <GuideStep n={1} color="bg-blue-500" title="Розпізнавання файлу">
+            <GuideStep n={1} color="bg-blue-500" title="Система знаходить таблицю та колонки">
               <p>
-                Щойно файл кинуто в зону завантаження, він одразу йде на «превʼю» (нічого ще не пишеться в базу).
-                Сервер дивиться на назви колонок — потрібні <span className="font-mono text-[11px]">size</span> і хоча б одне з
-                <span className="font-mono text-[11px]"> quantity</span> / <span className="font-mono text-[11px]">base_price</span>.
+                Після вибору файла система перевіряє всі листи Excel і перші 40 рядків кожного листа, тому службовий заголовок або лист-інструкція не завадить.
+                Вона розуміє поширені назви на кшталт «SKU», «ID товару», «Заводський артикул», «Артикул поставщика», «Код оферу», «Штрихкод», «Залишок», «Остаток», «Stock», «Базова ціна» та «Sale price».
               </p>
               <p>
-                Якщо колонки не збігаються з відомим шаблоном — файл автоматично надсилається на розпізнавання ШІ, який сам визначає, яка колонка за що відповідає.
-                Якщо навіть ШІ не може впевнено визначити формат — картка файлу підсвічується червоним і показує помилку замість статистики.
+                Якщо відомі назви не знайдено, запускається резервне розпізнавання структури. Низька впевненість не призводить до запису в каталог:
+                файл або покаже превʼю, або зупиниться з поясненням. За нестандартного постійного формату можна вибрати збережену схему в «Додаткових параметрах».
               </p>
             </GuideStep>
 
             <GuideStep n={2} color="bg-[#2f9488]" title="Превʼю — як саме зіставляються рядки з товарами">
-              <p>Для кожного рядка система шукає відповідний товар у каталозі за ланцюжком пріоритету (перший збіг перемагає):</p>
+              <p>Для кожного рядка система шукає відповідний товар за надійним ланцюжком (перший точний збіг перемагає):</p>
               <ol className="ml-4 list-decimal space-y-0.5">
-                <li><b>offer_code</b> — точний код пропозиції з розмірної сітки товару, якщо він вже був заповнений раніше;</li>
-                <li><b>barcode</b> — штрихкод конкретного розміру;</li>
-                <li><b>factory_article</b> — заводський артикул постачальника (заповнюється при попередньому імпорті або вручну в картці товару);</li>
-                <li><b>external_id / sku</b> — резервний варіант, коли жоден із перших трьох не збігся.</li>
+                <li><b>Код торгової пропозиції</b> — найточніший ключ конкретного розміру;</li>
+                <li><b>Штрихкод</b> — точний код конкретної позиції;</li>
+                <li><b>Артикул або SKU</b> — код картки товару;</li>
+                <li><b>Заводський артикул</b> — код постачальника, спільний для розмірів одного товару.</li>
               </ol>
               <p>
-                Якщо жоден із чотирьох варіантів не знайшов товар, але рядок несе назву товару (типово для одезда-шаблону) — така група рядків
+                Якщо жоден із чотирьох варіантів не знайшов товар, але рядок несе назву товару (типово для повного шаблону) — така група рядків
                 (усі розміри одного товару) при застосуванні <b>сама створить нову картку</b>. Якщо ж даних для створення теж немає — рядок потрапляє
                 у список <b>«Не знайдено»</b>, де кожен запис має кнопку <b>«+ Створити товар»</b> — коротка форма (назва + ціна), вже заповнена
                 кодом, розміром і кількістю з файлу.
@@ -640,9 +937,9 @@ function StartGuide() {
 
             <GuideStep n={3} color="bg-emerald-600" title="«Застосувати» — що саме записується в базу" last>
               <p>
-                Для кожного зіставленого рядка оновлюється кількість і ціна конкретного розміру у <span className="font-mono text-[11px]">product_variants</span>,
-                і кожна зміна кількості пишеться окремим рядком в <span className="font-mono text-[11px]">stock_movements</span> (звідки береться цифра «рухів» у результаті).
-                Після цього <b>сумарний залишок і статус «в наявності» перераховуються автоматично</b> як сума по всіх розмірах — вручну чіпати не потрібно.
+                Після натискання «Підтвердити імпорт» усі зміни записуються однією операцією: або застосовується весь файл, або при помилці не застосовується нічого.
+                Кожна зміна залишку потрапляє в журнал, а сумарна наявність товару перераховується автоматично. Імпорт можна скасувати з історії,
+                поки ці самі позиції не були змінені продажем, іншим імпортом або вручну.
               </p>
             </GuideStep>
           </div>
@@ -696,6 +993,16 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
   const [applyingAll, setApplyingAll] = useState(false);
   const [templates, setTemplates] = useState<{ id: string; name: string; format: string; column_count?: number }[]>([]);
   const [templateId, setTemplateId] = useState("");
+  const [sources, setSources] = useState<ImportSource[]>([]);
+  const [sourceId, setSourceId] = useState("");
+  const [stockMode, setStockMode] = useState<StockMode>("patch");
+  const [updateStock, setUpdateStock] = useState(true);
+  const [updatePrices, setUpdatePrices] = useState(true);
+  const [createMissingProducts, setCreateMissingProducts] = useState(true);
+  const [blankQuantity, setBlankQuantity] = useState<BlankQuantity>("ignore");
+  const [rollingBackId, setRollingBackId] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // Mirrors `files` for code that needs the LIVE list mid-loop (applyAll) —
   // the `files` closure captured at loop-start goes stale once sibling
@@ -723,22 +1030,34 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
       .then((r) => r.json())
       .then((d) => setTemplates(d.templates ?? []))
       .catch(() => {});
+    fetch("/api/admin/import-sources")
+      .then((r) => r.json())
+      .then((d) => setSources((d.sources ?? []) as ImportSource[]))
+      .catch(() => {});
     loadCatalog();
   }, [loadCatalog]);
 
-  const runPreview = useCallback(async (id: string, file: File, tplId: string): Promise<ImportPreview | null> => {
+  const runPreview = useCallback(async (
+    id: string, file: File, tplId: string, itemStockMode: StockMode, itemSourceId: string,
+    itemUpdateStock: boolean, itemUpdatePrices: boolean, itemCreateMissing: boolean, itemBlankQuantity: BlankQuantity,
+  ): Promise<ImportPreview | null> => {
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "previewing" } : f));
     const fd = new FormData();
     fd.append("file", file);
     fd.append("mode", "preview");
     if (tplId) fd.append("templateId", tplId);
+    fd.append("stockMode", itemStockMode);
+    if (itemSourceId) fd.append("sourceId", itemSourceId);
+    fd.append("updateStock", String(itemUpdateStock));
+    fd.append("updatePrices", String(itemUpdatePrices));
+    fd.append("createMissingProducts", String(itemCreateMissing));
+    fd.append("blankQuantity", itemBlankQuantity);
     try {
       const r = await fetchWithTimeout("/api/erp/import", { method: "POST", body: fd }, 60_000);
       const d = await r.json();
       if (d.preview) {
         const preview = d.preview as ImportPreview;
         setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "ready", preview } : f));
-        setExpandedId(id);
         return preview;
       }
       setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "error", error: d.error ?? "Помилка читання" } : f));
@@ -754,12 +1073,16 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
 
   const addFiles = useCallback((fileList: FileList | File[]) => {
     const toAdd: FileItem[] = Array.from(fileList).map((file) => ({
-      id: uid(), file, status: "idle" as FileStatus, templateId,
+      id: uid(), file, status: "idle" as FileStatus, templateId, stockMode, sourceId,
+      updateStock, updatePrices, createMissingProducts, blankQuantity,
       preview: null, result: null, error: "",
     }));
     setFiles((prev) => [...prev, ...toAdd]);
-    for (const item of toAdd) runPreview(item.id, item.file, item.templateId);
-  }, [runPreview, templateId]);
+    for (const item of toAdd) runPreview(
+      item.id, item.file, item.templateId, item.stockMode, item.sourceId,
+      item.updateStock, item.updatePrices, item.createMissingProducts, item.blankQuantity,
+    );
+  }, [runPreview, templateId, stockMode, sourceId, updateStock, updatePrices, createMissingProducts, blankQuantity]);
 
   const applyFile = useCallback(async (id: string): Promise<void> => {
     // Read the file from filesRef (always current — mirrored via effect),
@@ -770,13 +1093,19 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
     // "Застосувати" appearing to do nothing (state flips to a visual
     // "applying" flash from React's own re-render, then nothing follows).
     const item = filesRef.current.find((f) => f.id === id) ?? null;
-    const file = item?.file ?? null;
-    if (!file) return;
+    if (!item) return;
+    const file = item.file;
     setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "applying" } : f));
     const fd = new FormData();
     fd.append("file", file);
     fd.append("mode", "apply");
     if (item?.templateId) fd.append("templateId", item.templateId);
+    fd.append("stockMode", item.stockMode);
+    if (item.sourceId) fd.append("sourceId", item.sourceId);
+    fd.append("updateStock", String(item.updateStock));
+    fd.append("updatePrices", String(item.updatePrices));
+    fd.append("createMissingProducts", String(item.createMissingProducts));
+    fd.append("blankQuantity", item.blankQuantity);
     try {
       // Longer budget than preview — a full-catalog apply writes many rows in
       // one transaction. Still bounded: never leaves "застосування…" hanging
@@ -801,7 +1130,10 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
         // for it against the fresh DB. Awaited so callers (applyAll) see
         // up-to-date filesRef state right after this resolves.
         const siblings = filesRef.current.filter((f) => f.id !== id && (f.status === "ready" || f.status === "error"));
-        await Promise.all(siblings.map((s) => runPreview(s.id, s.file, s.templateId)));
+        await Promise.all(siblings.map((s) => runPreview(
+          s.id, s.file, s.templateId, s.stockMode, s.sourceId,
+          s.updateStock, s.updatePrices, s.createMissingProducts, s.blankQuantity,
+        )));
       } else {
         setFiles((prev) => prev.map((f) => f.id === id ? { ...f, status: "error", error: d.error ?? "Помилка застосування" } : f));
       }
@@ -833,9 +1165,62 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
     setApplyingAll(false);
   }, [applyFile]);
 
+  /** Re-run dry preview for files already in the queue after settings change.
+   *  This is intentionally explicit: changing a checkbox must never silently
+   *  change what an already-reviewed file will write. */
+  const recheckQueuedFiles = useCallback(async () => {
+    const pending = filesRef.current.filter((f) => f.status !== "done" && f.status !== "applying");
+    if (!pending.length) return;
+    setFiles((prev) => prev.map((f) => pending.some((p) => p.id === f.id) ? {
+      ...f, templateId, stockMode, sourceId, updateStock, updatePrices,
+      createMissingProducts, blankQuantity, preview: null, result: null, error: "",
+    } : f));
+    await Promise.all(pending.map((f) => runPreview(
+      f.id, f.file, templateId, stockMode, sourceId,
+      updateStock, updatePrices, createMissingProducts, blankQuantity,
+    )));
+  }, [runPreview, templateId, stockMode, sourceId, updateStock, updatePrices, createMissingProducts, blankQuantity]);
+
+  function selectPreset(preset: "standard" | "stock" | "prices" | "existing") {
+    setStockMode("patch");
+    setSourceId("");
+    setBlankQuantity("ignore");
+    if (preset === "stock") {
+      setUpdateStock(true); setUpdatePrices(false); setCreateMissingProducts(false);
+    } else if (preset === "prices") {
+      setUpdateStock(false); setUpdatePrices(true); setCreateMissingProducts(false);
+    } else if (preset === "existing") {
+      setUpdateStock(true); setUpdatePrices(true); setCreateMissingProducts(false);
+    } else {
+      setUpdateStock(true); setUpdatePrices(true); setCreateMissingProducts(true);
+    }
+  }
+
+  const settingsSummary = [
+    updateStock ? "залишки" : "",
+    updatePrices ? "ціни" : "",
+    createMissingProducts ? "створення нових товарів" : "лише наявні товари",
+    stockMode === "snapshot" ? "обнулення відсутніх" : "без обнулення",
+  ].filter(Boolean).join(" · ");
+  const activePreset: PresetId = stockMode !== "patch" || sourceId || blankQuantity !== "ignore"
+    ? "custom"
+    : updateStock && updatePrices && createMissingProducts ? "standard"
+    : updateStock && !updatePrices && !createMissingProducts ? "stock"
+    : !updateStock && updatePrices && !createMissingProducts ? "prices"
+    : updateStock && updatePrices && !createMissingProducts ? "existing"
+    : "custom";
+  const selectedSourceName = sources.find((s) => s.id === sourceId)?.name ?? "";
+  const advancedSummary = [
+    selectedSourceName ? `джерело: ${selectedSourceName}` : "ручне завантаження",
+    stockMode === "snapshot" ? "обнулення відсутніх" : "без обнулення",
+    blankQuantity === "zero" ? "порожній залишок = 0" : "порожній залишок ігнорується",
+    templateId ? "власна схема колонок" : "автовизначення колонок",
+  ].join(" · ");
+
   const readyCount = files.filter((f) => f.status === "ready" && (f.preview?.matchedRows ?? 0) > 0).length;
   const hasFiles   = files.length > 0;
   const allDone    = hasFiles && files.every((f) => f.status === "done" || f.status === "error");
+  const currentStep: 1 | 2 | 3 = allDone && files.some((f) => f.status === "done") ? 3 : hasFiles ? 2 : 1;
   const doneResults = files.filter((f) => f.status === "done" && f.result).map((f) => f.result!);
   const applied = doneResults.reduce((a, r) => ({
     created: a.created + r.productsCreated,
@@ -844,6 +1229,22 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
   }), { created: 0, updated: 0, movements: 0 });
   function startNewBatch() {
     setFiles([]); setExpandedId(null);
+  }
+  async function rollbackHistory(entry: HistoryEntry) {
+    if (!confirm(`Скасувати імпорт «${entry.filename}»? Залишки повернуться до значень перед цим запуском.`)) return;
+    setRollingBackId(entry.id);
+    try {
+      const response = await fetch("/api/erp/import/rollback", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runId: entry.id }),
+      });
+      const data = await response.json();
+      if (!response.ok) { onImported?.(data.error ?? "Не вдалося скасувати імпорт"); return; }
+      setHistory((prev) => prev.map((h) => h.id === entry.id ? { ...h, status: "rolled_back" } : h));
+      loadCatalog();
+      onImported?.(`Імпорт скасовано: відновлено ${data.result?.restoredVariants ?? 0} позицій`);
+    } finally {
+      setRollingBackId(null);
+    }
   }
 
   return (
@@ -857,9 +1258,9 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
               ‹ До товарів
             </button>
           )}
-          <h1 className="text-[22px] font-light tracking-tight">Завантажити товари</h1>
-          <p className="mt-0.5 text-[12px] text-[#9E9E9E]">
-            Оновлення залишків і цін — таблиця ОСТАТКИ (.csv); рядок без товару в каталозі сам створить нову картку.
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#1f2733]">Імпорт товарів із таблиці</h1>
+          <p className="mt-1 text-[13px] text-[#6f7884]">
+            Завантажте CSV або Excel. Спочатку система покаже зміни, і лише потім попросить підтвердження.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -877,6 +1278,8 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
           )}
         </div>
       </div>
+
+      <ImportSteps step={currentStep} />
 
       {/* Live catalog state — updates right after each apply so the effect of
           an import is visible in real time */}
@@ -904,6 +1307,8 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
           )}
         </div>
       )}
+
+      {!hasFiles && !allDone && <StartGuide />}
 
       {/* success banner — after all files applied. Honest about the next
           real blocker (no photo → storefront hides it) instead of just
@@ -937,7 +1342,7 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
               </span>
               {onGoToCatalog && (
                 <button onClick={onGoToCatalog} className="ml-auto shrink-0 text-[11px] uppercase tracking-[0.1em] text-amber-900 hover:underline">
-                  Додати фото масово →
+                  Відкрити каталог →
                 </button>
               )}
             </div>
@@ -945,19 +1350,140 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
         </div>
       )}
 
-      {/* onboarding — only before the first file is added */}
-      {!hasFiles && <StartGuide />}
+      {!allDone && (
+        <div className="mb-3 rounded-[6px] border border-[#DDE3E5] bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-semibold text-[#1f2733]">Що потрібно оновити?</p>
+              <p className="mt-0.5 text-[11px] text-[#8a94a0]">Оберіть готовий режим або налаштуйте поля вручну нижче.</p>
+            </div>
+            <span className="rounded-[3px] bg-[#F1F8F7] px-2.5 py-1 text-[11px] text-[#2f756d]">{settingsSummary}</span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {([
+              { id: "standard", title: "Звичайний імпорт", hint: "Залишки, ціни й нові картки" },
+              { id: "stock", title: "Лише залишки", hint: "Ціни не змінюються" },
+              { id: "prices", title: "Лише ціни", hint: "Кількість не змінюється" },
+              { id: "existing", title: "Лише наявні товари", hint: "Без створення нових карток" },
+            ] as const).map((preset) => (
+              <button key={preset.id} type="button" onClick={() => selectPreset(preset.id)}
+                className={`min-h-[58px] rounded-[5px] border px-3 py-2 text-left transition-colors ${activePreset === preset.id ? "border-[#2f9488] bg-[#F1F8F7] shadow-[inset_3px_0_0_#2f9488]" : "border-[#DDE3E5] bg-[#FAFBFB] hover:border-[#2f9488] hover:bg-[#F4FAF9]"}`}>
+                <b className="block text-[12px] font-medium text-[#1f2733]">{preset.title}</b>
+                <span className="mt-0.5 block text-[10px] leading-4 text-[#8a94a0]">{preset.hint}</span>
+              </button>
+            ))}
+          </div>
+          <ModeAdvisor
+            preset={activePreset}
+            stockMode={stockMode}
+            sourceName={selectedSourceName}
+            blankQuantity={blankQuantity}
+          />
+          {activePreset === "stock" && <StockImportInstruction />}
+          {hasFiles && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-[#E7EBED] pt-3">
+              <p className="min-w-0 flex-1 text-[11px] leading-4 text-amber-800">
+                Вибрані файли зберігають параметри, з якими їх перевіряли. Після зміни режиму запустіть повторну перевірку.
+              </p>
+              <button type="button" onClick={recheckQueuedFiles}
+                className="h-8 shrink-0 rounded-[4px] border border-[#2f9488] px-3 text-[11px] font-medium text-[#2f9488] hover:bg-[#2f9488] hover:text-white">
+                Перевірити файли знову
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!allDone && (
+        <button type="button" onClick={() => setAdvancedOpen((v) => !v)}
+          className="mb-3 flex min-h-11 w-full items-center justify-between rounded-[5px] border border-[#E0E0E0] bg-white px-4 text-left text-[12px] text-[#3a4250] transition-colors hover:border-[#B7C3C6]">
+          <span>
+            <b className="font-medium">Додаткові параметри</b>
+            <span className="ml-2 text-[#8a94a0]">{advancedSummary}</span>
+          </span>
+          <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-[#8a94a0] transition-transform ${advancedOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+
+      {!allDone && advancedOpen && (
+        <div className="mb-3 rounded-[5px] border border-[#E0E0E0] bg-[#FAFAFA] p-3">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <label className="block">
+              <span className="mb-1 block text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Постійне джерело (необовʼязково)</span>
+              <select value={sourceId} onChange={(e) => {
+                const id = e.target.value;
+                setSourceId(id);
+                const source = sources.find((s) => s.id === id);
+                if (source) setStockMode(source.stock_mode ?? "patch");
+                if (!id) setStockMode("patch");
+              }} className="h-9 w-full rounded-[3px] border border-[#E0E0E0] bg-white px-3 text-[12px] text-[#1f2733] outline-none focus:border-[#2f9488]">
+                <option value="">Звичайне ручне завантаження</option>
+                {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </label>
+            <div>
+              <span className="mb-1 block text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Як змінювати залишки</span>
+              <div className="flex rounded-[4px] border border-[#D9DFE2] bg-white p-0.5">
+                <button type="button" onClick={() => setStockMode("patch")}
+                  className={`h-8 rounded-[3px] px-3 text-[11px] font-medium ${stockMode === "patch" ? "bg-[#2f9488] text-white" : "text-[#5a6472]"}`}>
+                  Лише з файла
+                </button>
+                <button type="button" disabled={!sourceId} onClick={() => setStockMode("snapshot")}
+                  title={!sourceId ? "Спочатку виберіть джерело" : "Обнулити позиції джерела, яких немає у файлі"}
+                  className={`h-8 rounded-[3px] px-3 text-[11px] font-medium disabled:cursor-not-allowed disabled:opacity-35 ${stockMode === "snapshot" ? "bg-amber-500 text-white" : "text-[#5a6472]"}`}>
+                  Обнулити відсутні
+                </button>
+              </div>
+            </div>
+          </div>
+          <p className={`mt-2 text-[11px] leading-4 ${stockMode === "snapshot" ? "text-amber-800" : "text-[#8a94a0]"}`}>
+            {stockMode === "snapshot"
+              ? "Система спочатку покаже попередній перегляд. Позиції цього джерела, яких немає у повному файлі, отримають залишок 0."
+              : "Оновляться лише рядки, присутні у файлі. Інші залишки не зміняться."}
+          </p>
+          <div className="mt-3 grid gap-3 border-t border-[#E0E0E0] pt-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="flex cursor-pointer items-start gap-2 text-[12px] text-[#3a4250]">
+              <input type="checkbox" checked={updateStock} onChange={(e) => {
+                setUpdateStock(e.target.checked);
+                if (!e.target.checked) setStockMode("patch");
+              }} className="mt-0.5 h-4 w-4 accent-[#2f9488]" />
+              <span><b className="block font-medium">Залишки</b><span className="text-[11px] text-[#8a94a0]">Кількість за розмірами</span></span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 text-[12px] text-[#3a4250]">
+              <input type="checkbox" checked={updatePrices} onChange={(e) => setUpdatePrices(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#2f9488]" />
+              <span><b className="block font-medium">Ціни</b><span className="text-[11px] text-[#8a94a0]">Базова та акційна</span></span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 text-[12px] text-[#3a4250]">
+              <input type="checkbox" checked={createMissingProducts} onChange={(e) => setCreateMissingProducts(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#2f9488]" />
+              <span><b className="block font-medium">Нові товари</b><span className="text-[11px] text-[#8a94a0]">Створювати картки з повних рядків</span></span>
+            </label>
+            <label className={`block text-[11px] uppercase tracking-[0.08em] ${updateStock ? "text-[#8a94a0]" : "text-[#BDBDBD]"}`}>
+              Порожня кількість
+              <select value={blankQuantity} disabled={!updateStock} onChange={(e) => setBlankQuantity(e.target.value as BlankQuantity)}
+                className="mt-1 h-8 w-full rounded-[3px] border border-[#D9DFE2] bg-white px-2 text-[11px] normal-case tracking-normal text-[#3a4250] disabled:bg-[#f1f3f4]">
+                <option value="ignore">Не змінювати</option>
+                <option value="zero">Вважати нулем</option>
+              </select>
+            </label>
+          </div>
+          {!updateStock && !updatePrices && (
+            <p className="mt-2 text-[11px] font-medium text-red-600">Виберіть залишки, ціни або обидва поля.</p>
+          )}
+        </div>
+      )}
 
       {/* template selector — explicit column mapping instead of auto-detect;
           set BEFORE dropping files, each file remembers the template it was
           added with (see FileItem.templateId) so a later selector change
           doesn't retroactively affect already-queued files. */}
-      {!allDone && templates.length > 0 && (
-        <div className="mb-3 flex items-center gap-2">
-          <label className="text-[11px] uppercase tracking-[0.1em] text-[#9E9E9E]">Шаблон мапінгу</label>
+      {!allDone && advancedOpen && templates.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[5px] border border-[#E0E0E0] bg-[#FAFAFA] px-3 py-2.5">
+          <label className="text-[11px] uppercase tracking-[0.1em] text-[#8a94a0]">Колонки файла</label>
           <select value={templateId} onChange={(e) => setTemplateId(e.target.value)}
-            className="h-8 rounded-[3px] border border-[#E0E0E0] bg-white px-2 text-[12px] text-[#1f2733] outline-none focus:border-[#2f9488]">
-            <option value="">Автовизначення (за замовчуванням)</option>
+            className="h-9 min-w-[260px] flex-1 rounded-[3px] border border-[#E0E0E0] bg-white px-3 text-[12px] text-[#1f2733] outline-none focus:border-[#2f9488]">
+            <option value="">Визначити автоматично (рекомендовано)</option>
             {templates.map((t) => (
               <option key={t.id} value={t.id}>{t.name} · {t.format.toUpperCase()}{t.column_count ? ` · ${t.column_count} кол.` : ""}</option>
             ))}
@@ -970,30 +1496,44 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
         <div
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
-          onClick={() => fileRef.current?.click()}
-          className={`cursor-pointer rounded-[4px] border-2 border-dashed text-center transition-colors ${
+          onDrop={(e) => { e.preventDefault(); setDrag(false); if ((updateStock || updatePrices) && e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}
+          onClick={() => { if (updateStock || updatePrices) fileRef.current?.click(); }}
+          className={`${updateStock || updatePrices ? "cursor-pointer" : "cursor-not-allowed opacity-50"} rounded-[6px] border-2 border-dashed text-center transition-colors ${
             drag
               ? "border-[#2f9488] bg-[#FAFAFA]"
               : hasFiles
-                ? "border-[#E0E0E0] px-4 py-3 hover:border-[#BDBDBD]"
-                : "border-[#E0E0E0] px-4 py-12 hover:border-[#BDBDBD]"
+                ? "border-[#D5DCDE] px-4 py-3 hover:border-[#2f9488]"
+                : "border-[#BFCBCD] bg-[#FBFCFC] px-4 py-10 hover:border-[#2f9488] hover:bg-[#F7FBFA]"
           }`}>
           {!hasFiles ? (
             <>
               <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-[#BDBDBD]" fill="none" stroke="currentColor" strokeWidth="1.3">
                 <path d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="mt-3 text-[14px] text-[#3a4250]">Перетягніть файл або натисніть для вибору</p>
-              <p className="mt-1 text-[12px] text-[#9E9E9E]">.csv · .xls · .xlsx — можна кинути кілька файлів одразу</p>
+              <p className="mt-3 text-[15px] font-medium text-[#1f2733]">Оберіть таблицю з товарами</p>
+              <p className="mt-1 text-[12px] text-[#6f7884]">Перетягніть сюди або натисніть · CSV, XLS чи XLSX</p>
+              <span className="mt-4 inline-flex h-9 items-center rounded-[4px] bg-[#2f9488] px-5 text-[12px] font-medium text-white">Обрати файл</span>
+              <p className="mt-3 text-[11px] text-[#8a94a0]">
+                Спочатку відкриється превʼю. Нічого не зміниться без вашого підтвердження.
+              </p>
             </>
           ) : (
             <p className="text-[12px] text-[#9E9E9E]">+ Додати ще файли</p>
           )}
           <input ref={fileRef} type="file"
             accept=".csv,.xls,.xlsx"
-            multiple className="sr-only"
+            multiple disabled={!updateStock && !updatePrices} className="sr-only"
             onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); }} />
+        </div>
+      )}
+
+      {!hasFiles && !allDone && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#8a94a0]">
+          <span>Не знаєте, які мають бути колонки? Почніть із повного Excel-прикладу.</span>
+          <a href="/api/erp/import/template?type=full" download onClick={(e) => e.stopPropagation()}
+            className="inline-flex min-h-9 items-center px-2 font-medium text-[#2f9488] hover:underline">
+            Завантажити приклад XLSX ↓
+          </a>
         </div>
       )}
 
@@ -1011,8 +1551,14 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
                 if (expandedId === item.id) setExpandedId(null);
               }}
               onApply={() => applyFile(item.id)}
-              onRetry={() => (item.preview ? applyFile(item.id) : runPreview(item.id, item.file, item.templateId))}
-              onProductCreated={() => { runPreview(item.id, item.file, item.templateId); loadCatalog(); }}
+              onRetry={() => (item.preview ? applyFile(item.id) : runPreview(
+                item.id, item.file, item.templateId, item.stockMode, item.sourceId,
+                item.updateStock, item.updatePrices, item.createMissingProducts, item.blankQuantity,
+              ))}
+              onProductCreated={() => { runPreview(
+                item.id, item.file, item.templateId, item.stockMode, item.sourceId,
+                item.updateStock, item.updatePrices, item.createMissingProducts, item.blankQuantity,
+              ); loadCatalog(); }}
             />
           ))}
         </div>
@@ -1020,8 +1566,19 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
 
       {/* history */}
       <div className="mt-8">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[11px] uppercase tracking-[0.12em] text-[#9E9E9E]">Історія імпортів</h2>
+        <button type="button" onClick={() => setHistoryOpen((v) => !v)}
+          className="flex min-h-12 w-full items-center justify-between rounded-[5px] border border-[#E0E0E0] bg-white px-4 text-left hover:border-[#B7C3C6]">
+          <span>
+            <b className="block text-[13px] font-medium text-[#1f2733]">Попередні імпорти</b>
+            <span className="mt-0.5 block text-[11px] text-[#8a94a0]">{history.length ? `${history.length} останніх запусків` : "Історія поки порожня"}</span>
+          </span>
+          <svg viewBox="0 0 24 24" className={`h-4 w-4 text-[#8a94a0] transition-transform ${historyOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {historyOpen && <div className="mt-3">
+        <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
           {history.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {([
@@ -1062,16 +1619,21 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
                 {rows.map((h, i) => {
                   const open = historyOpenIdx === i;
                   return (
-                    <div key={i}>
+                    <div key={h.id} className={h.status === "rolled_back" ? "opacity-60" : ""}>
                       <button onClick={() => setHistoryOpenIdx(open ? null : i)}
                         className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left text-[12px] hover:bg-[#FAFAFA]">
                         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${h.unmatchedRows > 0 && h.matchedRows === 0 ? "bg-red-400" : "bg-green-400"}`} />
                         <span className={`shrink-0 rounded-[3px] border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.06em] ${KIND_COLOR[h.kind]}`}>{KIND_LABEL[h.kind]}</span>
+                        <span className={`shrink-0 rounded-[3px] px-1.5 py-0.5 text-[10px] ${h.stockMode === "snapshot" ? "bg-amber-50 text-amber-800" : "bg-[#f2f4f5] text-[#6f7884]"}`}>
+                          {h.stockMode === "snapshot" ? "Повний знімок" : "Точкове"}
+                        </span>
                         <span className="min-w-0 flex-1 truncate font-medium text-[#1f2733]">{h.filename}</span>
                         <span className="shrink-0 tabular-nums text-[#9E9E9E]">
                           {h.productsCreated > 0 && <>+{h.productsCreated} нових · </>}
                           {h.productsUpdated > 0 && <>{h.productsUpdated} оновлено · </>}
                           {h.stockMovements} рухів
+                          {h.zeroedRows > 0 && <span className="text-amber-700"> · {h.zeroedRows} обнулено</span>}
+                          {h.status === "rolled_back" && <span className="text-[#8a94a0]"> · скасовано</span>}
                           {h.unmatchedRows > 0 && <span className="text-red-500"> · {h.unmatchedRows} не знайдено</span>}
                         </span>
                         <span className="shrink-0 text-[11px] text-[#BDBDBD]" title={dmy(h.at)}>{ago(h.at)}</span>
@@ -1089,7 +1651,15 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
                             <StatChip label="Рухів складу"  value={h.stockMovements} />
                             <StatChip label="Не знайдено"   value={h.unmatchedRows}   accent={h.unmatchedRows ? "text-red-600" : undefined} />
                           </div>
-                          <p className="mt-2 text-[11px] text-[#9E9E9E]">{dmy(h.at)} · {h.filename}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <p className="text-[11px] text-[#9E9E9E]">{dmy(h.at)} · {h.sourceName || h.filename}</p>
+                            {h.status === "applied" && h.stockMovements > 0 && (
+                              <button onClick={() => rollbackHistory(h)} disabled={rollingBackId === h.id}
+                                className="ml-auto h-8 rounded-[3px] border border-red-200 bg-white px-3 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">
+                                {rollingBackId === h.id ? "Скасування…" : "Скасувати імпорт"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1099,7 +1669,8 @@ export function ErpImport({ onBack, onImported, onGoToCatalog }: {
             </>
           );
         })()}
-        <p className="mt-2 text-[11px] text-[#BDBDBD]">Зберігаються останні 20 імпортів. Повний журнал — у Моніторинг → журнал активності.</p>
+        <p className="mt-2 text-[11px] text-[#BDBDBD]">Показано останні 30 імпортів. Повний журнал — у Моніторинг → журнал активності.</p>
+        </div>}
       </div>
     </div>
   );
