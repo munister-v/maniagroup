@@ -1743,13 +1743,17 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
 
 /* ─── Media library ─── */
 
-type MediaFile = { url: string; name: string; size: number; mtime: number };
+type MediaUsage = { id: string; name: string; sku: string };
+type MediaFile = { url: string; name: string; size: number; mtime: number; usedBy?: MediaUsage[] };
 
 function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [search, setSearch] = useState("");
+  const [usage, setUsage] = useState<"all" | "used" | "free">("all");
+  const [sort, setSort] = useState<"new" | "big">("new");
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -1796,8 +1800,18 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   }
 
   async function remove(name: string) {
-    if (!confirm(`Видалити «${name}»? Якщо файл десь використовується — зображення зникне.`)) return;
-    const res = await fetch(`/api/admin/media?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (!confirm(`Видалити «${name}»?`)) return;
+    let res = await fetch(`/api/admin/media?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+
+    // The server refuses when a product still shows the file, and tells us
+    // which — so the second prompt can name them instead of guessing.
+    if (res.status === 409) {
+      const d: { usedBy?: MediaUsage[] } = await res.json().catch(() => ({}));
+      const list = (d.usedBy ?? []).map((u) => `• ${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n");
+      if (!confirm(`Це фото стоїть на товарах:\n\n${list}\n\nВидалити все одно? У картках воно стане «битим».`)) return;
+      res = await fetch(`/api/admin/media?name=${encodeURIComponent(name)}&force=1`, { method: "DELETE" });
+    }
+
     if (res.ok) {
       setFiles((fs) => fs.filter((f) => f.name !== name));
       onToast?.("Видалено");
@@ -1807,6 +1821,23 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   }
 
   const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.round(b / 1024)} КБ` : `${(b / 1024 / 1024).toFixed(1)} МБ`);
+
+  const shown = files
+    .filter((f) => {
+      const used = (f.usedBy?.length ?? 0) > 0;
+      if (usage === "used" && !used) return false;
+      if (usage === "free" && used) return false;
+      const term = search.trim().toLowerCase();
+      if (!term) return true;
+      // Search the filename and whatever product it is attached to, so you can
+      // find an image by the product it belongs to rather than by its uuid.
+      return f.name.toLowerCase().includes(term)
+        || (f.usedBy ?? []).some((u) => u.name.toLowerCase().includes(term) || u.sku.toLowerCase().includes(term));
+    })
+    .sort((a, b) => (sort === "big" ? b.size - a.size : b.mtime - a.mtime));
+
+  const freeCount = files.filter((f) => (f.usedBy?.length ?? 0) === 0).length;
+  const freeBytes = files.filter((f) => (f.usedBy?.length ?? 0) === 0).reduce((s, f) => s + f.size, 0);
 
   return (
     <div
@@ -1831,6 +1862,42 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         </button>
       </div>
 
+      {files.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Пошук за файлом, товаром або артикулом"
+            className="h-9 min-w-[240px] flex-1 border border-[#e6eaec] bg-white px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none"
+          />
+          <div className="flex">
+            {([["all", `Усі · ${files.length}`], ["used", `На товарах · ${files.length - freeCount}`], ["free", `Вільні · ${freeCount}`]] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setUsage(key)}
+                className={`h-9 border px-3 text-[12px] ${usage === key ? "border-[#2b2d42] bg-[#2b2d42] text-white" : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#b6c0ca]"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as "new" | "big")}
+            className="h-9 border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none"
+          >
+            <option value="new">Спочатку нові</option>
+            <option value="big">Спочатку важкі</option>
+          </select>
+        </div>
+      )}
+
+      {usage === "free" && freeCount > 0 && (
+        <p className="mb-3 text-[12px] text-[#8a94a0]">
+          Ці {freeCount} файлів не стоять на жодному товарі та займають {fmtSize(freeBytes)}.
+        </p>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {[1,2,3,4,5,6,7,8].map((i) => <div key={i} className="aspect-square animate-pulse bg-[#f7f9fa]" />)}
@@ -1839,12 +1906,26 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         <div className={`rounded-[3px] border border-dashed px-4 py-16 text-center text-sm transition-colors ${dragOver ? "border-[#2b2d42] bg-[#f4f6f7] text-[#2b2d42]" : "border-[#d5dbe0] bg-white text-[#8a94a0]"}`}>
           {dragOver ? "Відпустіть, щоб завантажити" : "Бібліотека порожня. Перетягніть фото сюди або натисніть «Завантажити»."}
         </div>
+      ) : shown.length === 0 ? (
+        <div className="rounded-[3px] border border-dashed border-[#d5dbe0] bg-white px-4 py-16 text-center text-sm text-[#8a94a0]">
+          Нічого не знайдено за цим фільтром.
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {files.map((f) => (
+          {shown.map((f) => (
             <div key={f.name} className="group relative overflow-hidden rounded-[3px] border border-[#eef2f3] bg-white">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={f.url} alt={f.name} className="aspect-square w-full object-cover" loading="lazy" />
+              {(f.usedBy?.length ?? 0) === 0 ? (
+                <span className="absolute left-1 top-1 rounded-[2px] bg-[#8a94a0]/90 px-1 text-[9px] uppercase text-white">вільне</span>
+              ) : (
+                <span
+                  className="absolute left-1 top-1 max-w-[92%] truncate rounded-[2px] bg-[#2f9488]/95 px-1 text-[9px] text-white"
+                  title={f.usedBy!.map((u) => `${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n")}
+                >
+                  {f.usedBy!.length === 1 ? f.usedBy![0].name : `${f.usedBy!.length} товари`}
+                </span>
+              )}
               <div className="flex items-center justify-between gap-1 px-2 py-1.5">
                 <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>{fmtSize(f.size)}</span>
                 <div className="flex shrink-0 gap-1">
