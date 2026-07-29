@@ -15,7 +15,8 @@
  * WordPress URL so the storefront still shows something, and lib/photoStore's
  * resetFailedPhotos() can re-queue them.
  *
- *   node scripts/migrate-photos.mjs [--scope=publish|all] [--limit=N] [--dry]
+ * Run it with a heap cap so it can never crowd out the site:
+ *   node --max-old-space-size=384 scripts/migrate-photos.mjs [--scope=publish|all] [--limit=N] [--dry]
  */
 import { mkdir, writeFile, stat } from "node:fs/promises";
 import path from "node:path";
@@ -33,9 +34,18 @@ const DRY = args.includes("--dry");
 
 const PUB_DIR = path.join(process.cwd(), "public", "catalog");
 const QUALITY = 82;
-// The live WP shop serves real customers — keep the crawl gentle.
-const CONCURRENCY = 4;
+// The live WP shop serves real customers — keep the crawl gentle. Two at a
+// time also keeps peak memory down, which matters more here than speed.
+const CONCURRENCY = 2;
 const TIMEOUT_MS = 25000;
+
+// This box has 1.7 GB and runs the shop itself. An earlier run at concurrency
+// 4 with sharp's defaults grew to 1.2 GB RSS and was OOM-killed by the kernel
+// 1525 products in. libvips keeps an operation cache and its own thread pool
+// per decode, and neither is bounded by anything Node can see — so switch both
+// off rather than trying to out-GC them. Run with --max-old-space-size=384.
+sharp.cache(false);
+sharp.concurrency(1);
 
 const isExternal = (u) => /^https?:\/\//i.test(String(u || ""));
 const kb = (n) => `${(n / 1024).toFixed(0)} KB`;
@@ -146,9 +156,11 @@ for (const row of todo) {
     const secs = (Date.now() - startedAt) / 1000;
     const rate = done / secs;
     const eta = rate > 0 ? Math.round((todo.length - done) / rate) : 0;
+    const rss = Math.round(process.memoryUsage().rss / 1048576);
     console.log(
       `${done}/${todo.length} products · ${saved} saved, ${skipped} already there, ${failed} failed` +
-      ` · ${kb(bytesOut)} written · ETA ${Math.floor(eta / 60)}m${String(eta % 60).padStart(2, "0")}s`,
+      ` · ${kb(bytesOut)} written · rss ${rss}MB` +
+      ` · ETA ${Math.floor(eta / 60)}m${String(eta % 60).padStart(2, "0")}s`,
     );
   }
 }
