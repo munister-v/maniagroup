@@ -21,7 +21,7 @@ fi
 mkdir -p "$BACKUP_DIR"
 echo "[$(date)] starting backup -> $OUT"
 
-if pg_dump "$DATABASE_URL" | gzip > "$OUT.tmp"; then
+if pg_dump --no-owner --no-privileges --clean --if-exists "$DATABASE_URL" | gzip > "$OUT.tmp"; then
   mv "$OUT.tmp" "$OUT"
   SIZE=$(du -h "$OUT" | cut -f1)
   echo "[$(date)] backup OK: $OUT ($SIZE)"

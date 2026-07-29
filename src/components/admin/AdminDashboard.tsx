@@ -2067,6 +2067,7 @@ function SubscribersSection() {
 /* ─── Backup ─── */
 
 type BackupFile = { name: string; size: number; mtime: string };
+type BackupActivity = { id: string; action: string; summary: string; count: number | null; author: string; created_at: string };
 
 function fmtBackupBytes(n: number): string {
   return n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} КБ` : `${(n / 1024 / 1024).toFixed(1)} МБ`;
@@ -2075,9 +2076,10 @@ function fmtBackupDate(iso: string): string {
   return new Date(iso).toLocaleString("uk-UA", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-function AutoBackupsCard() {
+function AutoBackupsCard({ onRestored }: { onRestored?: (msg: string) => void }) {
   const [files, setFiles] = useState<BackupFile[] | null>(null);
   const [running, setRunning] = useState(false);
+  const [restoring, setRestoring] = useState("");
   const [msg, setMsg] = useState("");
 
   const load = useCallback(() => {
@@ -2098,6 +2100,35 @@ function AutoBackupsCard() {
     } finally {
       setRunning(false);
       setTimeout(() => setMsg(""), 4000);
+    }
+  }
+
+  async function restore(file: BackupFile) {
+    const confirmText = window.prompt(
+      `Відновити базу з backup-файлу?\n\n${file.name}\n\nПеред restore система створить свіжу аварійну копію. Для підтвердження введіть RESTORE.`
+    );
+    if (confirmText !== "RESTORE") return;
+    setRestoring(file.name);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/backups/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: file.name, confirm: confirmText }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg("✓ Базу відновлено");
+        onRestored?.("Базу відновлено з backup. Оновіть сторінку, якщо бачите старі дані.");
+        load();
+      } else {
+        setMsg(`✗ ${d.error ?? "Restore не вдався"}`);
+      }
+    } catch {
+      setMsg("✗ Помилка мережі під час restore");
+    } finally {
+      setRestoring("");
+      setTimeout(() => setMsg(""), 7000);
     }
   }
 
@@ -2127,6 +2158,13 @@ function AutoBackupsCard() {
                 className="shrink-0 text-[11px] uppercase tracking-[0.1em] text-[#2b2d42] hover:underline">
                 ↓ Завантажити
               </a>
+              <button
+                onClick={() => restore(f)}
+                disabled={!!restoring}
+                className="shrink-0 rounded-[3px] border border-red-200 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-red-600 hover:bg-red-50 disabled:opacity-40"
+              >
+                {restoring === f.name ? "Restore…" : "Відновити"}
+              </button>
             </div>
           ))}
         </div>
@@ -2169,8 +2207,9 @@ function BackupSection() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <AutoBackupsCard />
+    <div className="max-w-4xl space-y-6">
+      <BackupSafetyStrip />
+      <AutoBackupsCard onRestored={setImportMsg} />
 
       <Card title="Повна копія бази даних (вручну)" subtitle="Дамп PostgreSQL: товари, замовлення, клієнти, підписники, налаштування">
         <div className="flex flex-wrap items-center gap-4">
@@ -2240,7 +2279,66 @@ function BackupSection() {
           Товари, замовлення та клієнти зберігаються в PostgreSQL — для них використовуйте повний дамп бази даних вище.
         </p>
       </Card>
+
+      <BackupActivityCard />
     </div>
+  );
+}
+
+function BackupSafetyStrip() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {[
+        ["01", "Автокопія перед ризиком", "Restore і повне очищення спочатку створюють свіжий дамп."],
+        ["02", "Подвійне підтвердження", "Небезпечні дії не запускаються без ручної фрази RESTORE."],
+        ["03", "Журнал слідів", "Імпорт, експорт, backup, restore і масові дії видно в історії."],
+      ].map(([num, title, text]) => (
+        <div key={num} className="rounded-[6px] border border-[#e6eaec] bg-white p-4">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-[#2f9488]">{num}</p>
+          <h3 className="mt-2 text-[13px] font-semibold text-[#2b2d42]">{title}</h3>
+          <p className="mt-1 text-[12px] leading-relaxed text-[#8a94a0]">{text}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BackupActivityCard() {
+  const [rows, setRows] = useState<BackupActivity[] | null>(null);
+  const load = useCallback(() => {
+    fetch("/api/admin/monitoring")
+      .then((r) => r.json())
+      .then((d) => {
+        const allowed = new Set(["backup", "import", "export", "delete", "photos", "settings"]);
+        setRows(((d.activity ?? []) as BackupActivity[]).filter((a) => allowed.has(a.action)).slice(0, 20));
+      })
+      .catch(() => setRows([]));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Card title="Журнал критичних операцій" subtitle="Останні імпорти, експорти, backup/restore, фото та масові зміни">
+      <div className="mb-3 flex justify-end">
+        <button onClick={load} className="h-8 rounded-[3px] border border-[#e6eaec] px-3 text-[10px] uppercase tracking-[0.12em] text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
+          Оновити
+        </button>
+      </div>
+      {rows === null ? (
+        <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>
+      ) : rows.length === 0 ? (
+        <p className="rounded-[3px] bg-[#f7f9fa] px-4 py-8 text-center text-[12px] text-[#aab4bf]">Критичних подій поки немає.</p>
+      ) : (
+        <div className="divide-y divide-[#eef2f3] rounded-[4px] border border-[#e6eaec] bg-white">
+          {rows.map((a) => (
+            <div key={a.id} className="grid gap-2 px-4 py-3 text-[12px] sm:grid-cols-[110px_1fr_150px] sm:items-center">
+              <span className="inline-flex w-fit rounded-full bg-[#f4f6f7] px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#5a6472]">{a.action}</span>
+              <p className="min-w-0 text-[#2b2d42]">{a.summary}</p>
+              <span className="text-left tabular-nums text-[#aab4bf] sm:text-right">{fmtBackupDate(a.created_at)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 
