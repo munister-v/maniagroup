@@ -813,6 +813,11 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
   const [pending, setPending] = useState(0); // count of uploads in flight, for the "Завантаження… (n)" label
   const [urlInput, setUrlInput] = useState("");
   const [dragOver, setDragOver] = useState(false);
+  // Media-library picker: everything already uploaded lives in /uploads, but
+  // until now the only ways to reuse a photo were re-uploading it or pasting
+  // its URL by hand.
+  const [libOpen, setLibOpen] = useState(false);
+  const [lib, setLib] = useState<{ url: string; name: string }[] | null>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null); // index being reordered
   const [overIdx, setOverIdx] = useState<number | null>(null); // index currently hovered while reordering
   const fileRef = useRef<HTMLInputElement>(null);
@@ -845,6 +850,24 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
   function addUrl() {
     const u = urlInput.trim();
     if (u) { onChange([...images, u]); setUrlInput(""); }
+  }
+
+  async function openLibrary() {
+    setLibOpen(true);
+    if (lib) return;                       // already fetched this session
+    try {
+      const res = await fetch("/api/admin/media");
+      const data = await res.json();
+      setLib(data.files ?? []);
+    } catch {
+      setLib([]);
+      onToast?.("Не вдалося завантажити медіатеку");
+    }
+  }
+
+  function toggleFromLibrary(url: string) {
+    const cur = imagesRef.current;
+    onChange(cur.includes(url) ? cur.filter((u) => u !== url) : [...cur, url]);
   }
   function removeAt(i: number) { onChange(images.filter((_, idx) => idx !== i)); }
   function makePrimary(i: number) {
@@ -934,7 +957,42 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
         <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addUrl())}
           placeholder="або вставте URL фото" className="h-9 flex-1 border border-[#e6eaec] bg-white px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none" />
         <button type="button" onClick={addUrl} className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] hover:border-[#2b2d42]">Додати</button>
+        <button type="button" onClick={openLibrary} className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] hover:border-[#2b2d42]">З медіатеки</button>
       </div>
+
+      {libOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setLibOpen(false)}>
+          <div className="flex max-h-[80vh] w-full max-w-3xl flex-col bg-white" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-[#eef2f3] px-4 py-3">
+              <span className="text-[13px] font-medium text-[#2b2d42]">
+                Медіатека{lib ? ` · ${lib.length}` : ""}
+              </span>
+              <button type="button" onClick={() => setLibOpen(false)} className="text-[13px] text-[#8a94a0] hover:text-[#2b2d42]">Готово</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {lib === null && <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>}
+              {lib?.length === 0 && <p className="text-[12px] text-[#8a94a0]">Порожньо — завантажте перше фото вище.</p>}
+              <div className="flex flex-wrap gap-2">
+                {lib?.map((f) => {
+                  const picked = images.includes(f.url);
+                  return (
+                    <button
+                      key={f.url}
+                      type="button"
+                      title={f.name}
+                      onClick={() => toggleFromLibrary(f.url)}
+                      className={`relative h-28 w-[84px] overflow-hidden border ${picked ? "border-[#2f9488] ring-2 ring-[#2f9488]" : "border-[#eef2f3] hover:border-[#b6c0ca]"}`}
+                    >
+                      <img src={f.url} alt="" className="h-full w-full object-cover" />
+                      {picked && <span className="absolute right-0 top-0 bg-[#2f9488] px-1 text-[9px] text-white">✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

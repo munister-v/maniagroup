@@ -9,6 +9,15 @@
  */
 import sharp from "sharp";
 
+// This runs inside the web server on a 1.7 GB box that also serves the shop,
+// and the admin uploader fires every dropped file at once (Promise.all). Left
+// on its defaults, libvips keeps an operation cache and a thread pool per
+// decode that Node's GC cannot see — the same combination that grew the photo
+// migration to 1.2 GB and got it OOM-killed. Here the kernel's victim could be
+// the site itself, so bound it: no cache, one thread per decode.
+sharp.cache(false);
+sharp.concurrency(1);
+
 const MAX_DIMENSION = 2000; // px, longest side
 const WEBP_QUALITY = 82;
 
