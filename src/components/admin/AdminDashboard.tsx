@@ -1744,35 +1744,56 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
 /* ─── Media library ─── */
 
 type MediaUsage = { id: string; name: string; sku: string };
-type MediaFile = { url: string; name: string; size: number; mtime: number; usedBy?: MediaUsage[] };
+type MediaFile = { url: string; name: string; size: number; mtime: number; usedBy: MediaUsage[]; source: "uploads" | "catalog" };
+type MediaCounts = { all: number; uploads: number; catalog: number; used: number; free: number };
+
+const PER_PAGE = 48;
 
 function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [files, setFiles] = useState<MediaFile[]>([]);
+  const [counts, setCounts] = useState<MediaCounts>({ all: 0, uploads: 0, catalog: 0, used: 0, free: 0 });
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [search, setSearch] = useState("");
+  const [source, setSource] = useState<"all" | "uploads" | "catalog">("all");
   const [usage, setUsage] = useState<"all" | "used" | "free">("all");
   const [sort, setSort] = useState<"new" | "big">("new");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function load() {
+  // Filtering happens on the server: the library is ~13.5k files since the
+  // product photos moved off WordPress, far too many to ship to the browser.
+  const load = useCallback(async (p: number, q: string) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/media");
+      const params = new URLSearchParams({
+        source, usage, sort, q, page: String(p), perPage: String(PER_PAGE),
+      });
+      const res = await fetch(`/api/admin/media?${params}`);
       const data = await res.json();
       setFiles(data.files ?? []);
+      setTotal(data.total ?? 0);
+      setCounts(data.counts ?? { all: 0, uploads: 0, catalog: 0, used: 0, free: 0 });
+      setPage(data.page ?? p);
+    } catch {
+      onToast?.("Не вдалося завантажити медіатеку");
     } finally {
       setLoading(false);
     }
-  }
-  useEffect(() => { load(); }, []);
+  }, [source, usage, sort, onToast]);
+
+  // Debounce the search box so typing does not fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => load(1, search), 250);
+    return () => clearTimeout(t);
+  }, [search, load]);
 
   async function upload(list: FileList | File[] | null) {
     const arr = list ? Array.from(list) : [];
     if (arr.length === 0) return;
     setUploading(true);
-    // Parallel — a batch of a dozen photos no longer crawls one-at-a-time.
     const results = await Promise.all(arr.map(async (file) => {
       const fd = new FormData();
       fd.append("file", file);
@@ -1786,7 +1807,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     if (inputRef.current) inputRef.current.value = "";
     const ok = results.filter(Boolean).length;
     if (ok) onToast?.(`Завантажено: ${ok}`);
-    load();
+    load(1, search);
   }
 
   async function copy(url: string) {
@@ -1799,21 +1820,22 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     }
   }
 
-  async function remove(name: string) {
-    if (!confirm(`Видалити «${name}»?`)) return;
-    let res = await fetch(`/api/admin/media?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+  async function remove(f: MediaFile) {
+    if (!confirm(`Видалити «${f.name}»?`)) return;
+    const qs = `url=${encodeURIComponent(f.url)}`;
+    let res = await fetch(`/api/admin/media?${qs}`, { method: "DELETE" });
 
-    // The server refuses when a product still shows the file, and tells us
-    // which — so the second prompt can name them instead of guessing.
+    // The server refuses while a product still shows the file and tells us
+    // which, so the second prompt can name them instead of guessing.
     if (res.status === 409) {
       const d: { usedBy?: MediaUsage[] } = await res.json().catch(() => ({}));
       const list = (d.usedBy ?? []).map((u) => `• ${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n");
       if (!confirm(`Це фото стоїть на товарах:\n\n${list}\n\nВидалити все одно? У картках воно стане «битим».`)) return;
-      res = await fetch(`/api/admin/media?name=${encodeURIComponent(name)}&force=1`, { method: "DELETE" });
+      res = await fetch(`/api/admin/media?${qs}&force=1`, { method: "DELETE" });
     }
 
     if (res.ok) {
-      setFiles((fs) => fs.filter((f) => f.name !== name));
+      setFiles((fs) => fs.filter((x) => x.url !== f.url));
       onToast?.("Видалено");
     } else {
       onToast?.("Не вдалося видалити");
@@ -1821,27 +1843,14 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   }
 
   const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.round(b / 1024)} КБ` : `${(b / 1024 / 1024).toFixed(1)} МБ`);
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
 
-  const shown = files
-    .filter((f) => {
-      const used = (f.usedBy?.length ?? 0) > 0;
-      if (usage === "used" && !used) return false;
-      if (usage === "free" && used) return false;
-      const term = search.trim().toLowerCase();
-      if (!term) return true;
-      // Search the filename and whatever product it is attached to, so you can
-      // find an image by the product it belongs to rather than by its uuid.
-      return f.name.toLowerCase().includes(term)
-        || (f.usedBy ?? []).some((u) => u.name.toLowerCase().includes(term) || u.sku.toLowerCase().includes(term));
-    })
-    .sort((a, b) => (sort === "big" ? b.size - a.size : b.mtime - a.mtime));
-
-  const freeCount = files.filter((f) => (f.usedBy?.length ?? 0) === 0).length;
-  const freeBytes = files.filter((f) => (f.usedBy?.length ?? 0) === 0).reduce((s, f) => s + f.size, 0);
+  const chip = (active: boolean) =>
+    `h-9 border px-3 text-[12px] ${active ? "border-[#2b2d42] bg-[#2b2d42] text-white" : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#b6c0ca]"}`;
 
   return (
     <div
-      className="max-w-4xl"
+      className="max-w-6xl"
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) upload(e.dataTransfer.files); }}
@@ -1849,10 +1858,11 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-[#2b2d42]">Медіа-бібліотека</h2>
-          <p className="text-[12px] text-[#8a94a0]">{files.length} зображень · jpg, png, webp, avif, gif · до 8 МБ · перетягніть файли будь-де на сторінці</p>
+          <p className="text-[12px] text-[#8a94a0]">
+            {counts.all} зображень · {counts.catalog} з каталогу, {counts.uploads} завантажених вручну · перетягніть файли будь-де на сторінці
+          </p>
         </div>
-        <input ref={inputRef} type="file" accept="image/*" multiple hidden
-          onChange={(e) => upload(e.target.files)} />
+        <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
         <button onClick={() => inputRef.current?.click()} disabled={uploading}
           className="flex h-10 items-center gap-2 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -1862,90 +1872,99 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         </button>
       </div>
 
-      {files.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук за файлом, товаром або артикулом"
-            className="h-9 min-w-[240px] flex-1 border border-[#e6eaec] bg-white px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none"
-          />
-          <div className="flex">
-            {([["all", `Усі · ${files.length}`], ["used", `На товарах · ${files.length - freeCount}`], ["free", `Вільні · ${freeCount}`]] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setUsage(key)}
-                className={`h-9 border px-3 text-[12px] ${usage === key ? "border-[#2b2d42] bg-[#2b2d42] text-white" : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#b6c0ca]"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as "new" | "big")}
-            className="h-9 border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none"
-          >
-            <option value="new">Спочатку нові</option>
-            <option value="big">Спочатку важкі</option>
-          </select>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Пошук за файлом, товаром або артикулом"
+          className="h-9 min-w-[240px] flex-1 border border-[#e6eaec] bg-white px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none"
+        />
+        <div className="flex">
+          {([["all", `Усі · ${counts.all}`], ["catalog", `Каталог · ${counts.catalog}`], ["uploads", `Завантажені · ${counts.uploads}`]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => { setSource(k); setPage(1); }} className={chip(source === k)}>{label}</button>
+          ))}
         </div>
-      )}
+        <div className="flex">
+          {([["all", "Будь-які"], ["used", `На товарах · ${counts.used}`], ["free", `Вільні · ${counts.free}`]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => { setUsage(k); setPage(1); }} className={chip(usage === k)}>{label}</button>
+          ))}
+        </div>
+        <select value={sort} onChange={(e) => setSort(e.target.value as "new" | "big")}
+          className="h-9 border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
+          <option value="new">Спочатку нові</option>
+          <option value="big">Спочатку важкі</option>
+        </select>
+      </div>
 
-      {usage === "free" && freeCount > 0 && (
+      {usage === "free" && counts.free > 0 && (
         <p className="mb-3 text-[12px] text-[#8a94a0]">
-          Ці {freeCount} файлів не стоять на жодному товарі та займають {fmtSize(freeBytes)}.
+          Ці файли не стоять на жодному товарі — зазвичай це залишки після переімпорту каталогу.
         </p>
       )}
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {[1,2,3,4,5,6,7,8].map((i) => <div key={i} className="aspect-square animate-pulse bg-[#f7f9fa]" />)}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square animate-pulse bg-[#f7f9fa]" />)}
         </div>
       ) : files.length === 0 ? (
         <div className={`rounded-[3px] border border-dashed px-4 py-16 text-center text-sm transition-colors ${dragOver ? "border-[#2b2d42] bg-[#f4f6f7] text-[#2b2d42]" : "border-[#d5dbe0] bg-white text-[#8a94a0]"}`}>
-          {dragOver ? "Відпустіть, щоб завантажити" : "Бібліотека порожня. Перетягніть фото сюди або натисніть «Завантажити»."}
-        </div>
-      ) : shown.length === 0 ? (
-        <div className="rounded-[3px] border border-dashed border-[#d5dbe0] bg-white px-4 py-16 text-center text-sm text-[#8a94a0]">
-          Нічого не знайдено за цим фільтром.
+          {dragOver ? "Відпустіть, щоб завантажити"
+            : counts.all === 0 ? "Бібліотека порожня. Перетягніть фото сюди або натисніть «Завантажити»."
+            : "Нічого не знайдено за цим фільтром."}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {shown.map((f) => (
-            <div key={f.name} className="group relative overflow-hidden rounded-[3px] border border-[#eef2f3] bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={f.url} alt={f.name} className="aspect-square w-full object-cover" loading="lazy" />
-              {(f.usedBy?.length ?? 0) === 0 ? (
-                <span className="absolute left-1 top-1 rounded-[2px] bg-[#8a94a0]/90 px-1 text-[9px] uppercase text-white">вільне</span>
-              ) : (
-                <span
-                  className="absolute left-1 top-1 max-w-[92%] truncate rounded-[2px] bg-[#2f9488]/95 px-1 text-[9px] text-white"
-                  title={f.usedBy!.map((u) => `${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n")}
-                >
-                  {f.usedBy!.length === 1 ? f.usedBy![0].name : `${f.usedBy!.length} товари`}
-                </span>
-              )}
-              <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>{fmtSize(f.size)}</span>
-                <div className="flex shrink-0 gap-1">
-                  <button onClick={() => copy(f.url)} title="Копіювати посилання"
-                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                      <path d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
-                    </svg>
-                  </button>
-                  <button onClick={() => remove(f.name)} title="Видалити"
-                    className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#fdecec] hover:text-[#c62828]">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-                      <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m1 0v12a1 1 0 01-1 1H8a1 1 0 01-1-1V7" />
-                    </svg>
-                  </button>
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {files.map((f) => (
+              <div key={f.url} className="group relative overflow-hidden rounded-[3px] border border-[#eef2f3] bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f.url} alt={f.name} className="aspect-square w-full object-cover" loading="lazy" />
+
+                {f.usedBy.length === 0 ? (
+                  <span className="absolute left-1 top-1 rounded-[2px] bg-[#8a94a0]/90 px-1 text-[9px] uppercase text-white">вільне</span>
+                ) : (
+                  <a
+                    href={`/product/${f.usedBy[0].id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={f.usedBy.map((u) => `${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n")}
+                    className="absolute left-1 top-1 max-w-[92%] truncate rounded-[2px] bg-[#2f9488]/95 px-1 text-[9px] text-white hover:bg-[#2f9488]"
+                  >
+                    {f.usedBy.length === 1 ? f.usedBy[0].name : `${f.usedBy.length} товари`}
+                  </a>
+                )}
+
+                <div className="flex items-center justify-between gap-1 px-2 py-1.5">
+                  <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>{fmtSize(f.size)}</span>
+                  <div className="flex shrink-0 gap-1">
+                    <button onClick={() => copy(f.url)} title="Копіювати посилання"
+                      className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                        <path d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
+                      </svg>
+                    </button>
+                    <button onClick={() => remove(f)} title="Видалити"
+                      className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#fdecec] hover:text-[#c62828]">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                        <path d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m1 0v12a1 1 0 01-1 1H8a1 1 0 01-1-1V7" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {pages > 1 && (
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <button disabled={page <= 1} onClick={() => load(page - 1, search)}
+                className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] disabled:opacity-40 hover:enabled:border-[#2b2d42]">Назад</button>
+              <span className="text-[12px] text-[#8a94a0]">{page} / {pages} · {total} файлів</span>
+              <button disabled={page >= pages} onClick={() => load(page + 1, search)}
+                className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] disabled:opacity-40 hover:enabled:border-[#2b2d42]">Далі</button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   );
