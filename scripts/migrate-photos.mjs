@@ -96,7 +96,19 @@ async function fetchOne(url, destDir, base) {
     // A WP error page can come back as 200 with HTML in the body.
     if (input.length < 1024) return null;
 
-    const out = await sharp(input).rotate().webp({ quality: QUALITY }).toBuffer();
+    let out;
+    try {
+      out = await sharp(input).rotate().webp({ quality: QUALITY }).toBuffer();
+    } catch (err) {
+      // A few of the WP originals are truncated ("Corrupt JPEG data: premature
+      // end of data segment") — they render fine in a browser, which tolerates
+      // the damage, and their header parses, so this only surfaces on a full
+      // decode. Salvage the intact scanlines rather than leaving the product
+      // pointing at WordPress forever.
+      if (!/corrupt|premature|truncated/i.test(String(err?.message))) throw err;
+      out = await sharp(input, { failOn: "none" }).rotate().webp({ quality: QUALITY }).toBuffer();
+      console.log(`  salvaged truncated source: ${url.split("/").pop()}`);
+    }
     await mkdir(destDir, { recursive: true });
     await writeFile(dest, out);
     bytesIn += input.length;
