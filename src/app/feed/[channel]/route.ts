@@ -10,12 +10,14 @@
  * hammering the URL never re-queries the DB on every hit. PM2 runs 2 workers;
  * each caches independently — acceptable for a 30-min feed.
  *
- * Scope: in-stock + has-image (what marketplaces accept). Defaults match the
- * "instock" export. Add ?scope=all to include everything.
+ * Scope: in-stock + has-image (what marketplaces accept) unless overridden.
+ * Accepts the same filters as the admin export — scope, brand, category,
+ * gender, minPrice, maxPrice, requireImage, requireSizes — and they form part
+ * of the cache key.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getExportRows, buildExport, type ExportFormat, type ExportFilters } from "@/lib/channelExport";
+import { getExportRows, buildExport, parseFilters, type ExportFormat, type ExportFilters } from "@/lib/channelExport";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -42,9 +44,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ channel: st
     );
   }
 
+  // A feed URL can be narrowed the same way the admin export is, so a channel
+  // can be handed e.g. /feed/price.csv?brand=KOCCA&minPrice=1000&requireSizes=1
+  // instead of the whole catalogue. Defaults stay in-stock + has-image.
   const sp = new URL(req.url).searchParams;
-  const scope = sp.get("scope") === "all" ? "all" : "instock";
-  const cacheKey = `${channel.toLowerCase()}:${scope}`;
+  const filters: ExportFilters = parseFilters(sp);
+
+  // Filters must be part of the cache key or the first caller's narrowed feed
+  // would be served to everyone else for the next 30 minutes.
+  const cacheKey = `${channel.toLowerCase()}:${new URLSearchParams([...sp.entries()].sort()).toString()}`;
   const now = Date.now();
 
   const hit = cache.get(cacheKey);
@@ -52,7 +60,6 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ channel: st
     return serve(hit.body, hit.contentType, hit.builtAt);
   }
 
-  const filters: ExportFilters = { scope: scope as "instock" | "all", requireImage: true };
   const rows = await getExportRows(filters);
   const { contentType, body } = buildExport(format, rows);
 

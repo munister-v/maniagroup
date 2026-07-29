@@ -29,10 +29,36 @@ export type ExportRow = {
 export type ExportFilters = {
   scope?: "instock" | "all";   // default instock
   minPrice?: number;
+  maxPrice?: number;
   requireImage?: boolean;       // default true (marketplaces reject imageless)
+  requireSizes?: boolean;       // drop rows with no sellable size
   brand?: string;
+  category?: string;
+  gender?: "men" | "women";
   ids?: string[];               // restrict to these product ids («Обрані»)
 };
+
+/**
+ * Read export filters off a query string. Shared by the admin export route and
+ * the public /feed URLs so both accept exactly the same knobs — it lives here
+ * rather than in a route file because Next validates route modules and only
+ * tolerates handler/config exports.
+ */
+export function parseFilters(sp: URLSearchParams): ExportFilters {
+  const ids = sp.get("ids");
+  const gender = sp.get("gender");
+  return {
+    scope: sp.get("scope") === "all" ? "all" : "instock",
+    minPrice: sp.get("minPrice") ? Number(sp.get("minPrice")) : undefined,
+    maxPrice: sp.get("maxPrice") ? Number(sp.get("maxPrice")) : undefined,
+    requireImage: sp.get("requireImage") !== "0",
+    requireSizes: sp.get("requireSizes") === "1",
+    brand: sp.get("brand") || undefined,
+    category: sp.get("category") || undefined,
+    gender: gender === "men" || gender === "women" ? gender : undefined,
+    ids: ids ? ids.split(",").filter(Boolean) : undefined,
+  };
+}
 
 export async function getExportRows(f: ExportFilters = {}): Promise<ExportRow[]> {
   const conds: string[] = ["p.status = 'publish'"];
@@ -40,7 +66,16 @@ export async function getExportRows(f: ExportFilters = {}): Promise<ExportRow[]>
   if (f.scope !== "all") conds.push("p.is_in_stock = TRUE");
   if (f.requireImage !== false) conds.push("p.images IS NOT NULL AND p.images::text NOT IN ('[]','null','')");
   if (f.minPrice && f.minPrice > 0) { bind.push(f.minPrice); conds.push(`p.price >= $${bind.length}`); }
+  if (f.maxPrice && f.maxPrice > 0) { bind.push(f.maxPrice); conds.push(`p.price <= $${bind.length}`); }
   if (f.brand) { bind.push(f.brand); conds.push(`p.brand = $${bind.length}`); }
+  if (f.category) { bind.push(f.category); conds.push(`p.category = $${bind.length}`); }
+  if (f.gender) { bind.push(f.gender); conds.push(`p.gender = $${bind.length}`); }
+  // Marketplaces reject an apparel offer with no size, so this drops rows whose
+  // size matrix has nothing sellable rather than shipping them and being told.
+  if (f.requireSizes) {
+    conds.push(`EXISTS (SELECT 1 FROM product_variants v
+                         WHERE v.product_id = p.id AND v.active AND v.stock_qty > 0)`);
+  }
   if (f.ids?.length) { bind.push(f.ids.map(Number).filter(Number.isFinite)); conds.push(`p.id = ANY($${bind.length})`); }
 
   const rows = await q<{

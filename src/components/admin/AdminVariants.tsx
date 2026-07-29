@@ -136,6 +136,16 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
   // Export drawer state.
   const [exFormat, setExFormat] = useState("");
   const [exType, setExType] = useState("");
+  // Channel-export filters. The API has supported these all along; nothing in
+  // the UI ever passed them, so every export was the whole catalogue.
+  const [exScope, setExScope] = useState<"all" | "instock">("all");
+  const [exBrand, setExBrand] = useState("");
+  const [exMin, setExMin] = useState("");
+  const [exMax, setExMax] = useState("");
+  const [exImage, setExImage] = useState(false);
+  const [exSizes, setExSizes] = useState(false);
+  const [exCount, setExCount] = useState<number | null>(null);
+  const [exCounting, setExCounting] = useState(false);
   const [exTouched, setExTouched] = useState(false);
 
   useEffect(() => {
@@ -206,16 +216,48 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
     } finally { setSaving(false); }
   }
 
+  const buildExportParams = useCallback(() => {
+    const fmt = exFormat === "XML" ? "xml" : exFormat === "CSV" ? "csv"
+      : exFormat === "GOOGLE" ? "google" : "xlsx";
+    const p = new URLSearchParams({ format: fmt, scope: exScope, requireImage: exImage ? "1" : "0" });
+    if (exSizes) p.set("requireSizes", "1");
+    if (exBrand) p.set("brand", exBrand);
+    if (exMin) p.set("minPrice", exMin);
+    if (exMax) p.set("maxPrice", exMax);
+    if (exType === "selected") {
+      const ids = [...new Set(rows.filter((r) => selected.has(r.id)).map((r) => r.product_id))];
+      p.set("ids", ids.join(","));
+    }
+    return p;
+  }, [exFormat, exScope, exImage, exSizes, exBrand, exMin, exMax, exType, rows, selected]);
+
+  // Live row count so you know what you are about to download before you do.
+  useEffect(() => {
+    if (!exportOpen) return;
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      if (cancelled) return;
+      setExCounting(true);
+      try {
+        const p = buildExportParams();
+        p.set("count", "1");
+        const res = await fetch(`/api/erp/export?${p}`);
+        const d = await res.json();
+        if (!cancelled) setExCount(res.ok ? d.count ?? 0 : null);
+      } catch {
+        if (!cancelled) setExCount(null);
+      } finally {
+        if (!cancelled) setExCounting(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [exportOpen, buildExportParams]);
+
   function runExport() {
     setExTouched(true);
     if (!exFormat || !exType) return;
-    const fmt = exFormat === "XML" ? "xml" : exFormat === "CSV" ? "csv" : "xlsx";
-    const p = new URLSearchParams({ format: fmt, scope: "all", requireImage: "0" });
-    if (exType === "selected") {
-      const ids = [...new Set(rows.filter((r) => selected.has(r.id)).map((r) => r.product_id))];
-      if (ids.length === 0) { onToast?.("Немає обраних пропозицій"); return; }
-      p.set("ids", ids.join(","));
-    }
+    if (exType === "selected" && selected.size === 0) { onToast?.("Немає обраних пропозицій"); return; }
+    const p = buildExportParams();
     window.location.assign(`/api/erp/export?${p}`);
     onToast?.("Формуємо файл експорту…");
     setExportOpen(false);
@@ -472,6 +514,7 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
               <option value="XML">XML</option>
               <option value="CSV">CSV</option>
               <option value="XLSX">XLSX</option>
+              <option value="GOOGLE">Google Merchant (XML)</option>
             </select>
             {exTouched && !exFormat && <span className="mt-1 block text-[11px] text-[#e5484d]">Поле обов&apos;язкове</span>}
           </label>
@@ -485,6 +528,49 @@ export function AdminVariants({ onToast, onImport }: { onToast?: (m: string) => 
             </select>
             {exTouched && !exType && <span className="mt-1 block text-[11px] text-[#e5484d]">Поле обов&apos;язкове</span>}
           </label>
+
+          <div className="border-t border-[#eef2f3] pt-4">
+            <span className={editLbl}>Фільтри</span>
+
+            <label className="mt-2 block">
+              <span className="text-[11px] text-[#8a94a0]">Наявність</span>
+              <select value={exScope} onChange={(e) => setExScope(e.target.value as "all" | "instock")} className={editInp}>
+                <option value="all">Усі товари</option>
+                <option value="instock">Лише в наявності</option>
+              </select>
+            </label>
+
+            <label className="mt-3 block">
+              <span className="text-[11px] text-[#8a94a0]">Бренд</span>
+              <input value={exBrand} onChange={(e) => setExBrand(e.target.value)} placeholder="усі бренди" className={editInp} />
+            </label>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-[11px] text-[#8a94a0]">Ціна від</span>
+                <input value={exMin} onChange={(e) => setExMin(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="—" className={editInp} />
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-[#8a94a0]">до</span>
+                <input value={exMax} onChange={(e) => setExMax(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="—" className={editInp} />
+              </label>
+            </div>
+
+            <label className="mt-3 flex items-center gap-2 text-[13px] text-[#3a4250]">
+              <input type="checkbox" checked={exImage} onChange={(e) => setExImage(e.target.checked)} />
+              Лише з фото
+            </label>
+            <label className="mt-2 flex items-center gap-2 text-[13px] text-[#3a4250]">
+              <input type="checkbox" checked={exSizes} onChange={(e) => setExSizes(e.target.checked)} />
+              Лише з розмірами в наявності
+            </label>
+
+            <p className="mt-4 rounded-[4px] bg-[#f4f6f7] px-3 py-2 text-[13px] text-[#3a4250]">
+              {exCounting ? "Рахуємо…"
+                : exCount === null ? "Не вдалося порахувати"
+                : <>Буде експортовано: <b className="tabular-nums">{exCount.toLocaleString("uk-UA")}</b> товарів</>}
+            </p>
+          </div>
         </div>
       </SlideOver>
 
