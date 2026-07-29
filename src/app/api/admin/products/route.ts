@@ -6,7 +6,7 @@ import { logActivity } from "@/lib/activity";
 export async function GET(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
   const { searchParams } = new URL(req.url);
-  const page = Number(searchParams.get("page") ?? "1");
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
   const perPage = searchParams.get("perPage") ? Number(searchParams.get("perPage")) : undefined;
   const sortBy = searchParams.get("sortBy") ?? undefined;
   const sortDirParam = searchParams.get("sortDir");
@@ -23,7 +23,10 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const body = (await req.json()) as AdminProductInput;
+  const body = (await req.json().catch(() => null)) as AdminProductInput | null;
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Некоректний JSON" }, { status: 400 });
+  }
   if (!body.name || body.regular_price === undefined) {
     return NextResponse.json({ error: "Вкажіть назву та ціну" }, { status: 400 });
   }

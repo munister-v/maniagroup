@@ -13,7 +13,7 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { q, q1 } from "./pg";
 
-const PUB_DIR = path.join(process.cwd(), "public", "catalog");
+const PUB_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
 
 const CT_EXT: Record<string, string> = {
   "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",

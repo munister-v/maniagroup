@@ -4,8 +4,8 @@ import { q } from "@/lib/pg";
 import { readdir, stat, unlink } from "fs/promises";
 import path from "path";
 
-const UPLOADS = path.join(process.cwd(), "public", "uploads");
-const CATALOG = path.join(process.cwd(), "public", "catalog");
+const UPLOADS = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
+const CATALOG = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
 const IMAGE_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
 
 export type MediaUsage = { id: string; name: string; sku: string };
@@ -110,7 +110,7 @@ export async function GET(req: Request) {
   const files = await Promise.all(
     slice.map(async (f) => {
       try {
-        const s = await stat(path.join(process.cwd(), "public", f.url));
+        const s = await stat(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", f.url));
         return { ...f, size: s.size, mtime: s.mtimeMs };
       } catch {
         return { ...f, size: 0, mtime: 0 };
@@ -143,8 +143,8 @@ export async function DELETE(req: Request) {
   if (!/^\/(uploads|catalog)\//.test(rel) || rel.includes("..") || !IMAGE_RE.test(rel)) {
     return NextResponse.json({ error: "Невірний шлях" }, { status: 400 });
   }
-  const full = path.join(process.cwd(), "public", rel);
-  const root = path.join(process.cwd(), "public");
+  const full = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", rel);
+  const root = path.join(/*turbopackIgnore: true*/ process.cwd(), "public");
   if (!full.startsWith(root + path.sep)) {
     return NextResponse.json({ error: "Невірний шлях" }, { status: 400 });
   }

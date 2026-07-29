@@ -14,7 +14,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
   const { id } = await params;
-  const body = (await req.json()) as Partial<AdminProductInput> & { statusTransitionLabel?: string };
+  const body = (await req.json().catch(() => null)) as (Partial<AdminProductInput> & { statusTransitionLabel?: string }) | null;
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Некоректний JSON" }, { status: 400 });
+  }
   const { statusTransitionLabel, ...patch } = body;
   try {
     await updateAdminProduct(id, patch);

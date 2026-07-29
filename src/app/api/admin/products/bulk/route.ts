@@ -3,6 +3,9 @@ import { isAdmin } from "@/lib/adminAuth";
 import { bulkProducts, bulkUpdateProducts, publishAllProducts, type BulkAction, type AdminProductInput } from "@/lib/products";
 import { logActivity } from "@/lib/activity";
 
+const MAX_BULK_IDS = 1_000;
+const MAX_BULK_UPDATES = 300;
+
 const ACTION_LABEL: Record<string, string> = {
   publish: "опубліковано", unpublish: "сховано", in_stock: "в наявності",
   out_of_stock: "немає в наявності", feature: "в обране", unfeature: "з обраного",
@@ -20,7 +23,11 @@ const SKIP_REASON: Record<string, string> = {
 
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const { ids, action } = (await req.json()) as { ids?: string[]; action: BulkAction | "publish_all" };
+  const body = (await req.json().catch(() => null)) as { ids?: string[]; action?: BulkAction | "publish_all" } | null;
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Некоректний JSON" }, { status: 400 });
+  }
+  const { ids, action } = body;
   if (action === "publish_all") {
     try {
       const count = await publishAllProducts();
@@ -33,10 +40,17 @@ export async function POST(req: Request) {
   if (!Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: "Не обрано товарів" }, { status: 400 });
   }
+  if (!action || !(action in ACTION_LABEL)) {
+    return NextResponse.json({ error: "Невідома дія" }, { status: 400 });
+  }
+  if (ids.length > MAX_BULK_IDS) {
+    return NextResponse.json({ error: `За раз можна обробити максимум ${MAX_BULK_IDS} товарів` }, { status: 413 });
+  }
   try {
-    const { count, skipped } = await bulkProducts(ids, action as BulkAction);
-    const summary = `Масова дія: ${ACTION_LABEL[action] ?? action} — ${count} товарів` + (skipped ? ` (${skipped} пропущено — ${SKIP_REASON[action] ?? "не підходять"})` : "");
-    await logActivity(action === "delete" ? "delete" : "save", summary, count);
+    const bulkAction = action as BulkAction;
+    const { count, skipped } = await bulkProducts(ids, bulkAction);
+    const summary = `Масова дія: ${ACTION_LABEL[bulkAction] ?? bulkAction} — ${count} товарів` + (skipped ? ` (${skipped} пропущено — ${SKIP_REASON[bulkAction] ?? "не підходять"})` : "");
+    await logActivity(bulkAction === "delete" ? "delete" : "save", summary, count);
     return NextResponse.json({ ok: true, count, skipped });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Помилка" }, { status: 400 });
@@ -46,9 +60,16 @@ export async function POST(req: Request) {
 /** Spreadsheet bulk save: apply per-field edits to many products at once. */
 export async function PATCH(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const { updates } = (await req.json()) as { updates: { id: string; fields: Partial<AdminProductInput> }[] };
+  const body = (await req.json().catch(() => null)) as { updates?: { id: string; fields: Partial<AdminProductInput> }[] } | null;
+  if (!body || typeof body !== "object") {
+    return NextResponse.json({ error: "Некоректний JSON" }, { status: 400 });
+  }
+  const { updates } = body;
   if (!Array.isArray(updates) || updates.length === 0) {
     return NextResponse.json({ error: "Немає змін" }, { status: 400 });
+  }
+  if (updates.length > MAX_BULK_UPDATES) {
+    return NextResponse.json({ error: `За раз можна зберегти максимум ${MAX_BULK_UPDATES} рядків` }, { status: 413 });
   }
   try {
     const count = await bulkUpdateProducts(updates);

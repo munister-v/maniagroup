@@ -25,10 +25,21 @@ export const pool: Pool =
   new Pool({
     connectionString: CONNECTION_STRING,
     max: 10,
+    connectionTimeoutMillis: 5_000,
     idleTimeoutMillis: 30_000,
+    maxUses: 1_000,
+    keepAlive: true,
+    statement_timeout: 30_000,
+    query_timeout: 35_000,
   });
 
 if (process.env.NODE_ENV !== "production") global.__mgPool = pool;
+
+pool.on("error", (err) => {
+  // pg emits this for idle clients after network/DB restarts. Without a
+  // listener Node treats it as an unhandled error and PM2 restarts the app.
+  console.error("[pg] idle client error", err);
+});
 
 const SCHEMA = `
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

@@ -10,7 +10,7 @@ import { logActivity } from "@/lib/activity";
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
-const PUB_DIR = path.join(process.cwd(), "public", "catalog");
+const PUB_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
 // Cap per run so one request can't hammer the source site indefinitely or
 // blow past the route's time budget — matches the scale of a typical
 // "products imported without photos" batch (see Каталог → «На сайті: Без фото»).

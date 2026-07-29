@@ -9,7 +9,7 @@ import { logActivity } from "@/lib/activity";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const PUB_DIR = path.join(process.cwd(), "public", "catalog");
+const PUB_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
 
 /**
  * Bulk photo intake: drop a folder of files named by supplier code (SKU or

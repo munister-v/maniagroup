@@ -10,7 +10,7 @@ import path from "path";
  * also serves /catalog/ directly for speed; this is the in-app fallback.
  */
 
-const ROOT = path.join(process.cwd(), "public", "catalog");
+const ROOT = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
 const TYPES: Record<string, string> = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
   webp: "image/webp", avif: "image/avif", gif: "image/gif",
