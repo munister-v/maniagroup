@@ -10,6 +10,8 @@ export type AdminOrder = {
   date_created: string;
   date_modified: string;
   payment_method: string;
+  payment_status?: string;
+  paid_at?: string | null;
   billing: { first_name: string; last_name: string; phone: string; email: string };
   shipping_city: string;
   shipping_branch: string;
@@ -538,8 +540,30 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
   const date = new Date(order.date_created).toLocaleString("uk-UA", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const payLabel = order.payment_method === "prepay" ? "Передоплата" : "Накладений платіж";
 
+  const [payStatus, setPayStatus] = useState(order.payment_status ?? "unpaid");
+  const [savingPay, setSavingPay] = useState(false);
   const [ttn, setTtn] = useState(order.ttn ?? "");
   const [savingTtn, setSavingTtn] = useState(false);
+
+  async function savePayment(next: string) {
+    const prev = payStatus;
+    setPayStatus(next);          // optimistic — the select should not lag
+    setSavingPay(true);
+    try {
+      const res = await fetch("/api/admin/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: order.id, payment_status: next }),
+      });
+      if (!res.ok) throw new Error();
+      onPatched({ payment_status: next });
+      loadEvents();
+    } catch {
+      setPayStatus(prev);
+    } finally {
+      setSavingPay(false);
+    }
+  }
   const [events, setEvents] = useState<OrderEvent[]>([]);
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -612,7 +636,33 @@ function OrderDrawer({ order, onClose, onStatus, onPatched }: {
             <p className="mb-1 text-[10px] uppercase tracking-wider text-[#8a94a0]">Доставка · Нова Пошта</p>
             <DrawerRow label="Місто">{order.shipping_city || "—"}</DrawerRow>
             <DrawerRow label="Відділення">{order.shipping_branch || "—"}</DrawerRow>
-            <DrawerRow label="Оплата">{payLabel}</DrawerRow>
+            <DrawerRow label="Спосіб оплати">{payLabel}</DrawerRow>
+            <DrawerRow label="Статус оплати">
+              <span className="flex items-center gap-2">
+                <select
+                  value={payStatus}
+                  onChange={(e) => savePayment(e.target.value)}
+                  disabled={savingPay}
+                  className={`h-8 rounded-[3px] border px-2 text-[12px] focus:outline-none ${
+                    payStatus === "paid" ? "border-[#2e7d32] bg-[#edf7ee] text-[#2e7d32]"
+                    : payStatus === "failed" ? "border-[#c62828] bg-[#fdecec] text-[#c62828]"
+                    : payStatus === "pending" ? "border-[#ef6c00] bg-[#fff4e5] text-[#ef6c00]"
+                    : "border-[#e6eaec] bg-white text-[#5a6472]"
+                  }`}
+                >
+                  <option value="unpaid">Не оплачено</option>
+                  <option value="pending">Очікує оплати</option>
+                  <option value="paid">Оплачено</option>
+                  <option value="failed">Оплата не пройшла</option>
+                  <option value="refunded">Повернуто</option>
+                </select>
+                {order.paid_at && payStatus === "paid" && (
+                  <span className="text-[11px] text-[#8a94a0]">
+                    {new Date(order.paid_at).toLocaleDateString("uk-UA", { day: "2-digit", month: "short", year: "numeric" })}
+                  </span>
+                )}
+              </span>
+            </DrawerRow>
             {order.comment && <DrawerRow label="Коментар">{order.comment}</DrawerRow>}
           </section>
 

@@ -231,6 +231,35 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS ttn          TEXT NOT NULL DEFAULT '
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS source       TEXT NOT NULL DEFAULT 'site';
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS stock_applied BOOLEAN NOT NULL DEFAULT FALSE;
+-- Payment state kept separate from the fulfilment status column. Fulfilment is
+-- pending → processing → completed; whether money arrived is an orthogonal
+-- fact, and conflating the two breaks the moment an online provider is added:
+-- a paid order can still be unshipped, and a shipped COD order stays unpaid
+-- until it is handed over.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+
+-- One row per attempt against a payment provider (monopay, LiqPay/Privat, …).
+-- Providers retry their callbacks, so provider_ref is unique: the webhook
+-- handler upserts on it and a duplicate delivery cannot pay an order twice.
+-- The payload column keeps the raw callback for disputes — never trust our
+-- own summary of someone else's money.
+CREATE TABLE IF NOT EXISTS payments (
+  id           BIGSERIAL PRIMARY KEY,
+  order_id     BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  provider     TEXT NOT NULL DEFAULT '',
+  provider_ref TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'pending',
+  amount       NUMERIC NOT NULL DEFAULT 0,
+  currency     TEXT NOT NULL DEFAULT 'UAH',
+  payload      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_ref
+  ON payments(provider, provider_ref) WHERE provider_ref <> '';
 
 -- Unified order timeline: status changes, notes, ttn, stock events.
 CREATE TABLE IF NOT EXISTS order_events (

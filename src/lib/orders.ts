@@ -81,6 +81,8 @@ export type Order = {
   last_name: string;
   status: string;
   payment_method: string;
+  payment_status: string;
+  paid_at: string | null;
   shipping_method: string;
   shipping_city: string;
   shipping_branch: string;
@@ -108,6 +110,31 @@ export type OrderEvent = {
 };
 
 export const ORDER_STATUSES = ["pending", "processing", "on-hold", "completed", "cancelled", "refunded"] as const;
+
+/**
+ * Payment state, tracked separately from fulfilment `status`. A COD order ships
+ * while still `unpaid`; a card order can be `paid` days before it ships. Online
+ * providers (monopay, Privat) will move orders unpaid → pending → paid|failed.
+ */
+export const PAYMENT_STATUSES = ["unpaid", "pending", "paid", "failed", "refunded"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  unpaid: "Не оплачено",
+  pending: "Очікує оплати",
+  paid: "Оплачено",
+  failed: "Оплата не пройшла",
+  refunded: "Повернуто",
+};
+
+/** Methods offered at checkout. Online ones get added when the keys arrive. */
+export const PAYMENT_METHODS = ["cod", "prepay"] as const;
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cod: "Накладений платіж",
+  prepay: "Передоплата на картку",
+  monopay: "Картка онлайн (monopay)",
+  privat: "Картка онлайн (Приват)",
+};
 
 // Statuses that free up reserved stock (order no longer consumes inventory).
 const STOCK_RELEASING = new Set(["cancelled", "refunded"]);
@@ -397,7 +424,7 @@ async function hydrate(orders: Record<string, unknown>[]): Promise<Order[]> {
 }
 
 const ORDER_SELECT = `id, number, account_id, email, phone, first_name, last_name, status,
-  payment_method, shipping_method, shipping_city, shipping_branch, comment,
+  payment_method, payment_status, paid_at, shipping_method, shipping_city, shipping_branch, comment,
   ttn, tracking_url, source, coupon_code, discount,
   subtotal, shipping_cost, total, created_at, updated_at`;
 
@@ -516,6 +543,70 @@ export async function updateOrderStatus(id: number, status: string): Promise<voi
     await client.query(
       "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'status',$2,'admin')",
       [id, `Статус: ${STATUS_LABELS[prev] ?? prev} → ${STATUS_LABELS[status] ?? status}`],
+    );
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Move an order's payment state, logging it on the order timeline.
+ *
+ * `author` distinguishes a manual "money landed on the card" from a provider
+ * callback, which matters when reconciling later. Recording an external
+ * transaction alongside is optional — pass `payment` and it is upserted on
+ * (provider, provider_ref), so a provider re-delivering the same webhook
+ * cannot create a second payment row or double-log the event.
+ */
+export async function setPaymentStatus(
+  id: number,
+  status: PaymentStatus,
+  opts: {
+    author?: string;
+    payment?: { provider: string; ref?: string; amount?: number; currency?: string; payload?: unknown };
+  } = {},
+): Promise<void> {
+  if (!PAYMENT_STATUSES.includes(status)) throw new Error("Невірний статус оплати");
+  const author = opts.author ?? "admin";
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const cur = await client.query<{ payment_status: string }>(
+      "SELECT payment_status FROM orders WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    if (cur.rows.length === 0) throw new Error("Замовлення не знайдено");
+    const prev = cur.rows[0].payment_status;
+
+    if (opts.payment) {
+      const p = opts.payment;
+      await client.query(
+        `INSERT INTO payments (order_id, provider, provider_ref, status, amount, currency, payload)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
+         ON CONFLICT (provider, provider_ref) WHERE provider_ref <> ''
+         DO UPDATE SET status = EXCLUDED.status, amount = EXCLUDED.amount,
+                       payload = EXCLUDED.payload, updated_at = now()`,
+        [id, p.provider, p.ref ?? "", status, p.amount ?? 0, p.currency ?? "UAH",
+         JSON.stringify(p.payload ?? {})],
+      );
+    }
+
+    if (prev === status) { await client.query("COMMIT"); return; }
+
+    await client.query(
+      `UPDATE orders SET payment_status = $1,
+              paid_at = CASE WHEN $1 = 'paid' THEN now() ELSE NULL END,
+              updated_at = now()
+        WHERE id = $2`,
+      [status, id],
+    );
+    await client.query(
+      "INSERT INTO order_events (order_id, type, message, author) VALUES ($1,'payment',$2,$3)",
+      [id, `Оплата: ${PAYMENT_STATUS_LABELS[prev as PaymentStatus] ?? prev} → ${PAYMENT_STATUS_LABELS[status]}`, author],
     );
     await client.query("COMMIT");
   } catch (e) {

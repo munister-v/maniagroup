@@ -28,6 +28,7 @@ export async function GET(req: Request) {
       shipping_city: o.shipping_city || null,
       shipping_branch: o.shipping_branch || null,
       payment_method: o.payment_method || null,
+      payment_status: o.payment_status || "unpaid",
       line_items: o.items.map((it) => ({
         id: it.id,
         name: it.variation ? `${it.name} (${it.variation})` : it.name,

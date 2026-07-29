@@ -16,6 +16,7 @@ type DbOrder = {
   ttn?: string | null; tracking_url?: string | null;
   shipping_city?: string | null; shipping_branch?: string | null;
   payment_method?: string | null;
+  payment_status?: string | null;
   line_items: { id: number; name: string; quantity: number; total: string; image?: { src?: string } }[];
 };
 
@@ -301,6 +302,20 @@ function OrdersTab() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-medium text-ink">№{o.number}</span>
                       <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-luxe ${st.badge}`}>{st.label}</span>
+                      {(() => {
+                        const ps = o.payment_status ?? "unpaid";
+                        // COD is unpaid until handover, so saying so adds noise
+                        // rather than information. Only speak up when it matters.
+                        if (ps === "unpaid") return null;
+                        const look: Record<string, { label: string; cls: string }> = {
+                          pending: { label: "Очікує оплати", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+                          paid: { label: "Оплачено", cls: "border-green-200 bg-green-50 text-green-700" },
+                          failed: { label: "Оплата не пройшла", cls: "border-red-200 bg-red-50 text-red-700" },
+                          refunded: { label: "Повернуто", cls: "border-line bg-cloud text-muted" },
+                        };
+                        const l = look[ps];
+                        return l ? <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-luxe ${l.cls}`}>{l.label}</span> : null;
+                      })()}
                       {hasTracking && (
                         <a href={o.tracking_url ?? "#"} target="_blank" rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}

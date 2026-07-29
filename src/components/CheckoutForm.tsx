@@ -15,6 +15,7 @@ type Form = {
   city: string;
   branch: string;
   note: string;
+  payment_method: string;
 };
 
 const EMPTY: Form = {
@@ -25,6 +26,9 @@ const EMPTY: Form = {
   city: "",
   branch: "",
   note: "",
+  // Offline only for now. Card-online lands here when the monopay/Privat
+  // merchant keys exist — the order model already carries payment_status.
+  payment_method: "cod",
 };
 
 export function CheckoutForm() {
@@ -99,7 +103,7 @@ export function CheckoutForm() {
         city: form.city,
         branch: form.branch,
         note: form.note,
-        payment_method: "cod",
+        payment_method: form.payment_method,
         coupon_code: coupon?.code ?? "",
       }),
     });
@@ -181,6 +185,34 @@ export function CheckoutForm() {
                 Обрано: {form.city}, {form.branch}
               </p>
             )}
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-[11px] uppercase tracking-luxe text-muted">Спосіб оплати</legend>
+            {[
+              { id: "cod", title: "Накладений платіж", hint: "Оплата при отриманні у відділенні Нової Пошти" },
+              { id: "prepay", title: "Передоплата на картку", hint: "Реквізити надішлемо після підтвердження замовлення" },
+            ].map((m) => (
+              <label
+                key={m.id}
+                className={`flex cursor-pointer items-start gap-3 border p-3 transition-colors ${
+                  form.payment_method === m.id ? "border-ink bg-cloud/40" : "border-line hover:border-ink/40"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="payment_method"
+                  value={m.id}
+                  checked={form.payment_method === m.id}
+                  onChange={(e) => set("payment_method", e.target.value)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm text-ink">{m.title}</span>
+                  <span className="block text-xs text-muted">{m.hint}</span>
+                </span>
+              </label>
+            ))}
           </fieldset>
 
           <label className="block">

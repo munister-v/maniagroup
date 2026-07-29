@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { listOrders, updateOrderStatus, setOrderTracking, getOrder, type Order } from "@/lib/orders";
+import { listOrders, updateOrderStatus, setOrderTracking, setPaymentStatus, getOrder, type Order, type PaymentStatus } from "@/lib/orders";
 import { notifyStatusChange } from "@/lib/notify";
 
 export function serializeOrder(o: Order) {
@@ -11,6 +11,8 @@ export function serializeOrder(o: Order) {
     date_created: o.created_at,
     date_modified: o.updated_at,
     payment_method: o.payment_method,
+    payment_status: o.payment_status ?? "unpaid",
+    paid_at: o.paid_at ?? null,
     billing: {
       first_name: o.first_name,
       last_name: o.last_name,
@@ -69,10 +71,14 @@ export async function GET(req: Request) {
 
 export async function PATCH(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const body = (await req.json()) as { id: number; status?: string; ttn?: string };
+  const body = (await req.json()) as { id: number; status?: string; ttn?: string; payment_status?: string };
   try {
     if (typeof body.ttn === "string") {
       await setOrderTracking(Number(body.id), body.ttn);
+    } else if (body.payment_status) {
+      // Manual reconciliation — "the transfer landed". Online providers will
+      // call setPaymentStatus themselves from their webhook.
+      await setPaymentStatus(Number(body.id), body.payment_status as PaymentStatus, { author: "admin" });
     } else if (body.status) {
       await updateOrderStatus(Number(body.id), body.status);
       const order = await getOrder(Number(body.id));
