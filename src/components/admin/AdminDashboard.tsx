@@ -66,7 +66,7 @@ type SyncState = {
  *  sections (Intertop's «Товари» group with a hover-flyout submenu). */
 type RailItem =
   | { kind: "leaf"; id: Section; label: string; d: string }
-  | { kind: "group"; key: string; label: string; d: string; children: { id: Section; label: string }[] };
+  | { kind: "group"; key: string; label: string; d: string; children: { id: Section; label: string; hint?: string }[] };
 
 const NAV_MAIN: RailItem[] = [
   {
@@ -81,13 +81,13 @@ const NAV_MAIN: RailItem[] = [
     label: "Товари",
     d: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
     children: [
-      { id: "products", label: "Список товарів" },
-      { id: "offers", label: "Торгові пропозиції" },
-      { id: "properties", label: "Властивості товарів" },
-      { id: "propertyMatching", label: "Зіставлення властивостей" },
-      { id: "catalog", label: "Імпорт" },
-      { id: "sizeCharts", label: "Розмірні сітки" },
-      { id: "classifier", label: "Класифікатор товарів" },
+      { id: "products", label: "Список товарів", hint: "картки, ціни, фото, публікація" },
+      { id: "offers", label: "Торгові пропозиції", hint: "розміри, залишки й ціна по кожному розміру" },
+      { id: "properties", label: "Властивості товарів", hint: "довідник: колір, склад, сезон" },
+      { id: "propertyMatching", label: "Зіставлення властивостей", hint: "які колонки файлу лягають у які поля" },
+      { id: "catalog", label: "Імпорт", hint: "завантаження прайсів і залишків з XLS/CSV" },
+      { id: "sizeCharts", label: "Розмірні сітки", hint: "таблиці відповідності розмірів для картки" },
+      { id: "classifier", label: "Класифікатор товарів", hint: "дерево категорій магазину" },
     ],
   },
   {
@@ -315,7 +315,12 @@ export function AdminDashboard({
                             section === c.id ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10 hover:text-white"
                           }`}
                         >
-                          {c.label}
+                          <span className="block">{c.label}</span>
+                          {c.hint && (
+                            <span className={`mt-0.5 block text-[11px] leading-tight ${section === c.id ? "text-white/60" : "text-white/35"}`}>
+                              {c.hint}
+                            </span>
+                          )}
                         </button>
                       ))}
                     </div>
