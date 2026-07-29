@@ -21,8 +21,9 @@
 import path from "path";
 import fs from "fs";
 import sharp from "sharp";
+import { UPLOADS_DIR } from "./mediaStorage";
 
-const BRANDS_DIR = path.join(process.cwd(), "public", "uploads", "brands");
+const BRANDS_DIR = path.join(UPLOADS_DIR, "brands");
 const MIN_DIM = 64;
 
 export type LogoBg = "light" | "dark";

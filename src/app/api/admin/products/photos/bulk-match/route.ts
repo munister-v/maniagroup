@@ -5,11 +5,12 @@ import { isAdmin } from "@/lib/adminAuth";
 import { q } from "@/lib/pg";
 import { optimizeImage } from "@/lib/imageOptimize";
 import { logActivity } from "@/lib/activity";
+import { CATALOG_DIR } from "@/lib/mediaStorage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const PUB_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
+const PUB_DIR = CATALOG_DIR;
 
 /**
  * Bulk photo intake: drop a folder of files named by supplier code (SKU or
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
         const opt = await optimizeImage(raw, file.type || "image/jpeg");
         await mkdir(destDir, { recursive: true });
         const outName = `${nextIdx}.${opt.ext}`;
-        await writeFile(path.join(destDir, outName), opt.buffer);
+        await writeFile(path.join(/*turbopackIgnore: true*/ destDir, outName), opt.buffer);
         imgs.push({ src: `/catalog/${productId}/${outName}` });
         nextIdx++;
         matched.push({ filename: file.name, productId, productName: nameById.get(productId) ?? String(productId) });

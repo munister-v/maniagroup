@@ -6,11 +6,12 @@ import { listEnabledPhotoSources } from "@/lib/photoSources";
 import { searchAcrossSources, fetchImageBytes } from "@/lib/wpPhotos";
 import { optimizeImage } from "@/lib/imageOptimize";
 import { logActivity } from "@/lib/activity";
+import { CATALOG_DIR } from "@/lib/mediaStorage";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
-const PUB_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
+const PUB_DIR = CATALOG_DIR;
 // Cap per run so one request can't hammer the source site indefinitely or
 // blow past the route's time budget — matches the scale of a typical
 // "products imported without photos" batch (see Каталог → «На сайті: Без фото»).
@@ -123,7 +124,7 @@ export async function POST(req: Request) {
               const destDir = path.join(PUB_DIR, String(job.target.id));
               await mkdir(destDir, { recursive: true });
               const outName = `${job.index + 1}.${opt.ext}`;
-              await writeFile(path.join(destDir, outName), opt.buffer);
+              await writeFile(path.join(/*turbopackIgnore: true*/ destDir, outName), opt.buffer);
               return { id: job.target.id, index: job.index, src: `/catalog/${job.target.id}/${outName}` };
             } catch {
               return null;

@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { optimizeImage } from "@/lib/imageOptimize";
+import { UPLOADS_DIR } from "@/lib/mediaStorage";
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
 const MAX_BYTES = 12 * 1024 * 1024; // pre-optimization ceiling; output is capped by imageOptimize
@@ -27,10 +28,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Не вдалося обробити зображення — файл пошкоджено?" }, { status: 400 });
   }
 
-  const dir = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
+  const dir = UPLOADS_DIR;
   await mkdir(dir, { recursive: true });
   const name = `${randomUUID()}.${optimized.ext}`;
-  await writeFile(path.join(dir, name), optimized.buffer);
+  await writeFile(path.join(/*turbopackIgnore: true*/ dir, name), optimized.buffer);
 
   return NextResponse.json({ ok: true, url: `/uploads/${name}` });
 }

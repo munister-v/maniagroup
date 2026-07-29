@@ -3,9 +3,10 @@ import { isAdmin } from "@/lib/adminAuth";
 import { q } from "@/lib/pg";
 import { readdir, stat, unlink } from "fs/promises";
 import path from "path";
+import { CATALOG_DIR, UPLOADS_DIR, mediaUrlToPath } from "@/lib/mediaStorage";
 
-const UPLOADS = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "uploads");
-const CATALOG = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
+const UPLOADS = UPLOADS_DIR;
+const CATALOG = CATALOG_DIR;
 const IMAGE_RE = /\.(jpe?g|png|webp|avif|gif)$/i;
 
 export type MediaUsage = { id: string; name: string; sku: string };
@@ -110,7 +111,9 @@ export async function GET(req: Request) {
   const files = await Promise.all(
     slice.map(async (f) => {
       try {
-        const s = await stat(path.join(/*turbopackIgnore: true*/ process.cwd(), "public", f.url));
+        const full = mediaUrlToPath(f.url);
+        if (!full) throw new Error("bad path");
+        const s = await stat(full);
         return { ...f, size: s.size, mtime: s.mtimeMs };
       } catch {
         return { ...f, size: 0, mtime: 0 };
@@ -143,9 +146,8 @@ export async function DELETE(req: Request) {
   if (!/^\/(uploads|catalog)\//.test(rel) || rel.includes("..") || !IMAGE_RE.test(rel)) {
     return NextResponse.json({ error: "Невірний шлях" }, { status: 400 });
   }
-  const full = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", rel);
-  const root = path.join(/*turbopackIgnore: true*/ process.cwd(), "public");
-  if (!full.startsWith(root + path.sep)) {
+  const full = mediaUrlToPath(rel);
+  if (!full) {
     return NextResponse.json({ error: "Невірний шлях" }, { status: 400 });
   }
 

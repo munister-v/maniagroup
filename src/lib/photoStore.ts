@@ -1,6 +1,6 @@
 /**
  * Photo storage core — pull product images off WordPress (maniagroup.com.ua)
- * into the server's own `public/catalog/<productId>/` storage and rewrite the DB
+ * into the server's own media storage (`/catalog/<productId>/` URLs) and rewrite the DB
  * so the catalog is fully self-contained (no WP dependency, survives WP going
  * away). We download the full `src` only and point both src+thumbnail at it —
  * next/image resizes on the fly, so one file per image is enough.
@@ -12,8 +12,7 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { q, q1 } from "./pg";
-
-const PUB_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
+import { CATALOG_DIR } from "./mediaStorage";
 
 const CT_EXT: Record<string, string> = {
   "image/jpeg": "jpg", "image/jpg": "jpg", "image/png": "png",
@@ -37,7 +36,7 @@ async function download(url: string, destDir: string, base: string): Promise<str
     if (buf.length < 100) return null; // guard against error pages
     await mkdir(destDir, { recursive: true });
     const file = `${base}.${ext}`;
-    await writeFile(path.join(destDir, file), buf);
+    await writeFile(path.join(/*turbopackIgnore: true*/ destDir, file), buf);
     return file;
   } catch {
     return null;
@@ -67,7 +66,7 @@ export type BatchResult = { processed: number; downloaded: number; failed: numbe
 
 /**
  * Migrate one batch of products. Downloads each external image into
- * public/catalog/<id>/, rewrites the products row to local paths, and marks it
+ * media-root/catalog/<id>/, rewrites the products row to local paths, and marks it
  * migrated (even on partial failure — failed images keep their WP url and can be
  * retried via resetFailed). Returns counts + how many products still pending.
  */
@@ -89,7 +88,7 @@ export async function migratePhotoBatch(
   for (const row of rows) {
     let imgs: ImgObj[] = [];
     try { imgs = JSON.parse(row.images || "[]"); } catch {}
-    const destDir = path.join(PUB_DIR, row.id);
+    const destDir = path.join(CATALOG_DIR, row.id);
     const out: ImgObj[] = [];
     let okCount = 0;
 

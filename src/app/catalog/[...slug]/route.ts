@@ -1,16 +1,17 @@
 import { NextRequest } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
+import { CATALOG_DIR } from "@/lib/mediaStorage";
 
 /**
- * Serves migrated product photos from public/catalog/ at runtime. Next 16 does
+ * Serves migrated product photos from the runtime media storage. Next 16 does
  * NOT serve files added to public/ after the server starts, and next/image's
  * optimizer fetches sources from the Next origin (bypassing nginx) — so this
  * handler is what makes both the optimizer and any direct hit resolve. nginx
  * also serves /catalog/ directly for speed; this is the in-app fallback.
  */
 
-const ROOT = path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "catalog");
+const ROOT = CATALOG_DIR;
 const TYPES: Record<string, string> = {
   jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
   webp: "image/webp", avif: "image/avif", gif: "image/gif",
