@@ -18,6 +18,7 @@ type Row = {
   is_in_stock: boolean;
   status: string;
   image_src: string;
+  image_count?: number;
   featured: boolean;
   color: string;
   season: string;
@@ -801,12 +802,22 @@ function ProductListView({
                   </td>
                   <td className="px-3 py-2.5 font-medium tabular-nums text-[#5a6472]">{row.id}</td>
                   <td className="max-w-[280px] truncate px-3 py-2.5 text-[#2b2d42]" title={row.name}>{row.name}</td>
-                  <td className="px-3 py-2">
-                    {row.image_src
-                      ? <img src={row.image_src} alt="" className="h-11 w-11 rounded-[4px] border border-[#e6eaec] object-cover" />
-                      : <div className="flex h-11 w-11 items-center justify-center rounded-[4px] border border-dashed border-[#d5dbe0] text-[#b6c0ca]">
-                          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z" /></svg>
-                        </div>}
+                  <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(row.id)}
+                      title={row.image_src ? `Відкрити картку · фото: ${row.image_count ?? 1}` : "Додати фото в картці товару"}
+                      className="group relative block h-12 w-12 rounded-[4px] border border-[#e6eaec] bg-white transition-colors hover:border-[#2f9488] focus:outline-none focus:ring-2 focus:ring-[#2f9488]/30"
+                    >
+                      {row.image_src
+                        ? <img src={row.image_src} alt="" className="h-full w-full rounded-[3px] object-cover" loading="lazy" />
+                        : <span className="flex h-full w-full items-center justify-center rounded-[3px] border border-dashed border-[#d5dbe0] text-[#b6c0ca] group-hover:text-[#2f9488]">
+                            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z" /></svg>
+                          </span>}
+                      <span className={`absolute -right-1 -top-1 min-w-4 rounded-full px-1 text-[9px] leading-4 ${row.image_src ? "bg-[#2b2d42] text-white" : "bg-[#d97706] text-white"}`}>
+                        {row.image_count ?? (row.image_src ? 1 : 0)}
+                      </span>
+                    </button>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[#5a6472]">{row.category || "—"}</td>
                   <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-[#5a6472]">{row.factory_article || "—"}</td>

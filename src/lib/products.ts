@@ -228,6 +228,7 @@ export async function listAdminProducts(opts: ProductFilterOpts & {
     `SELECT id::text AS id, name, name_uk, slug, sku, brand, category, category_slug, gender,
             regular_price::float AS regular_price, sale_price::float AS sale_price,
             price::float AS price, is_in_stock, status, image_src, featured, show_without_photo,
+            CASE WHEN jsonb_typeof(images) = 'array' THEN jsonb_array_length(images) ELSE 0 END AS image_count,
             color, season, composition, country, attributes, factory_article,
             description, description_uk, material, subtype, moderation_status, size_chart_code,
             to_char(updated_at, 'DD.MM.YYYY HH24:MI') AS updated_at,

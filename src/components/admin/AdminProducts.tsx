@@ -824,12 +824,28 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
   const imagesRef = useRef(images);
   imagesRef.current = images;
 
+  const normalizeUrl = (v: string) => v.trim();
+  const isLikelyImageUrl = (v: string) => /^https?:\/\/.+\.(jpe?g|png|webp|avif|gif)(\?.*)?$/i.test(v) || /^\/(uploads|catalog)\//.test(v);
+
+  async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+    const out: R[] = new Array(items.length);
+    let i = 0;
+    async function worker() {
+      while (i < items.length) {
+        const idx = i++;
+        out[idx] = await fn(items[idx]);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return out;
+  }
+
   async function upload(files: FileList | File[] | null) {
     const list = files ? Array.from(files).filter((f) => f.type.startsWith("image/")) : [];
     if (list.length === 0) return;
     setPending((n) => n + list.length);
-    // Parallel upload — the old sequential loop made a 20-photo batch crawl.
-    const results = await Promise.all(list.map(async (file) => {
+    // Bounded queue: fast enough for batches, gentle enough for sharp on the VPS.
+    const results = await mapLimit(list, 3, async (file) => {
       const fd = new FormData();
       fd.append("file", file);
       try {
@@ -841,15 +857,18 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
         onToast?.(`Мережева помилка: ${file.name}`);
       }
       return null;
-    }));
+    });
     setPending((n) => n - list.length);
-    const added = results.filter((u): u is string => !!u);
+    const added = results.filter((u): u is string => !!u && !imagesRef.current.includes(u));
     if (added.length) onChange([...imagesRef.current, ...added]);
   }
 
   function addUrl() {
-    const u = urlInput.trim();
-    if (u) { onChange([...images, u]); setUrlInput(""); }
+    const u = normalizeUrl(urlInput);
+    if (!u) return;
+    if (!isLikelyImageUrl(u)) { onToast?.("Це не схоже на URL зображення"); return; }
+    if (images.includes(u)) { onToast?.("Це фото вже додано"); setUrlInput(""); return; }
+    onChange([...images, u]); setUrlInput("");
   }
 
   async function openLibrary() {
@@ -870,6 +889,11 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
     onChange(cur.includes(url) ? cur.filter((u) => u !== url) : [...cur, url]);
   }
   function removeAt(i: number) { onChange(images.filter((_, idx) => idx !== i)); }
+  async function copyUrl(src: string) {
+    const full = src.startsWith("/") ? `${location.origin}${src}` : src;
+    try { await navigator.clipboard.writeText(full); onToast?.("Посилання скопійовано"); }
+    catch { onToast?.(full); }
+  }
   function makePrimary(i: number) {
     if (i === 0) return;
     const next = [...images];
@@ -924,9 +948,11 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
             >
               <img src={src} alt="" className={`h-24 w-[72px] object-cover ${i === 0 ? "ring-2 ring-[#2b2d42]" : "border border-[#eef2f3]"}`} />
               {i === 0 && <span className="absolute left-0 top-0 bg-[#2b2d42] px-1 text-[8px] uppercase text-white">гол.</span>}
-              <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                {i !== 0 && <button onClick={() => makePrimary(i)} title="Зробити головним" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#2b2d42]">★</button>}
-                <button onClick={() => removeAt(i)} title="Видалити" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#e5484d]">✕</button>
+              <div className="absolute inset-0 flex items-center justify-center gap-1 bg-black/45 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                {i !== 0 && <button type="button" onClick={() => makePrimary(i)} title="Зробити головним" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#2b2d42]">★</button>}
+                <button type="button" onClick={() => copyUrl(src)} title="Скопіювати URL" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#2b2d42]">⧉</button>
+                <a href={src} target="_blank" rel="noreferrer" title="Відкрити" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#2b2d42]">↗</a>
+                <button type="button" onClick={() => removeAt(i)} title="Видалити" className="rounded bg-white/90 px-1.5 py-0.5 text-[10px] text-[#e5484d]">✕</button>
               </div>
             </div>
           ))}

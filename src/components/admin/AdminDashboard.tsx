@@ -1799,7 +1799,19 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     const arr = list ? Array.from(list) : [];
     if (arr.length === 0) return;
     setUploading(true);
-    const results = await Promise.all(arr.map(async (file) => {
+    async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+      const out: R[] = new Array(items.length);
+      let i = 0;
+      async function worker() {
+        while (i < items.length) {
+          const idx = i++;
+          out[idx] = await fn(items[idx]);
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+      return out;
+    }
+    const results = await mapLimit(arr, 3, async (file) => {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
@@ -1807,7 +1819,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
       const d = await res.json().catch(() => ({}));
       onToast?.(d.error ?? `Не вдалося завантажити ${file.name}`);
       return false;
-    }));
+    });
     setUploading(false);
     if (inputRef.current) inputRef.current.value = "";
     const ok = results.filter(Boolean).length;
