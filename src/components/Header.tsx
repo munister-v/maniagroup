@@ -123,6 +123,22 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    const locked = mobileOpen || searchOpen || cartOpen;
+    document.body.style.overflow = locked ? "hidden" : "";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setSearchOpen(false);
+      setMobileOpen(false);
+      setMobileExpanded(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mobileOpen, searchOpen, cartOpen]);
+
   const solid = scrolled || active !== null || mobileOpen || !overHero;
   const [cartCount, setCartCount] = useState(0);
 
@@ -152,7 +168,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
           <div className="flex items-center">
             <button
               onClick={() => setMobileOpen((v) => { if (v) setMobileExpanded(null); return !v; })}
-              className="-ml-1 flex h-9 w-9 items-center justify-center md:hidden"
+              className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full transition-colors active:bg-cloud md:hidden"
               aria-label="Меню"
               aria-expanded={mobileOpen}
             >
@@ -161,7 +177,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
             <button
               onClick={() => setSearchOpen(true)}
               aria-label="Пошук"
-              className="hidden items-center gap-2 text-[11px] uppercase tracking-luxe opacity-75 transition-opacity hover:opacity-100 md:flex"
+              className="hidden h-11 items-center gap-2 rounded-full px-2 text-[11px] uppercase tracking-luxe opacity-75 transition-opacity hover:opacity-100 md:flex"
             >
               <Icon d={ICONS.search} />
               Пошук
@@ -187,7 +203,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Instagram"
-              className="hidden hover:opacity-60 lg:block"
+              className="hidden h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-cloud/70 lg:flex"
             >
               <Icon d={SOCIAL_ICONS.instagram} />
             </a>
@@ -196,17 +212,17 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Telegram"
-              className="hidden hover:opacity-60 lg:block"
+              className="hidden h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-cloud/70 lg:flex"
             >
               <Icon d={SOCIAL_ICONS.telegram} />
             </a>
-            <Link href="/account/profile" aria-label="Акаунт" className="hidden hover:opacity-60 md:block">
+            <Link href="/account/profile" aria-label="Акаунт" className="hidden h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-cloud/70 md:flex">
               <Icon d={ICONS.user} />
             </Link>
             <button
               onClick={() => setCartOpen(true)}
               aria-label="Кошик"
-              className="relative hover:opacity-60"
+              className="relative flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-cloud/70"
             >
               <Icon d={ICONS.bag} />
               {cartCount > 0 && (
@@ -270,7 +286,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
 
       {/* mobile menu */}
       {mobileOpen && (
-        <nav className="max-h-[calc(100vh-4rem)] overflow-y-auto border-b border-line bg-paper text-ink md:hidden">
+        <nav className="fixed inset-x-0 top-16 z-50 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-paper/98 pb-[env(safe-area-inset-bottom)] text-ink shadow-[0_24px_60px_-42px_rgba(26,23,20,0.75)] backdrop-blur-xl md:hidden">
           {/* gender tiles */}
           <div className="wrap grid grid-cols-2 gap-3 pt-4">
             {MEGA_MENU.filter((m) => m.label === "Жінкам" || m.label === "Чоловікам").map((item) => (
@@ -278,7 +294,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                 key={item.label}
                 href={item.featured.href ?? item.href}
                 onClick={() => setMobileOpen(false)}
-                className="group relative block aspect-[3/4] overflow-hidden"
+                className="group relative block aspect-[3/4] overflow-hidden rounded-[3px]"
                 style={{ backgroundColor: item.featured.tone }}
               >
                 {item.featured.image && (
@@ -311,7 +327,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                     <Link
                       href="/brands"
                       onClick={() => setMobileOpen(false)}
-                      className="flex w-full items-center justify-between py-3 text-[12px] uppercase tracking-luxe opacity-80"
+                      className="flex min-h-12 w-full items-center justify-between py-3 text-[12px] uppercase tracking-luxe opacity-80"
                     >
                       {item.label}
                       <span className="opacity-40">→</span>
@@ -326,7 +342,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                   <button
                     onClick={() => setMobileExpanded(open ? null : item.label)}
                     aria-expanded={open}
-                    className="flex w-full items-center justify-between py-3 text-[12px] uppercase tracking-luxe opacity-80"
+                    className="flex min-h-12 w-full items-center justify-between py-3 text-[12px] uppercase tracking-luxe opacity-80"
                   >
                     {item.label}
                     <span className={`transition-transform ${open ? "rotate-45" : ""}`}>
@@ -340,7 +356,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                           key={l.slug}
                           href={l.href ?? `/catalog?category=${l.slug}`}
                           onClick={() => setMobileOpen(false)}
-                          className="flex items-center py-1.5"
+                          className="flex min-h-10 items-center py-1.5"
                         >
                           {l.logo ? (
                             <Image
@@ -371,7 +387,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               <Link
                 href="/sale"
                 onClick={() => setMobileOpen(false)}
-                className="flex w-full items-center justify-between py-3 text-[12px] font-semibold uppercase tracking-luxe text-[var(--color-sale)]"
+                className="flex min-h-12 w-full items-center justify-between py-3 text-[12px] font-semibold uppercase tracking-luxe text-[var(--color-sale)]"
               >
                 Sale
                 <span className="bg-[var(--color-sale)] px-1.5 py-0.5 text-[9px] text-white">%</span>
@@ -381,7 +397,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               <a
                 href="/delivery"
                 onClick={() => setMobileOpen(false)}
-                className="block py-3 text-[12px] uppercase tracking-luxe opacity-80"
+                className="block min-h-12 py-3 text-[12px] uppercase tracking-luxe opacity-80"
               >
                 Доставка
               </a>
@@ -390,7 +406,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               <a
                 href="/contacts"
                 onClick={() => setMobileOpen(false)}
-                className="block py-3 text-[12px] uppercase tracking-luxe opacity-80"
+                className="block min-h-12 py-3 text-[12px] uppercase tracking-luxe opacity-80"
               >
                 Контакти
               </a>
@@ -419,7 +435,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
           }`}
         />
         <div
-          className={`absolute inset-x-0 top-0 max-h-[85vh] overflow-y-auto bg-paper transition-transform duration-400 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${
+          className={`absolute inset-x-0 top-0 max-h-[88dvh] overflow-y-auto bg-paper shadow-[0_28px_80px_-48px_rgba(26,23,20,0.7)] transition-transform duration-300 ease-[cubic-bezier(0.2,0.7,0.2,1)] ${
             searchOpen ? "translate-y-0" : "-translate-y-full"
           }`}
         >
@@ -430,7 +446,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               setSearchOpen(false);
               router.push(`/catalog?q=${encodeURIComponent(query.trim())}`);
             }}
-            className="wrap flex items-center gap-4 py-8"
+            className="wrap flex items-center gap-4 py-6 md:py-8"
           >
             <Icon d={ICONS.search} />
             <input
@@ -438,7 +454,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Шукати товари…"
-              className="flex-1 border-b border-line bg-transparent py-2 font-display text-2xl text-ink placeholder:text-muted focus:border-ink focus:outline-none md:text-3xl"
+              className="min-w-0 flex-1 border-b border-line bg-transparent py-3 font-display text-2xl text-ink placeholder:text-muted focus:border-ink focus:outline-none md:text-3xl"
             />
             <button
               type="button"
@@ -447,7 +463,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                 setQuery("");
               }}
               aria-label="Закрити"
-              className="text-ink hover:opacity-60"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-ink transition-colors hover:bg-cloud"
             >
               <Icon d={ICONS.close} />
             </button>
@@ -471,7 +487,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
                           setSearchOpen(false);
                           setQuery("");
                         }}
-                        className="flex items-center gap-4 py-3 hover:opacity-70"
+                        className="flex min-h-[76px] items-center gap-4 py-3 transition-colors hover:bg-cloud/45"
                       >
                         <div
                           className="relative h-14 w-11 flex-none overflow-hidden bg-line"
@@ -526,21 +542,21 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
       </div>
 
       {/* mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-paper/95 backdrop-blur-md md:hidden">
-        <Link href="/catalog" className="flex flex-col items-center gap-1 py-2.5 text-ink">
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-18px_42px_-34px_rgba(26,23,20,0.65)] backdrop-blur-md md:hidden">
+        <Link href="/catalog" className="flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud">
           <Icon d={ICONS.grid} />
           <span className="text-[9px] uppercase tracking-luxe">Каталог</span>
         </Link>
         <button
           onClick={() => setSearchOpen(true)}
-          className="flex flex-col items-center gap-1 py-2.5 text-ink"
+          className="flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud"
         >
           <Icon d={ICONS.search} />
           <span className="text-[9px] uppercase tracking-luxe">Пошук</span>
         </button>
         <button
           onClick={() => setCartOpen(true)}
-          className="relative flex flex-col items-center gap-1 py-2.5 text-ink"
+          className="relative flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud"
         >
           <Icon d={ICONS.bag} />
           <span className="text-[9px] uppercase tracking-luxe">Кошик</span>
@@ -550,7 +566,7 @@ export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; bra
             </span>
           )}
         </button>
-        <Link href="/account/profile" className="flex flex-col items-center gap-1 py-2.5 text-ink">
+        <Link href="/account/profile" className="flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud">
           <Icon d={ICONS.user} />
           <span className="text-[9px] uppercase tracking-luxe">Профіль</span>
         </Link>

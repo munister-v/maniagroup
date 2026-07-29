@@ -33,13 +33,13 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
     <div className="flex flex-col-reverse gap-3 md:flex-row md:gap-4">
       {/* Thumbnails — horizontal strip on mobile, left column on desktop */}
       {shown.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-0.5 md:w-[72px] md:flex-col md:overflow-x-visible">
+        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-0.5 md:w-[72px] md:flex-col md:overflow-x-visible">
           {shown.map((img, i) => (
             <button
               key={img.id}
               onClick={() => setActive(i)}
               aria-label={`Фото ${i + 1}`}
-              className={`relative aspect-[3/4] w-14 shrink-0 overflow-hidden transition-all duration-200 md:w-full ${
+              className={`relative aspect-[3/4] w-16 shrink-0 overflow-hidden rounded-[2px] transition-all duration-200 md:w-full ${
                 i === active
                   ? "ring-1 ring-ink ring-offset-2"
                   : "opacity-45 hover:opacity-75"
@@ -59,7 +59,7 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
 
       {/* Main image */}
       <div className="flex-1">
-        <div className="relative aspect-[3/4] overflow-hidden bg-cloud">
+        <div className="surface-card relative aspect-[3/4] overflow-hidden rounded-[2px] bg-cloud">
           <Image
             key={shown[active]?.src}
             src={shown[active]?.src ?? ""}
@@ -76,14 +76,14 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
               <button
                 onClick={prev}
                 aria-label="Попереднє фото"
-                className="absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center bg-paper/80 text-ink backdrop-blur-sm transition-opacity hover:opacity-90 md:hidden"
+                className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-paper/85 text-ink shadow-[0_10px_24px_-18px_rgba(26,23,20,0.75)] backdrop-blur-sm transition-opacity hover:opacity-90 md:hidden"
               >
                 <ChevronIcon dir="left" />
               </button>
               <button
                 onClick={next}
                 aria-label="Наступне фото"
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center bg-paper/80 text-ink backdrop-blur-sm transition-opacity hover:opacity-90 md:hidden"
+                className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-paper/85 text-ink shadow-[0_10px_24px_-18px_rgba(26,23,20,0.75)] backdrop-blur-sm transition-opacity hover:opacity-90 md:hidden"
               >
                 <ChevronIcon dir="right" />
               </button>

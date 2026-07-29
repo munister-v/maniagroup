@@ -177,7 +177,7 @@ export default async function CatalogPage({
       </Reveal>
 
       {/* Quick chips — prominent shortcuts (Sale / gender / new) */}
-      <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto pb-1">
         {(() => {
           const noFacets = { category: undefined, gender: undefined, sale: undefined, brands: undefined, brandGroup: undefined, page: undefined };
           const chips: { label: string; href: string; active: boolean; sale?: boolean }[] = [
@@ -190,7 +190,7 @@ export default async function CatalogPage({
             <Link
               key={c.label}
               href={c.href}
-              className={`shrink-0 whitespace-nowrap border px-5 py-2.5 text-[11px] uppercase tracking-luxe transition-colors ${
+              className={`shrink-0 whitespace-nowrap rounded-full border px-5 py-3 text-[11px] uppercase tracking-luxe transition-colors ${
                 c.active
                   ? c.sale
                     ? "border-[var(--color-sale)] bg-[var(--color-sale)] text-white"
@@ -227,7 +227,7 @@ export default async function CatalogPage({
           {/* Brand chips — horizontal scroll (tablet/desktop only; mobile uses Фільтри).
               Click toggles the brand within the multi-select brands list. */}
           {brands.length > 0 && (
-            <div className="mb-5 hidden gap-2 overflow-x-auto pb-1 md:flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="no-scrollbar mb-5 hidden gap-2 overflow-x-auto pb-1 md:flex">
               {brands.map((b) => {
                 const active = brandSlugs.includes(b.slug);
                 const next = active ? brandSlugs.filter((s) => s !== b.slug) : [...brandSlugs, b.slug];
@@ -235,7 +235,7 @@ export default async function CatalogPage({
                   <Link
                     key={b.slug}
                     href={buildHref({ brands: next.length ? next.join(",") : undefined, brandGroup: undefined, page: undefined })}
-                    className={`shrink-0 border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
+                    className={`shrink-0 rounded-full border px-4 py-2 text-[11px] uppercase tracking-luxe transition-colors ${
                       active ? "border-ink bg-ink text-paper" : "border-line text-ink hover:border-ink"
                     }`}
                   >
@@ -276,13 +276,26 @@ export default async function CatalogPage({
           </div>
 
           {/* Grid */}
-          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-            {products.map((product, i) => (
-              <Reveal key={product.id} delay={(i % 4) * 70}>
-                <ProductCard product={product} />
-              </Reveal>
-            ))}
-          </div>
+          {products.length > 0 ? (
+            <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {products.map((product, i) => (
+                <Reveal key={product.id} delay={(i % 4) * 70}>
+                  <ProductCard product={product} />
+                </Reveal>
+              ))}
+            </div>
+          ) : (
+            <div className="surface-card mt-8 rounded-[4px] px-6 py-16 text-center">
+              <p className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-cloud text-lg">⌕</p>
+              <h2 className="mt-4 font-display text-2xl text-ink">Нічого не знайшли</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
+                Спробуйте прибрати частину фільтрів або перейти до всього каталогу — інколи один зайвий розмір ховає гарні речі.
+              </p>
+              <Link href="/catalog" className="mt-6 inline-flex h-11 items-center rounded-full border border-ink px-6 text-[11px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper">
+                Скинути фільтри
+              </Link>
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages && totalPages > 1 && (
@@ -290,7 +303,7 @@ export default async function CatalogPage({
               <Link
                 href={buildHref({ page: String(page - 1) })}
                 aria-disabled={page <= 1}
-                className={`flex h-9 w-9 items-center justify-center border text-sm transition-colors ${
+                className={`flex h-11 w-11 items-center justify-center rounded-full border text-sm transition-colors ${
                   page <= 1
                     ? "pointer-events-none border-line text-muted/30"
                     : "border-line text-ink hover:border-ink"
@@ -308,12 +321,12 @@ export default async function CatalogPage({
                 }, [])
                 .map((p, i) =>
                   p === "…" ? (
-                    <span key={`ellipsis-${i}`} className="flex h-9 w-9 items-center justify-center text-sm text-muted">…</span>
+                    <span key={`ellipsis-${i}`} className="flex h-11 w-11 items-center justify-center text-sm text-muted">…</span>
                   ) : (
                     <Link
                       key={p}
                       href={buildHref({ page: p === 1 ? undefined : String(p) })}
-                      className={`flex h-9 w-9 items-center justify-center border text-sm transition-colors ${
+                      className={`flex h-11 w-11 items-center justify-center rounded-full border text-sm transition-colors ${
                         p === page
                           ? "border-ink bg-ink text-paper"
                           : "border-line text-ink hover:border-ink"
@@ -327,7 +340,7 @@ export default async function CatalogPage({
               <Link
                 href={buildHref({ page: String(page + 1) })}
                 aria-disabled={page >= totalPages}
-                className={`flex h-9 w-9 items-center justify-center border text-sm transition-colors ${
+                className={`flex h-11 w-11 items-center justify-center rounded-full border text-sm transition-colors ${
                   page >= totalPages
                     ? "pointer-events-none border-line text-muted/30"
                     : "border-line text-ink hover:border-ink"

@@ -14,8 +14,8 @@ export function ProductCard({ product }: { product: Product }) {
   const archived = product.inStock === false;
 
   return (
-    <Link href={`/product/${slug}`} className="group block">
-      <div className="relative overflow-hidden">
+    <Link href={`/product/${slug}`} className="group block rounded-[2px] focus-visible:outline-offset-4">
+      <div className="surface-card surface-card-hover relative overflow-hidden rounded-[2px]">
         <div className={archived ? "opacity-60 grayscale-[35%]" : ""}>
           <ProductMedia tone={tone} brand={brand} category={category} image={image} />
         </div>
@@ -38,7 +38,7 @@ export function ProductCard({ product }: { product: Product }) {
           <>
             <WishButton
               productId={product.id}
-              className="absolute right-3 top-3 z-20 flex h-8 w-8 items-center justify-center bg-paper/90 text-ink opacity-0 backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100 md:opacity-0 [.wished_&]:opacity-100"
+              className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 text-ink shadow-[0_8px_20px_-14px_rgba(26,23,20,0.65)] backdrop-blur-sm transition-all duration-200 hover:scale-105 md:opacity-0 md:group-hover:opacity-100 [.wished_&]:opacity-100"
             />
 
             <div className="absolute inset-x-0 bottom-0 z-20 hidden translate-y-full bg-ink/95 py-3 text-center text-[10px] uppercase tracking-luxe text-paper backdrop-blur-sm transition-transform duration-300 ease-out group-hover:translate-y-0 md:block">
@@ -48,9 +48,9 @@ export function ProductCard({ product }: { product: Product }) {
         )}
       </div>
 
-      <div className="mt-3">
-        <p className="text-[10px] uppercase tracking-luxe text-muted">{brand}</p>
-        <h3 className="mt-1 text-sm leading-snug text-ink">{name}</h3>
+      <div className="mt-3 px-0.5">
+        <p className="truncate text-[10px] uppercase tracking-luxe text-muted">{brand || "MANIA GROUP"}</p>
+        <h3 className="mt-1 line-clamp-2 min-h-[2.45em] text-[13px] leading-snug text-ink md:text-sm">{name}</h3>
         <div className="mt-1.5 flex items-baseline gap-2">
           <span className={`text-sm tabular-nums ${discount ? "font-medium text-[#b3392c]" : "text-ink"}`}>
             {formatPrice(price)}

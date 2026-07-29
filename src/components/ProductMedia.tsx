@@ -25,14 +25,14 @@ export function ProductMedia({
       {image ? (
         <Image
           src={image}
-          alt={brand}
+          alt={`${brand} product photo`}
           fill
           sizes="(min-width: 1024px) 25vw, 50vw"
-          className="object-cover transition-transform duration-[1300ms] ease-out group-hover:scale-[1.05]"
+          className="object-cover transition-transform duration-[900ms] ease-out group-hover:scale-[1.035]"
         />
       ) : (
         <div
-          className="absolute inset-0 transition-transform duration-[1300ms] ease-out group-hover:scale-[1.05]"
+          className="absolute inset-0 transition-transform duration-[900ms] ease-out group-hover:scale-[1.035]"
           style={{
             backgroundColor: tone,
             backgroundImage:
@@ -41,6 +41,9 @@ export function ProductMedia({
         >
           <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-display text-[3.6rem] leading-none text-ink/12">
             {brandMark(brand)}
+          </span>
+          <span className="absolute bottom-3 left-3 rounded-full bg-paper/70 px-2.5 py-1 text-[9px] uppercase tracking-luxe text-ink/55 backdrop-blur-sm">
+            фото готується
           </span>
         </div>
       )}
