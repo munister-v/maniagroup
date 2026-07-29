@@ -95,17 +95,17 @@ export function NovaPoshtaPicker({ onChange }: { onChange: (s: NpSelection) => v
             placeholder="Почніть вводити місто…"
             required
             autoComplete="off"
-            className="mt-2 h-11 w-full border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
+            className="mt-2 h-11 w-full rounded-[2px] border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
           />
         </label>
         {openList && cities.length > 0 && (
-          <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto border border-line bg-paper shadow-lg">
+          <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-[3px] border border-line bg-paper shadow-[0_18px_44px_-28px_rgba(26,23,20,0.7)]">
             {cities.map((c) => (
               <li key={c.ref}>
                 <button
                   type="button"
                   onClick={() => pickCity(c)}
-                  className="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm text-ink hover:bg-cloud"
+                  className="flex min-h-11 w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-sm text-ink hover:bg-cloud"
                 >
                   <span>{c.name}</span>
                   <span className="text-xs text-muted">{c.area} обл.</span>
@@ -128,12 +128,12 @@ export function NovaPoshtaPicker({ onChange }: { onChange: (s: NpSelection) => v
                   value={whFilter}
                   onChange={(e) => setWhFilter(e.target.value)}
                   placeholder="Пошук відділення за номером чи вулицею"
-                  className="mt-2 h-10 w-full border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
+                  className="mt-2 h-11 w-full rounded-[2px] border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
                 />
               )}
               {/* Custom clickable list — strong selected/hover feedback (a native
                   multi-row <select> felt unresponsive: weak grey highlight). */}
-              <ul className="mt-2 max-h-64 w-full divide-y divide-line overflow-y-auto border border-line bg-white">
+              <ul className="mt-2 max-h-64 w-full divide-y divide-line overflow-y-auto rounded-[3px] border border-line bg-white">
                 {filteredWh.length === 0 && (
                   <li className="px-3 py-3 text-sm text-muted">Нічого не знайдено</li>
                 )}
@@ -145,7 +145,7 @@ export function NovaPoshtaPicker({ onChange }: { onChange: (s: NpSelection) => v
                         type="button"
                         onClick={() => pickWarehouse(w.ref)}
                         aria-pressed={active}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors ${
+                        className={`flex min-h-12 w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm transition-colors ${
                           active ? "bg-ink text-paper" : "text-ink hover:bg-cloud active:bg-line"
                         }`}
                       >

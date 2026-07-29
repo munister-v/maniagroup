@@ -90,6 +90,10 @@ export function CheckoutForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!deliveryReady) {
+      setError("Оберіть місто та відділення Нової Пошти.");
+      return;
+    }
     setStatus("submitting");
     setError(null);
     const res = await fetch("/api/checkout", {
@@ -120,6 +124,9 @@ export function CheckoutForm() {
   if (order) {
     return (
       <section className="wrap flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700">
+          <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </div>
         <p className="text-[11px] uppercase tracking-luxe text-muted">Дякуємо за замовлення</p>
         <h1 className="mt-3 font-display text-4xl text-ink">Замовлення {order}</h1>
         <p className="mt-4 max-w-md text-sm leading-relaxed text-muted">
@@ -128,7 +135,7 @@ export function CheckoutForm() {
         </p>
         <Link
           href="/"
-          className="mt-8 inline-flex h-12 items-center bg-ink px-8 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85"
+          className="mt-8 inline-flex h-12 items-center rounded-[2px] bg-ink px-8 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85"
         >
           На головну
         </Link>
@@ -142,10 +149,13 @@ export function CheckoutForm() {
   if (cart && items.length === 0) {
     return (
       <section className="wrap flex min-h-[60vh] flex-col items-center justify-center py-16 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-cloud text-ink">
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M6 8h12l1 13H5L6 8Zm3 0V6a3 3 0 0 1 6 0v2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </div>
         <h1 className="font-display text-3xl text-ink">Кошик порожній</h1>
         <Link
           href="/catalog"
-          className="mt-6 inline-flex h-12 items-center bg-ink px-8 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85"
+          className="mt-6 inline-flex h-12 items-center rounded-[2px] bg-ink px-8 text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85"
         >
           До каталогу
         </Link>
@@ -165,9 +175,9 @@ export function CheckoutForm() {
 
       <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_380px] lg:gap-16">
         <form onSubmit={submit} className="space-y-8">
-          <fieldset className="space-y-4">
+          <fieldset className="surface-card rounded-[4px] p-4 sm:p-5">
             <legend className="text-[12px] uppercase tracking-luxe text-muted">Контактні дані</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Ім'я" value={form.first_name} onChange={(v) => set("first_name", v)} required />
               <Field label="Прізвище" value={form.last_name} onChange={(v) => set("last_name", v)} required />
               <Field label="Телефон" value={form.phone} onChange={(v) => set("phone", v)} type="tel" required />
@@ -175,11 +185,13 @@ export function CheckoutForm() {
             </div>
           </fieldset>
 
-          <fieldset className="space-y-4">
+          <fieldset className="surface-card rounded-[4px] p-4 sm:p-5">
             <legend className="text-[12px] uppercase tracking-luxe text-muted">
               Доставка · Нова Пошта
             </legend>
+            <div className="mt-4">
             <NovaPoshtaPicker onChange={onDelivery} />
+            </div>
             {form.branch && (
               <p className="text-xs text-muted">
                 Обрано: {form.city}, {form.branch}
@@ -195,7 +207,7 @@ export function CheckoutForm() {
             ].map((m) => (
               <label
                 key={m.id}
-                className={`flex cursor-pointer items-start gap-3 border p-3 transition-colors ${
+                className={`flex min-h-14 cursor-pointer items-start gap-3 rounded-[3px] border p-3 transition-colors ${
                   form.payment_method === m.id ? "border-ink bg-cloud/40" : "border-line hover:border-ink/40"
                 }`}
               >
@@ -221,16 +233,16 @@ export function CheckoutForm() {
               value={form.note}
               onChange={(e) => set("note", e.target.value)}
               rows={3}
-              className="mt-2 w-full border border-line bg-white px-3 py-2 text-sm text-ink focus:border-ink focus:outline-none"
+              className="mt-2 w-full rounded-[2px] border border-line bg-white px-3 py-2 text-sm text-ink focus:border-ink focus:outline-none"
             />
           </label>
 
-          {error && <p className="text-sm text-[#b3392c]">{error}</p>}
+          {error && <p role="alert" className="rounded-[3px] border border-[#b3392c]/20 bg-[#b3392c]/5 px-4 py-3 text-sm text-[#b3392c]">{error}</p>}
 
           <button
             type="submit"
             disabled={status === "submitting" || !deliveryReady}
-            className="h-12 w-full bg-ink text-[12px] uppercase tracking-luxe text-paper transition-opacity hover:opacity-85 disabled:opacity-50 sm:w-auto sm:px-12"
+            className="h-12 w-full rounded-[2px] bg-ink text-[12px] uppercase tracking-luxe text-paper transition-all hover:-translate-y-px hover:opacity-90 disabled:translate-y-0 disabled:opacity-50 sm:w-auto sm:px-12"
           >
             {status === "submitting" ? "Оформлюємо…" : "Підтвердити замовлення"}
           </button>
@@ -238,12 +250,12 @@ export function CheckoutForm() {
         </form>
 
         <aside className="lg:sticky lg:top-28 lg:h-fit">
-          <div className="border border-line p-6">
+          <div className="surface-card rounded-[4px] p-5 sm:p-6">
             <h2 className="text-[12px] uppercase tracking-luxe text-muted">Ваше замовлення</h2>
             <div className="mt-5 space-y-4">
               {items.map((it) => (
                 <div key={it.key} className="flex gap-3">
-                  <div className="relative aspect-[3/4] w-14 shrink-0 overflow-hidden bg-cloud">
+                  <div className="relative aspect-[3/4] w-14 shrink-0 overflow-hidden rounded-[2px] bg-cloud">
                     {it.image && (
                       <Image src={it.image} alt={it.name} fill sizes="56px" className="object-cover" />
                     )}
@@ -272,10 +284,10 @@ export function CheckoutForm() {
                     onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyCoupon(); } }}
                     placeholder="Промокод"
-                    className="h-10 flex-1 border border-line bg-white px-3 text-sm uppercase tracking-wide text-ink placeholder:normal-case placeholder:tracking-normal placeholder:text-muted focus:border-ink focus:outline-none"
+                    className="h-11 min-w-0 flex-1 rounded-[2px] border border-line bg-white px-3 text-sm uppercase tracking-wide text-ink placeholder:normal-case placeholder:tracking-normal placeholder:text-muted focus:border-ink focus:outline-none"
                   />
                   <button onClick={applyCoupon} disabled={applying || !couponInput.trim()}
-                    className="h-10 shrink-0 border border-ink px-4 text-[11px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-40">
+                    className="h-11 shrink-0 rounded-[2px] border border-ink px-4 text-[11px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-40">
                     {applying ? "…" : "Застосувати"}
                   </button>
                 </div>
@@ -327,7 +339,8 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        className="mt-2 h-11 w-full border border-line bg-white px-3 text-sm text-ink focus:border-ink focus:outline-none"
+        autoComplete={type === "email" ? "email" : type === "tel" ? "tel" : label === "Ім'я" ? "given-name" : label === "Прізвище" ? "family-name" : undefined}
+        className="mt-2 h-11 w-full rounded-[2px] border border-line bg-white px-3 text-sm text-ink focus:border-ink focus:outline-none"
       />
     </label>
   );
