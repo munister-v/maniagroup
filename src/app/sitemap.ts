@@ -1,7 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getCatalogCategories, getProducts } from "@/lib/productSource";
-
-const BASE = "https://maniagroup.munister.com.ua";
+import { SITE_URL as BASE } from "@/lib/siteUrl";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [

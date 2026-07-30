@@ -16,8 +16,9 @@
 import * as XLSX from "xlsx";
 import { q } from "./pg";
 import { ukrainianize } from "./uk";
+import { SITE_URL } from "./siteUrl";
 
-const BASE = "https://maniagroup.munister.com.ua";
+const BASE = SITE_URL;
 const CURRENCY = "UAH";
 
 export type ExportRow = {

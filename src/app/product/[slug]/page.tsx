@@ -8,6 +8,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { ProductMedia } from "@/components/ProductMedia";
 import { ProductGallery } from "@/components/ProductGallery";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { SITE_URL } from "@/lib/siteUrl";
 import { dbProductById, getCatalogProducts, type DbProductDetail } from "@/lib/productSource";
 
 export async function generateMetadata({
@@ -76,7 +77,7 @@ function ProductView({
     { label: "Країна", value: country ?? "" },
   ].filter((s) => s.value);
 
-  const BASE = "https://maniagroup.munister.com.ua";
+  const BASE = SITE_URL;
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",

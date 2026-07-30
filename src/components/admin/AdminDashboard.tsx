@@ -960,7 +960,7 @@ function AnnouncementPreview({ text, color }: { text: string; color?: string }) 
   );
 }
 
-function SeoGooglePreview({ title, desc, url = "maniagroup.munister.com.ua" }: { title: string; desc: string; url?: string }) {
+function SeoGooglePreview({ title, desc, url = "shop.maniagroup.com.ua" }: { title: string; desc: string; url?: string }) {
   return (
     <div className="rounded-[4px] border border-[#e6eaec] bg-white p-4 shadow-sm">
       <p className="mb-2.5 text-[10px] uppercase tracking-wider text-[#aab4bf]">Вигляд у Google</p>
@@ -2725,7 +2725,7 @@ function SettingsSection() {
 
       <Card title="Інфраструктура">
         <div className="space-y-3">
-          <InfoRow label="Сайт" value="maniagroup.munister.com.ua" />
+          <InfoRow label="Сайт" value="shop.maniagroup.com.ua" />
           <InfoRow label="База даних" value="PostgreSQL · maniagroup" />
           <InfoRow label="Сервер" value="173.242.49.73 · pm2 maniagroup" />
         </div>

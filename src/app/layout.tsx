@@ -7,6 +7,7 @@ import { WishlistProvider } from "@/components/WishlistContext";
 import { getSiteContent, announcementActive } from "@/lib/siteContent";
 import { dbBrands } from "@/lib/productSource";
 import { getResolvedBrandLogoMap } from "@/lib/brandLogos";
+import { SITE_URL } from "@/lib/siteUrl";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -22,8 +23,6 @@ const jost = Jost({
   weight: ["300", "400", "500", "600"],
   display: "swap",
 });
-
-const SITE_URL = "https://maniagroup.munister.com.ua";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { seo } = await getSiteContent();
