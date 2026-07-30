@@ -2,6 +2,16 @@ import type { MetadataRoute } from "next";
 import { headers } from "next/headers";
 import { SITE_URL, CANONICAL_HOST, SITE_INDEXABLE } from "@/lib/siteUrl";
 
+// AI-краулери влаштовували вибух трафіку на комбінаціях фільтрів каталогу.
+const AI_CRAWLERS = [
+  "GPTBot",
+  "meta-externalagent",
+  "FacebookBot",
+  "CCBot",
+  "anthropic-ai",
+  "Claude-Web",
+];
+
 // headers() робить цей маршрут динамічним — robots.txt має відрізнятися
 // залежно від домену, тому кешувати його не можна.
 export default async function robots(): Promise<MetadataRoute.Robots> {
@@ -18,8 +28,10 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
       {
         userAgent: "*",
         allow: "/",
-        disallow: "/admin",
+        disallow: ["/admin", "/api/", "/account/", "/cart/", "/checkout/"],
       },
+      ...AI_CRAWLERS.map((userAgent) => ({ userAgent, disallow: "/catalog?*" })),
+      { userAgent: "Bytespider", disallow: "/" },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
   };
