@@ -798,6 +798,16 @@ type DeadRow = {
 
 const PERIODS = [30, 90, 180, 365];
 
+/**
+ * За майже нульових продажів формула days/turns дає сотні тисяч днів — число
+ * математично вірне, але як показник марне. Понад 10 років показуємо як стелю.
+ */
+function daysOnHandLabel(days: number | null): string {
+  if (days == null) return "—";
+  if (days > 3650) return "> 10 років";
+  return Math.round(days).toLocaleString("uk-UA");
+}
+
 export function FinanceTurnover() {
   const [days, setDays] = useState(90);
   const [idleDays, setIdleDays] = useState(90);
@@ -844,7 +854,7 @@ export function FinanceTurnover() {
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Kpi label={`Оборотів за ${summary.days} дн`} val={summary.turns.toFixed(2)} tone="accent" />
-            <Kpi label="Днів на складі" val={summary.daysOnHand == null ? "—" : Math.round(summary.daysOnHand).toLocaleString("uk-UA")} />
+            <Kpi label="Днів на складі" val={daysOnHandLabel(summary.daysOnHand)} />
             <Kpi label="Собівартість продажів" val={uah(summary.cogs)} />
             <Kpi label="Середній запас" val={uah(summary.stockValueAvg)} />
             <Kpi label="Продано одиниць" val={summary.unitsSold.toLocaleString("uk-UA")} tone="ok" />
