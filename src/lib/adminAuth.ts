@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { getSetting, setSetting } from "./settings";
 import { hashPassword, verifyPassword } from "./accountsDb";
 import { q, q1 } from "./pg";
+import { baseCookie } from "./cookieOptions";
 
 const COOKIE_NAME = "mg_admin";
 const PASSWORD = process.env.ADMIN_PASSWORD ?? "maniagroup2026";
@@ -93,12 +94,7 @@ export async function setAdminPassword(newPassword: string): Promise<void> {
 
 export async function setAdminSession() {
   const jar = await cookies();
-  jar.set(COOKIE_NAME, token(), {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7,
-  });
+  jar.set(COOKIE_NAME, token(), { ...baseCookie, maxAge: 60 * 60 * 24 * 7 });
 }
 
 export async function clearAdminSession() {

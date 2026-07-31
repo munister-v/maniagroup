@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { q, q1 } from "./pg";
+import { baseCookie } from "./cookieOptions";
 
 /**
  * First-party cart engine (Postgres). Replaces the WooCommerce Store API cart.
@@ -45,7 +46,7 @@ export async function ensureCartToken(accountId?: number): Promise<string> {
   let token = jar.get(CART_COOKIE)?.value;
   if (!token) {
     token = crypto.randomBytes(24).toString("hex");
-    jar.set(CART_COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: MAX_AGE });
+    jar.set(CART_COOKIE, token, { ...baseCookie, maxAge: MAX_AGE });
   }
   await q(
     `INSERT INTO carts (token, account_id) VALUES ($1, $2)

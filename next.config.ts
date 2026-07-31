@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Не розголошуємо стек у заголовку відповіді.
+  poweredByHeader: false,
   // The VPS also has /opt/package-lock.json. Without an explicit root, Next can
   // trace from /opt instead of this app and produce fragile standalone output.
   outputFileTracingRoot: process.cwd(),
