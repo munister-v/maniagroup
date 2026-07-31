@@ -19,6 +19,7 @@ import { AdminDelivery } from "./AdminDelivery";
 import { MonitoringSection } from "./MonitoringSection";
 import { ErpImportTabs } from "@/components/erp/ErpImportTabs";
 import { AiAssistant, AiInsights } from "./AiAssistant";
+import { ADMIN_LOGIN } from "@/lib/adminPath";
 
 /* ─── Types ─── */
 
@@ -275,7 +276,7 @@ export function AdminDashboard({
 
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
-    router.push("/admin/login");
+    router.push(ADMIN_LOGIN);
     router.refresh();
   }
 

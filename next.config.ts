@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
   // Lets the deploy build into a side directory (NEXT_DIST_DIR=.next-build) while
   // the live server keeps serving the intact .next, then swap atomically.
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Адмінка живе за нестандартним шляхом (NEXT_PUBLIC_ADMIN_PATH), а рерайт
+  // віддає під ним справжні сторінки /admin. Прямий /admin ріже nginx.
+  async rewrites() {
+    const slug = process.env.NEXT_PUBLIC_ADMIN_PATH?.trim().replace(/^\/+|\/+$/g, "");
+    if (!slug) return [];
+    return [
+      { source: `/${slug}`, destination: "/admin" },
+      { source: `/${slug}/:path*`, destination: "/admin/:path*" },
+    ];
+  },
   images: {
     remotePatterns: [
       {

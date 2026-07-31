@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ADMIN_BASE } from "@/lib/adminPath";
 
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
@@ -16,7 +17,7 @@ export default function AdminLoginPage() {
       body: JSON.stringify({ password }),
     });
     if (res.ok) {
-      router.push("/admin");
+      router.push(ADMIN_BASE);
       router.refresh();
     } else if (res.status === 429) {
       const d = await res.json().catch(() => ({}));
