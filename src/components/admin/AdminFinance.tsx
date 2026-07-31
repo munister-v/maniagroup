@@ -1080,3 +1080,113 @@ export function FinancePurchasePrices() {
     </div>
   );
 }
+
+/* ── Tab: Баланс (Intertop «Фінанси / Баланс») ──────────────────────────── */
+
+type BalanceRow = { period: string; opening: number; income: number; expense: number; closing: number; orders: number };
+type BalanceData = {
+  rows: BalanceRow[];
+  totals: { opening: number; income: number; expense: number; closing: number; orders: number };
+  pending: { orders: number; amount: number };
+};
+
+const GRAINS: { id: "day" | "month" | "year"; label: string }[] = [
+  { id: "day", label: "По днях" },
+  { id: "month", label: "По місяцях" },
+  { id: "year", label: "По роках" },
+];
+
+/** Період приходить як дата початку — показуємо його за обраною деталізацією. */
+function periodLabel(period: string, grain: "day" | "month" | "year"): string {
+  const d = new Date(period);
+  if (grain === "year") return String(d.getFullYear());
+  if (grain === "month") return `${UA_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return d.toLocaleDateString("uk-UA");
+}
+
+export function FinanceBalance() {
+  const [from, setFrom] = useState(new Date().getFullYear() + "-01-01");
+  const [to, setTo] = useState(today());
+  const [grain, setGrain] = useState<"day" | "month" | "year">("month");
+  const [data, setData] = useState<BalanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/finance?report=balance&from=${from}&to=${to}&grain=${grain}`)
+      .then((r) => r.json())
+      .then(setData)
+      .finally(() => setLoading(false));
+  }, [from, to, grain]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 rounded-[4px] border border-[#e6eaec] bg-white p-4">
+        <DateRange from={from} to={to} setFrom={setFrom} setTo={setTo} />
+        <div className="flex gap-1">
+          {GRAINS.map((g) => (
+            <button key={g.id} onClick={() => setGrain(g.id)}
+              className={`rounded-[3px] border px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                grain === g.id ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]"
+              }`}>{g.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? <Loading /> : data && (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Kpi label="На початку періоду" val={uah(data.totals.opening)} />
+            <Kpi label="Прихід (оплачено)" val={uah(data.totals.income)} tone="ok" />
+            <Kpi label="Видаток" val={uah(data.totals.expense)} tone="bad" />
+            <Kpi label="На кінець періоду" val={uah(data.totals.closing)} tone="accent" />
+          </div>
+
+          {data.pending.orders > 0 && (
+            <p className="rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] px-4 py-3 text-[12px] text-[#5a6472]">
+              Оформлено, але ще не оплачено: {data.pending.orders.toLocaleString("uk-UA")} замовл.
+              на <span className="font-medium text-[#2b2d42]">{uah(data.pending.amount)}</span> — у баланс не входять.
+            </p>
+          )}
+
+          <div className="rounded-[4px] border border-[#e6eaec] bg-white">
+            <h3 className="border-b border-[#e6eaec] px-5 py-4 text-[10px] uppercase tracking-wider text-[#8a94a0]">
+              Реєстр руху коштів
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-[#e6eaec] text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                    <th className="px-5 py-2.5 text-left font-normal">Період</th>
+                    <th className="px-3 py-2.5 text-right font-normal">На початку</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Прихід</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Видаток</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Замовлень</th>
+                    <th className="px-5 py-2.5 text-right font-normal">На кінець</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.rows.map((r) => (
+                    <tr key={r.period} className="border-b border-[#f2f5f6] last:border-0">
+                      <td className="px-5 py-2.5 text-[#2b2d42]">{periodLabel(r.period, grain)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[#8a94a0]">{uah(r.opening)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-green-700">{r.income ? uah(r.income) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-red-600">{r.expense ? uah(r.expense) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[#8a94a0]">{r.orders || "—"}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums font-medium text-[#2b2d42]">{uah(r.closing)}</td>
+                    </tr>
+                  ))}
+                  {data.rows.length === 0 && (
+                    <tr><td colSpan={6} className="px-5 py-8 text-center text-[12px] text-[#8a94a0]">
+                      За цей період руху коштів не було
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

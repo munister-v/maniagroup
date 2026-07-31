@@ -41,6 +41,14 @@ export type StoreSettings = {
    *  see lib/wpPhotos.ts. Defaults to the old WooCommerce site these products
    *  originally migrated from. */
   wp_photo_source_url: string;
+  /** Nova Poshta API key. Like the OpenRouter key, an env var
+   *  (NOVAPOSHTA_API_KEY) still wins — this just lets an admin rotate the key
+   *  from Налаштування → Доставка instead of SSH + .env.local. */
+  novaposhta_api_key: string;
+  /** Sender city/warehouse used as the return address on printed waybills. */
+  novaposhta_sender_city: string;
+  novaposhta_sender_branch: string;
+  novaposhta_sender_phone: string;
 };
 
 const DEFAULTS: StoreSettings = {
@@ -60,6 +68,10 @@ const DEFAULTS: StoreSettings = {
   require_product_photo: "1",
   openrouter_api_key: "",
   wp_photo_source_url: "https://maniagroup.com.ua",
+  novaposhta_api_key: "",
+  novaposhta_sender_city: "",
+  novaposhta_sender_branch: "",
+  novaposhta_sender_phone: "",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
@@ -83,6 +95,10 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     require_product_photo: get("require_product_photo"),
     openrouter_api_key: get("openrouter_api_key"),
     wp_photo_source_url: get("wp_photo_source_url"),
+    novaposhta_api_key: get("novaposhta_api_key"),
+    novaposhta_sender_city: get("novaposhta_sender_city"),
+    novaposhta_sender_branch: get("novaposhta_sender_branch"),
+    novaposhta_sender_phone: get("novaposhta_sender_phone"),
   };
 }
 

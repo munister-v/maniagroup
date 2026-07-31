@@ -1,5 +1,12 @@
-// Server-side Nova Poshta API client. The API key lives in NOVAPOSHTA_API_KEY
-// and must never reach the browser — only the route handlers call these.
+// Server-side Nova Poshta API client. The key must never reach the browser —
+// only route handlers call these.
+//
+// Key resolution mirrors the OpenRouter one: the NOVAPOSHTA_API_KEY env var
+// wins, otherwise the value saved in Налаштування → Доставка. That lets an
+// admin rotate the key from the browser without SSH, while a key pinned in
+// .env.local still takes precedence.
+
+import { getSetting } from "./settings";
 
 const NP_URL = "https://api.novaposhta.ua/v2.0/json/";
 
@@ -8,13 +15,24 @@ export type NpWarehouse = { ref: string; description: string; number: string; po
 
 type NpResponse<T> = { success: boolean; data: T[]; errors: string[] };
 
+export async function resolveNpKey(): Promise<string | null> {
+  return process.env.NOVAPOSHTA_API_KEY || (await getSetting("novaposhta_api_key")) || null;
+}
+
+/** Where the active key came from — the settings screen shows this. */
+export async function npKeySource(): Promise<"env" | "settings" | "none"> {
+  if (process.env.NOVAPOSHTA_API_KEY) return "env";
+  return (await getSetting("novaposhta_api_key")) ? "settings" : "none";
+}
+
 async function npCall<T>(
   modelName: string,
   calledMethod: string,
   methodProperties: Record<string, string>,
+  keyOverride?: string,
 ): Promise<T[]> {
-  const apiKey = process.env.NOVAPOSHTA_API_KEY;
-  if (!apiKey) throw new Error("NOVAPOSHTA_API_KEY is not configured");
+  const apiKey = keyOverride || (await resolveNpKey());
+  if (!apiKey) throw new Error("Ключ Нової Пошти не налаштовано — Налаштування → Доставка");
 
   const res = await fetch(NP_URL, {
     method: "POST",
@@ -49,4 +67,18 @@ export async function getWarehouses(cityRef: string, query = ""): Promise<NpWare
     number: w.Number,
     postcode: w.PostalCodeUA,
   }));
+}
+
+/**
+ * Probe a key against the API without saving it — powers the «Перевірити»
+ * button, so a wrong key is caught before it breaks checkout. Uses the
+ * cheapest read method there is (a single area lookup).
+ */
+export async function testNpKey(key?: string): Promise<{ ok: true; areas: number } | { ok: false; error: string }> {
+  try {
+    const data = await npCall<{ Ref: string }>("Address", "getAreas", {}, key);
+    return { ok: true, areas: data.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Помилка з'єднання" };
+  }
 }

@@ -3,6 +3,7 @@ import { isAdmin } from "@/lib/adminAuth";
 import { q, q1 } from "@/lib/pg";
 import { getFinanceSettings, costSql, orderCogsSql } from "@/lib/finance";
 import { getTurnoverReport } from "@/lib/turnover";
+import { getBalanceReport, type BalanceGrain } from "@/lib/balance";
 import { getProductPriceHistory, getSupplierPriceComparison, getPriceSpread } from "@/lib/priceHistory";
 
 export const dynamic = "force-dynamic";
@@ -203,6 +204,13 @@ export async function GET(req: NextRequest) {
         cost_value: Number(b.cost_value), retail_value: Number(b.retail_value),
       })),
     });
+  }
+
+  // ── Balance register (Intertop «Фінанси / Баланс») ───────────────────────
+  if (report === "balance") {
+    const g = sp.get("grain");
+    const grain: BalanceGrain = g === "day" || g === "year" ? g : "month";
+    return NextResponse.json(await getBalanceReport({ from, to, grain }));
   }
 
   // ── C3: turnover + dead stock ────────────────────────────────────────────
