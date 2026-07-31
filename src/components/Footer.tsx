@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { getSiteContent } from "@/lib/siteContent";
+import { isAdmin } from "@/lib/adminAuth";
+import { ADMIN_BASE } from "@/lib/adminPath";
 
 export async function Footer() {
   const content = await getSiteContent();
+  // Посилання на адмінку бачить ЛИШЕ той, у кого вже є активна сесія: для
+  // гостей його немає в розмітці взагалі. Публічне посилання видало б
+  // нестандартний шлях адмінки всім — саме те, від чого ми його ховали.
+  const admin = await isAdmin().catch(() => false);
   const { phone, email, instagram, facebook } = content.contacts;
   const COLUMNS = content.footer.columns;
 
@@ -60,7 +66,17 @@ export async function Footer() {
 
       <div className="border-t border-line">
         <div className="wrap flex flex-col items-center justify-between gap-2.5 py-5 text-[10px] uppercase tracking-luxe text-muted md:flex-row md:py-6 md:text-[11px]">
-          <p>© {new Date().getFullYear()} Mania Group · Усі права захищені</p>
+          <p>
+            © {new Date().getFullYear()} Mania Group · Усі права захищені
+            {admin && (
+              <>
+                {" · "}
+                <Link href={ADMIN_BASE} className="text-ink underline underline-offset-2 hover:opacity-70">
+                  Адмін-панель
+                </Link>
+              </>
+            )}
+          </p>
           <div className="flex items-center gap-5">
             <a
               href={instagram || "https://instagram.com/maniagroup.ua"}
