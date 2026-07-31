@@ -16,6 +16,7 @@ import { AdminSizeCharts } from "./AdminSizeCharts";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { AdminDelivery } from "./AdminDelivery";
+import { AdminPayments } from "./AdminPayments";
 import { MonitoringSection } from "./MonitoringSection";
 import { ErpImportTabs } from "@/components/erp/ErpImportTabs";
 import { AiAssistant, AiInsights } from "./AiAssistant";
@@ -23,7 +24,7 @@ import { ADMIN_LOGIN } from "@/lib/adminPath";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "delivery" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "delivery" | "payments" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -155,6 +156,11 @@ const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
     id: "monitoring",
     label: "Моніторинг",
     d: "M3 12h4l3 8 4-16 3 8h4",
+  },
+  {
+    id: "payments",
+    label: "Оплата",
+    d: "M3 10h18M7 15h4m-7 4h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z",
   },
   {
     id: "delivery",
@@ -449,6 +455,7 @@ export function AdminDashboard({
           {section === "monitoring" && <MonitoringSection />}
           {section === "backup" && <BackupSection />}
           {section === "delivery" && <AdminDelivery onToast={showToast} />}
+          {section === "payments" && <AdminPayments onToast={showToast} />}
           {section === "settings" && <SettingsSection />}
         </main>
       </div>

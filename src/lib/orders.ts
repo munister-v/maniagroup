@@ -54,7 +54,7 @@ export type OrderInput = {
   shippingCity: string;
   shippingBranch: string;
   comment?: string;
-  paymentMethod?: "cod" | "prepay";
+  paymentMethod?: "cod" | "prepay" | "card";
   couponCode?: string;
 };
 
@@ -326,7 +326,7 @@ export type ManualOrderInput = {
   shippingCity: string;
   shippingBranch: string;
   comment?: string;
-  paymentMethod?: "cod" | "prepay";
+  paymentMethod?: "cod" | "prepay" | "card";
   items: { product_id: number; variation: string; quantity: number }[];
 };
 

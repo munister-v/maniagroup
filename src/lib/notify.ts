@@ -125,3 +125,18 @@ export async function notifyStatusChange(order: Order, newStatus: string): Promi
     }
   }
 }
+
+/**
+ * Гроші надійшли. Окреме повідомлення від notifyStatusChange: там про стан
+ * виконання замовлення, а тут — про факт оплати, і власнику це важливо бачити
+ * одразу, не чекаючи, поки хтось відкриє адмінку.
+ */
+export async function notifyPaymentReceived(order: Order): Promise<void> {
+  if (!(await enabled())) return;
+  const text =
+    `💳 <b>Оплачено ${esc(order.number)}</b>\n` +
+    `${esc(order.first_name)} ${esc(order.last_name)} · ` +
+    `<b>${order.total.toLocaleString("uk-UA")} ₴</b>\n` +
+    `Картка онлайн · monobank`;
+  try { await sendTelegram(text); } catch { /* best-effort */ }
+}

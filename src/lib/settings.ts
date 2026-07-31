@@ -49,6 +49,10 @@ export type StoreSettings = {
   novaposhta_sender_city: string;
   novaposhta_sender_branch: string;
   novaposhta_sender_phone: string;
+  /** Monobank Acquiring: токен мерчанта та вмикач. Як і решта ключів,
+   *  змінна середовища MONOBANK_TOKEN має пріоритет над збереженим тут. */
+  monobank_enabled: string;
+  monobank_token: string;
 };
 
 const DEFAULTS: StoreSettings = {
@@ -72,6 +76,8 @@ const DEFAULTS: StoreSettings = {
   novaposhta_sender_city: "",
   novaposhta_sender_branch: "",
   novaposhta_sender_phone: "",
+  monobank_enabled: "",
+  monobank_token: "",
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
@@ -99,6 +105,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     novaposhta_sender_city: get("novaposhta_sender_city"),
     novaposhta_sender_branch: get("novaposhta_sender_branch"),
     novaposhta_sender_phone: get("novaposhta_sender_phone"),
+    monobank_enabled: get("monobank_enabled"),
+    monobank_token: get("monobank_token"),
   };
 }
 

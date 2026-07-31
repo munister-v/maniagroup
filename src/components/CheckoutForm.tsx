@@ -31,7 +31,7 @@ const EMPTY: Form = {
   payment_method: "cod",
 };
 
-export function CheckoutForm() {
+export function CheckoutForm({ cardEnabled = false }: { cardEnabled?: boolean }) {
   const [cart, setCart] = useState<Cart | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
@@ -114,8 +114,15 @@ export function CheckoutForm() {
     const data = await res.json();
     setStatus("idle");
     if (data.ok) {
-      setOrder(data.number ?? data.orderId);
       window.dispatchEvent(new CustomEvent("cart:updated", { detail: { count: 0 } }));
+      // Замовлення вже створене; якщо обрано картку — ведемо на сторінку банку.
+      // Не вийшло створити рахунок (банк недоступний) — показуємо звичайне
+      // «дякуємо», щоб покупець не залишився ні з чим.
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl as string;
+        return;
+      }
+      setOrder(data.number ?? data.orderId);
     } else {
       setError(data.message ?? "Сталася помилка. Спробуйте ще раз.");
     }
@@ -202,6 +209,9 @@ export function CheckoutForm() {
           <fieldset className="space-y-2">
             <legend className="text-[11px] uppercase tracking-luxe text-muted">Спосіб оплати</legend>
             {[
+              ...(cardEnabled
+                ? [{ id: "card", title: "Картка онлайн", hint: "Visa / Mastercard, Apple Pay, Google Pay — через monobank" }]
+                : []),
               { id: "cod", title: "Накладений платіж", hint: "Оплата при отриманні у відділенні Нової Пошти" },
               { id: "prepay", title: "Передоплата на картку", hint: "Реквізити надішлемо після підтвердження замовлення" },
             ].map((m) => (

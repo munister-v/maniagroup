@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SlideOver } from "./intertop/primitives";
 
 /**
@@ -39,16 +39,21 @@ export function AdminDelivery({ onToast }: { onToast?: (msg: string) => void }) 
   const [form, setForm] = useState({ api_key: "", sender_city: "", sender_branch: "", sender_phone: "", free_ship_threshold: "" });
   const [test, setTest] = useState<{ state: "idle" | "testing"; msg: string; ok?: boolean }>({ state: "idle", msg: "" });
 
-  const load = () => {
-    setLoading(true);
+  // spinner=false на монтуванні: loading вже true, а синхронний setState
+  // всередині ефекту викликає зайвий каскад рендерів.
+  const load = useCallback((spinner = true) => {
+    if (spinner) setLoading(true);
     fetch("/api/admin/delivery")
       .then((r) => r.json())
       .then((d) => setState({ ...EMPTY, ...d }))
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(load, []);
+  // load(false) не викликає setState синхронно — спіннер уже увімкнений
+  // початковим станом, а решта оновлень приходить у .then().
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load(false); }, [load]);
 
   const openEdit = () => {
     // Ключ не приходить з сервера — поле лишається порожнім і означає
@@ -120,7 +125,7 @@ export function AdminDelivery({ onToast }: { onToast?: (msg: string) => void }) 
           <p className="mt-0.5 text-[12px] text-[#8a94a0]">Способи доставки та інтеграції</p>
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           className="ml-auto h-9 rounded-[4px] border border-[#e6eaec] px-4 text-[13px] text-[#5a6472] transition-colors hover:border-[#2b2d42] hover:text-[#2b2d42]"
         >
           ОНОВИТИ
