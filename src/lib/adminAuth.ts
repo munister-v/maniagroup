@@ -102,9 +102,18 @@ export async function setAdminPassword(newPassword: string): Promise<void> {
   await setSetting("admin_password_hash", hashPassword(newPassword));
 }
 
-export async function setAdminSession() {
+const SESSION_DAYS = 7;
+const REMEMBERED_DAYS = 60;
+
+/**
+ * @param remember true — кука живе REMEMBERED_DAYS; false — сесійна кука, яка
+ * зникає із закриттям браузера. Для спільного чи чужого комп'ютера друге
+ * безпечніше, тому за замовчуванням «запам'ятати» вимкнено.
+ */
+export async function setAdminSession(remember = false) {
   const jar = await cookies();
-  jar.set(COOKIE_NAME, token(), { ...baseCookie, maxAge: 60 * 60 * 24 * 7 });
+  const maxAge = 60 * 60 * 24 * (remember ? REMEMBERED_DAYS : SESSION_DAYS);
+  jar.set(COOKIE_NAME, token(), { ...baseCookie, maxAge });
 }
 
 export async function clearAdminSession() {

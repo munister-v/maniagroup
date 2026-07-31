@@ -20,14 +20,14 @@ export async function POST(req: Request) {
     );
   }
 
-  const { password } = (await req.json()) as { password: string };
+  const { password, remember = false } = (await req.json()) as { password: string; remember?: boolean };
   if (!(await checkPassword(password))) {
     await recordFailedLogin(ip);
     logActivity("login_fail", `Невдалий вхід з IP ${ip}`, undefined, ip);
     return NextResponse.json({ ok: false }, { status: 401 });
   }
   await clearLoginAttempts(ip);
-  await setAdminSession();
+  await setAdminSession(remember);
   logActivity("login", `Вхід в адмін-панель з IP ${ip}`, undefined, ip);
   return NextResponse.json({ ok: true });
 }
