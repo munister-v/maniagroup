@@ -6,7 +6,14 @@ import { q, q1 } from "./pg";
 import { baseCookie } from "./cookieOptions";
 
 const COOKIE_NAME = "mg_admin";
-const PASSWORD = process.env.ADMIN_PASSWORD ?? "maniagroup2026";
+// ⚠️ Пароль за замовчуванням лишається ТІЛЬКИ для локальної розробки. Репозиторій
+// публічний, тож у production цей рядок знав би кожен, хто його відкрив: там
+// пароль обов'язково береться з ADMIN_PASSWORD або з хешу в store_settings, а
+// якщо нема ні того, ні іншого — вхід просто не працює (краще, ніж відомий пароль).
+const DEV_FALLBACK_PASSWORD = "maniagroup2026";
+const PASSWORD =
+  process.env.ADMIN_PASSWORD ??
+  (process.env.NODE_ENV === "production" ? "" : DEV_FALLBACK_PASSWORD);
 const SECRET = process.env.ADMIN_SECRET ?? "mg-admin-secret-change-me";
 
 if (SECRET === "mg-admin-secret-change-me") {
@@ -85,6 +92,9 @@ export async function clearLoginAttempts(ip: string): Promise<void> {
 export async function checkPassword(input: string): Promise<boolean> {
   const hash = await getSetting("admin_password_hash").catch(() => null);
   if (hash) return verifyPassword(input, hash);
+  // Порожній PASSWORD = у production не налаштовано жодного пароля. Без цієї
+  // перевірки порожній ввід збігся б із порожнім паролем і пустив би всередину.
+  if (!PASSWORD) return false;
   return input === PASSWORD;
 }
 
