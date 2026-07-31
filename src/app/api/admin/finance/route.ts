@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { q, q1 } from "@/lib/pg";
 import { getFinanceSettings, costSql, orderCogsSql } from "@/lib/finance";
+import { getTurnoverReport } from "@/lib/turnover";
+import { getProductPriceHistory, getSupplierPriceComparison, getPriceSpread } from "@/lib/priceHistory";
 
 export const dynamic = "force-dynamic";
 
@@ -201,6 +203,32 @@ export async function GET(req: NextRequest) {
         cost_value: Number(b.cost_value), retail_value: Number(b.retail_value),
       })),
     });
+  }
+
+  // ── C3: turnover + dead stock ────────────────────────────────────────────
+  if (report === "turnover") {
+    const days = Math.min(Math.max(Number(sp.get("days")) || 90, 1), 730);
+    const idleDays = Math.min(Math.max(Number(sp.get("idleDays")) || 90, 1), 730);
+    return NextResponse.json(await getTurnoverReport(days, idleDays));
+  }
+
+  // ── D4: supplier price history ───────────────────────────────────────────
+  if (report === "purchase-prices") {
+    const productId = Number(sp.get("productId")) || 0;
+    if (productId) {
+      const history = await getProductPriceHistory(productId);
+      if (!history) return NextResponse.json({ error: "Товар не знайдено" }, { status: 404 });
+      return NextResponse.json(history);
+    }
+    const [comparison, spread] = await Promise.all([
+      getSupplierPriceComparison({
+        supplierId: Number(sp.get("supplierId")) || undefined,
+        search: sp.get("q") || undefined,
+        onlyMulti: sp.get("onlyMulti") === "1",
+      }),
+      getPriceSpread(30),
+    ]);
+    return NextResponse.json({ comparison, spread });
   }
 
   return NextResponse.json({ error: "Unknown report" }, { status: 400 });

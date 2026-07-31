@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   FinancePnL, FinanceProfitability, FinanceExpenses,
   FinanceCashflow, FinanceInventory, FinanceCostSettings,
+  FinanceTurnover, FinancePurchasePrices,
 } from "./AdminFinance";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -565,7 +566,8 @@ function InventoryTab() {
 
 type AccountingTab =
   | "register" | "monthly" | "products" | "inventory"
-  | "pnl" | "profit" | "expenses" | "cashflow" | "valuation" | "cost";
+  | "pnl" | "profit" | "expenses" | "cashflow" | "valuation" | "cost"
+  | "turnover" | "purchase";
 
 // Two groups: операційний облік (revenue/ops) and фінанси (profit/cost).
 const TAB_GROUPS: { title: string; tabs: { id: AccountingTab; label: string }[] }[] = [
@@ -587,6 +589,8 @@ const TAB_GROUPS: { title: string; tabs: { id: AccountingTab; label: string }[] 
       { id: "cashflow",  label: "Грошовий потік" },
       { id: "valuation", label: "Оцінка складу" },
       { id: "cost",      label: "Собівартість" },
+      { id: "turnover", label: "Оборотність" },
+      { id: "purchase",  label: "Закупівельні ціни" },
     ],
   },
 ];
@@ -627,6 +631,8 @@ export function AdminAccounting({ onToast }: { onToast?: (m: string) => void }) 
       {tab === "cashflow"  && <FinanceCashflow />}
       {tab === "valuation" && <FinanceInventory />}
       {tab === "cost"      && <FinanceCostSettings onToast={onToast} />}
+      {tab === "turnover"  && <FinanceTurnover />}
+      {tab === "purchase"  && <FinancePurchasePrices />}
     </div>
   );
 }

@@ -782,3 +782,291 @@ function CostRow({ p, onSet }: { p: CostProduct; onSet: (id: string, cost: numbe
     </tr>
   );
 }
+
+/* ── Tab: Оборотність складу (C3) ───────────────────────────────────────── */
+
+type TurnoverSummary = {
+  days: number; cogs: number; stockValueNow: number; stockValueStart: number; stockValueAvg: number;
+  turns: number; daysOnHand: number | null; unitsSold: number; unitsOnHand: number;
+  withRealQty: number; inStockItems: number;
+};
+type TurnoverBrand = { brand: string; unitsSold: number; cogs: number; stockValue: number; unitsOnHand: number; turns: number | null };
+type DeadRow = {
+  id: string; name: string; brand: string; category: string; sku: string; image: string;
+  stock: number; price: number; stockValue: number; lastSold: string | null; daysIdle: number | null;
+};
+
+const PERIODS = [30, 90, 180, 365];
+
+export function FinanceTurnover() {
+  const [days, setDays] = useState(90);
+  const [idleDays, setIdleDays] = useState(90);
+  const [summary, setSummary] = useState<TurnoverSummary | null>(null);
+  const [byBrand, setByBrand] = useState<TurnoverBrand[]>([]);
+  const [dead, setDead] = useState<DeadRow[]>([]);
+  const [deadTotal, setDeadTotal] = useState({ items: 0, units: 0, value: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/admin/finance?report=turnover&days=${days}&idleDays=${idleDays}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setSummary(d.summary ?? null);
+        setByBrand(d.byBrand ?? []);
+        setDead(d.deadStock ?? []);
+        setDeadTotal(d.deadStockTotal ?? { items: 0, units: 0, value: 0 });
+      })
+      .finally(() => setLoading(false));
+  }, [days, idleDays]);
+
+  const maxStock = Math.max(1, ...byBrand.map((b) => b.stockValue));
+  // Частка запасу, порахована припущенням «в наявності = 1 шт».
+  const estimated = summary && summary.inStockItems > 0
+    ? 1 - summary.withRealQty / summary.inStockItems
+    : 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-4 rounded-[4px] border border-[#e6eaec] bg-white p-4">
+        <Period label="Період обороту" value={days} onChange={setDays} />
+        <Period label="Не продається (днів)" value={idleDays} onChange={setIdleDays} />
+      </div>
+
+      {estimated > 0.5 && (
+        <p className="rounded-[4px] border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] text-amber-900">
+          У {Math.round(estimated * 100)}% товарів немає поштучних залишків — вони рахуються як 1 шт.
+          Цифри стануть точними після завантаження кількостей у «Імпорт».
+        </p>
+      )}
+
+      {loading ? <Loading /> : summary && (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <Kpi label={`Оборотів за ${summary.days} дн`} val={summary.turns.toFixed(2)} tone="accent" />
+            <Kpi label="Днів на складі" val={summary.daysOnHand == null ? "—" : Math.round(summary.daysOnHand).toLocaleString("uk-UA")} />
+            <Kpi label="Собівартість продажів" val={uah(summary.cogs)} />
+            <Kpi label="Середній запас" val={uah(summary.stockValueAvg)} />
+            <Kpi label="Продано одиниць" val={summary.unitsSold.toLocaleString("uk-UA")} tone="ok" />
+            <Kpi label="Одиниць на складі" val={summary.unitsOnHand.toLocaleString("uk-UA")} />
+          </div>
+
+          <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
+            <h3 className="mb-4 flex items-center justify-between text-[10px] uppercase tracking-wider text-[#8a94a0]">
+              <span>Оборотність за брендами</span>
+              <span>запас / обертів</span>
+            </h3>
+            <div className="space-y-2.5">
+              {byBrand.map((b) => (
+                <div key={b.brand}>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#2b2d42]">{b.brand}</span>
+                    <span className="text-[11px] tabular-nums text-[#8a94a0]">{b.unitsSold.toLocaleString("uk-UA")} прод.</span>
+                    <span className="w-40 text-right text-[12px] tabular-nums">
+                      <span className="font-medium text-[#2b2d42]">{uah(b.stockValue)}</span>
+                      <span className="mx-1 text-[#aab4bf]">/</span>
+                      <span className={b.turns && b.turns > 0 ? "text-green-700" : "text-[#aab4bf]"}>
+                        {b.turns == null || b.turns === 0 ? "0" : b.turns.toFixed(2)}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[#eef2f3]">
+                    <div className="h-full rounded-full bg-[#2b2d42]" style={{ width: `${Math.max(2, Math.round((b.stockValue / maxStock) * 100))}%` }} />
+                  </div>
+                </div>
+              ))}
+              {byBrand.length === 0 && <p className="py-4 text-center text-[12px] text-[#8a94a0]">Немає даних</p>}
+            </div>
+          </div>
+
+          <div className="rounded-[4px] border border-[#e6eaec] bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e6eaec] px-5 py-4">
+              <h3 className="text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                Мертвий запас · без продажу понад {idleDays} дн
+              </h3>
+              <p className="text-[12px] tabular-nums text-[#8a94a0]">
+                {deadTotal.items.toLocaleString("uk-UA")} позицій ·{" "}
+                {deadTotal.units.toLocaleString("uk-UA")} шт ·{" "}
+                <span className="font-medium text-red-600">{uah(deadTotal.value)}</span> заморожено
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-[#e6eaec] text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                    <th className="px-5 py-2.5 text-left font-normal">Товар</th>
+                    <th className="px-3 py-2.5 text-left font-normal">Бренд</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Залишок</th>
+                    <th className="px-3 py-2.5 text-right font-normal">У закупці</th>
+                    <th className="px-5 py-2.5 text-right font-normal">Лежить</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dead.map((d) => (
+                    <tr key={d.id} className="border-b border-[#f2f5f6] last:border-0">
+                      <td className="px-5 py-2.5">
+                        <span className="block truncate text-[#2b2d42]" title={d.name}>{d.name}</span>
+                        {d.sku && <span className="text-[10px] text-[#aab4bf]">{d.sku}</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#8a94a0]">{d.brand}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{d.stock.toLocaleString("uk-UA")}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{uah(d.stockValue)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums text-[#8a94a0]">
+                        {d.daysIdle == null ? "жодного продажу" : `${Math.round(d.daysIdle)} дн`}
+                      </td>
+                    </tr>
+                  ))}
+                  {dead.length === 0 && (
+                    <tr><td colSpan={5} className="px-5 py-8 text-center text-[12px] text-[#8a94a0]">Мертвого запасу немає</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Period({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">{label}</span>
+      <div className="flex gap-1">
+        {PERIODS.map((p) => (
+          <button key={p} onClick={() => onChange(p)}
+            className={`rounded-[3px] border px-3 py-1.5 text-[11px] tabular-nums transition-colors ${
+              value === p ? "border-[#2f9488] bg-[#2f9488] text-white" : "border-[#e6eaec] text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]"
+            }`}>{p}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Tab: Закупівельні ціни (D4) ────────────────────────────────────────── */
+
+type SupplierPriceRow = {
+  supplierId: number | null; supplier: string; productId: number; name: string; sku: string;
+  qty: number; avgCost: number; lastCost: number; lastDate: string; vsBestPct: number | null;
+};
+type SpreadRow = { productId: number; name: string; sku: string; minCost: number; maxCost: number; spreadPct: number; receipts: number };
+
+export function FinancePurchasePrices() {
+  const [search, setSearch] = useState("");
+  const [onlyMulti, setOnlyMulti] = useState(true);
+  const [rows, setRows] = useState<SupplierPriceRow[]>([]);
+  const [spread, setSpread] = useState<SpreadRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const t = setTimeout(() => {
+      fetch(`/api/admin/finance?report=purchase-prices&q=${encodeURIComponent(search)}&onlyMulti=${onlyMulti ? 1 : 0}`)
+        .then((r) => r.json())
+        .then((d) => { setRows(d.comparison ?? []); setSpread(d.spread ?? []); })
+        .finally(() => setLoading(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [search, onlyMulti]);
+
+  // Рядки приходять згрупованими по товару — малюємо назву лише на першому.
+  const grouped = useMemo(() => {
+    const seen = new Set<number>();
+    return rows.map((r) => {
+      const first = !seen.has(r.productId);
+      seen.add(r.productId);
+      return { ...r, first };
+    });
+  }, [rows]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end gap-4 rounded-[4px] border border-[#e6eaec] bg-white p-4">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-[#8a94a0]">Пошук товару</span>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="назва або артикул" className={`${inp} w-64`} />
+        </label>
+        <label className="flex items-center gap-2 pb-2 text-[12px] text-[#2b2d42]">
+          <input type="checkbox" checked={onlyMulti} onChange={(e) => setOnlyMulti(e.target.checked)} />
+          Лише де є з чим порівняти (≥2 постачальники)
+        </label>
+      </div>
+
+      {loading ? <Loading /> : (
+        <>
+          <div className="rounded-[4px] border border-[#e6eaec] bg-white">
+            <h3 className="border-b border-[#e6eaec] px-5 py-4 text-[10px] uppercase tracking-wider text-[#8a94a0]">
+              Ціни постачальників · з проведених приходів
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-[#e6eaec] text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                    <th className="px-5 py-2.5 text-left font-normal">Товар</th>
+                    <th className="px-3 py-2.5 text-left font-normal">Постачальник</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Куплено</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Середня</th>
+                    <th className="px-3 py-2.5 text-right font-normal">Остання</th>
+                    <th className="px-5 py-2.5 text-right font-normal">Проти кращої</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grouped.map((r) => (
+                    <tr key={`${r.productId}-${r.supplierId ?? r.supplier}`} className="border-b border-[#f2f5f6] last:border-0">
+                      <td className="px-5 py-2.5">
+                        {r.first ? (
+                          <>
+                            <span className="block truncate text-[#2b2d42]" title={r.name}>{r.name}</span>
+                            {r.sku && <span className="text-[10px] text-[#aab4bf]">{r.sku}</span>}
+                          </>
+                        ) : <span className="text-[#e6eaec]">↳</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#2b2d42]">{r.supplier}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[#8a94a0]">{r.qty.toLocaleString("uk-UA")}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-medium">{uah(r.avgCost)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[#8a94a0]">{uah(r.lastCost)}</td>
+                      <td className="px-5 py-2.5 text-right tabular-nums">
+                        {r.vsBestPct == null ? "—" : r.vsBestPct < 0.01 ? (
+                          <span className="text-green-700">найкраща</span>
+                        ) : (
+                          <span className="text-red-600">+{r.vsBestPct.toFixed(1)}%</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {grouped.length === 0 && (
+                    <tr><td colSpan={6} className="px-5 py-8 text-center text-[12px] text-[#8a94a0]">
+                      Ще немає проведених приходів — історія цін збирається з них
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {spread.length > 0 && (
+            <div className="rounded-[4px] border border-[#e6eaec] bg-white p-5">
+              <h3 className="mb-4 text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                Найбільший розкид закупівельних цін · де торг дає найбільше
+              </h3>
+              <div className="space-y-2">
+                {spread.map((s) => (
+                  <div key={s.productId} className="flex items-baseline justify-between gap-3">
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#2b2d42]" title={s.name}>{s.name}</span>
+                    <span className="text-[11px] tabular-nums text-[#8a94a0]">{s.receipts} прих.</span>
+                    <span className="w-48 text-right text-[12px] tabular-nums">
+                      {uah(s.minCost)} <span className="mx-1 text-[#aab4bf]">→</span> {uah(s.maxCost)}
+                      <span className="ml-2 text-red-600">+{s.spreadPct.toFixed(0)}%</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
