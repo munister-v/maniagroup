@@ -31,9 +31,11 @@ function orderBrands(brands: Brand[], logoMap: Record<string, string>): BrandWit
 import { CartDrawer } from "./CartDrawer";
 import { Grain } from "./Grain";
 
-const SOCIAL = {
-  instagram: "https://instagram.com/maniagroup.ua",
-  telegram: "https://t.me/maniagroup_ua",
+/** Запасные значения: используются, только если контент почему-то не отдал
+    контакты. Правда живёт в контенте сайта и правится в админке. */
+const SOCIAL_FALLBACK = {
+  instagram: "https://instagram.com/mania.group",
+  telegram: "https://t.me/ManiaGroupKiev",
 };
 
 type SearchHit = {
@@ -81,7 +83,11 @@ const SOCIAL_ICONS = {
     "M21.05 3.07 17.6 19.65c-.26 1.16-.94 1.44-1.9.9l-5.26-3.88-2.54 2.45c-.28.28-.52.52-1.06.52l.38-5.4L17.4 5.6c.46-.4-.1-.62-.62-.22L7.1 11.8l-5.26-1.64c-1.14-.36-1.16-1.14.24-1.69L19.66 1.6c.95-.36 1.78.22 1.4 1.47Z",
 };
 
-export function Header({ brands = [], brandLogos = {} }: { brands?: Brand[]; brandLogos?: Record<string, string> }) {
+export function Header({ brands = [], brandLogos = {}, social }: { brands?: Brand[]; brandLogos?: Record<string, string>; social?: { instagram?: string; telegram?: string } }) {
+  const SOCIAL = {
+    instagram: social?.instagram || SOCIAL_FALLBACK.instagram,
+    telegram: social?.telegram || SOCIAL_FALLBACK.telegram,
+  };
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);

@@ -160,9 +160,9 @@ export const DEFAULT_CONTENT: SiteContent = {
   contacts: {
     phone: "+38 (096) 343-60-35",
     email: "",
-    instagram: "https://instagram.com/maniagroup.ua",
+    instagram: "https://instagram.com/mania.group",
     facebook: "",
-    telegram: "https://t.me/maniagroup_ua",
+    telegram: "https://t.me/ManiaGroupKiev",
     address: "Україна",
     workingHours: "Щодня · 9:00 — 20:00",
   },

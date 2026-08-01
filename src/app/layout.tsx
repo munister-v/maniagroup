@@ -99,6 +99,9 @@ export default async function RootLayout({
   try { brands = await dbBrands(); } catch { brands = []; }
   let brandLogos: Record<string, string> = {};
   try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
+  // Контакты для шапки — из того же контента, что и в подвале: иначе
+  // правка в админке меняет один блок и не трогает другой.
+  const { contacts: headerContacts } = await getSiteContent();
   return (
     <html
       lang="uk"
@@ -111,7 +114,7 @@ export default async function RootLayout({
         />
         <WishlistProvider>
           <AnnouncementBar />
-          <Header brands={brands} brandLogos={brandLogos} />
+          <Header brands={brands} brandLogos={brandLogos} social={headerContacts} />
           <main className="flex-1">{children}</main>
           <Footer />
         </WishlistProvider>
