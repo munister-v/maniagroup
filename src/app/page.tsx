@@ -108,7 +108,7 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
             {hero.subtitle}
           </p>
           <div
-            className="hero-rise mt-9 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center md:mt-7"
+            className="hero-rise mt-12 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center md:mt-11"
             style={{ animationDelay: "220ms" }}
           >
             <Link
