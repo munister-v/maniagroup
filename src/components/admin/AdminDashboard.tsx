@@ -15,16 +15,13 @@ import { AdminPropertyMatching } from "./AdminPropertyMatching";
 import { AdminSizeCharts } from "./AdminSizeCharts";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
-import { AdminDelivery } from "./AdminDelivery";
-import { AdminPayments } from "./AdminPayments";
 import { MonitoringSection } from "./MonitoringSection";
 import { ErpImportTabs } from "@/components/erp/ErpImportTabs";
 import { AiAssistant, AiInsights } from "./AiAssistant";
-import { ADMIN_LOGIN } from "@/lib/adminPath";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "delivery" | "payments" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
 
 type RecentOrder = {
   id: number;
@@ -158,16 +155,6 @@ const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
     d: "M3 12h4l3 8 4-16 3 8h4",
   },
   {
-    id: "payments",
-    label: "Оплата",
-    d: "M3 10h18M7 15h4m-7 4h16a2 2 0 002-2V7a2 2 0 00-2-2H4a2 2 0 00-2 2v10a2 2 0 002 2z",
-  },
-  {
-    id: "delivery",
-    label: "Доставка",
-    d: "M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0zM3 5h11v9H3V5zm11 3h3l3 3v3h-6V8z",
-  },
-  {
     id: "backup",
     label: "Резервні копії",
     d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
@@ -282,7 +269,7 @@ export function AdminDashboard({
 
   async function logout() {
     await fetch("/api/admin/logout", { method: "POST" });
-    router.push(ADMIN_LOGIN);
+    router.push("/admin/login");
     router.refresh();
   }
 
@@ -428,7 +415,7 @@ export function AdminDashboard({
               content={content}
               setContent={setContent}
               showToast={showToast}
-              editor={<ContentSection content={content} update={update} />}
+              editor={<ContentSection content={content} update={update} onOpenMedia={() => setSection("media")} onToast={showToast} />}
             />
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
@@ -454,8 +441,6 @@ export function AdminDashboard({
           {section === "accounting" && <AdminAccounting onToast={showToast} />}
           {section === "monitoring" && <MonitoringSection />}
           {section === "backup" && <BackupSection />}
-          {section === "delivery" && <AdminDelivery onToast={showToast} />}
-          {section === "payments" && <AdminPayments onToast={showToast} />}
           {section === "settings" && <SettingsSection />}
         </main>
       </div>
@@ -975,7 +960,7 @@ function AnnouncementPreview({ text, color }: { text: string; color?: string }) 
   );
 }
 
-function SeoGooglePreview({ title, desc, url = "shop.maniagroup.com.ua" }: { title: string; desc: string; url?: string }) {
+function SeoGooglePreview({ title, desc, url = "maniagroup.munister.com.ua" }: { title: string; desc: string; url?: string }) {
   return (
     <div className="rounded-[4px] border border-[#e6eaec] bg-white p-4 shadow-sm">
       <p className="mb-2.5 text-[10px] uppercase tracking-wider text-[#aab4bf]">Вигляд у Google</p>
@@ -1179,11 +1164,17 @@ function FooterColumnsEditor({
 function ContentSection({
   content,
   update,
+  onOpenMedia,
+  onToast,
 }: {
   content: SiteContent;
   update: (fn: (c: SiteContent) => SiteContent) => void;
+  onOpenMedia: () => void;
+  onToast?: (message: string) => void;
 }) {
   const [tab, setTab] = useState<ContentTab>("home");
+  const [seoImageUploading, setSeoImageUploading] = useState(false);
+  const seoImageInputRef = useRef<HTMLInputElement>(null);
 
   function set<K extends keyof SiteContent>(key: K, val: SiteContent[K]) {
     update((c) => ({ ...c, [key]: val }));
@@ -1208,6 +1199,29 @@ function ContentSection({
   }
   function returnsF(field: keyof SiteContent["returns"], v: unknown) {
     update((c) => ({ ...c, returns: { ...c.returns, [field]: v } }));
+  }
+
+  async function uploadSeoImage(list: FileList | File[] | null) {
+    const file = list ? Array.from(list)[0] : null;
+    if (!file) return;
+    setSeoImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        onToast?.(data.error ?? "Не вдалося завантажити зображення");
+        return;
+      }
+      seoF("ogImage", data.url);
+      onToast?.("OG-зображення завантажено");
+    } catch {
+      onToast?.("Не вдалося завантажити зображення");
+    } finally {
+      setSeoImageUploading(false);
+      if (seoImageInputRef.current) seoImageInputRef.current.value = "";
+    }
   }
 
   return (
@@ -1367,14 +1381,42 @@ function ContentSection({
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">OG-зображення (URL)</span>
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#8a94a0]">OG-зображення</span>
+                    <input
+                      ref={seoImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => uploadSeoImage(e.target.files)}
+                    />
                   </div>
-                  <input
-                    value={content.seo.ogImage}
-                    onChange={(e) => seoF("ogImage", e.target.value)}
-                    placeholder="/images/hero.webp"
-                    className="h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
-                  />
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+                    <input
+                      value={content.seo.ogImage}
+                      onChange={(e) => seoF("ogImage", e.target.value)}
+                      placeholder="/images/hero.webp"
+                      className="h-9 w-full rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa] px-3 text-sm text-[#2b2d42] placeholder:text-[#c3ccd4] focus:border-[#2b2d42] focus:bg-white focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => seoImageInputRef.current?.click()}
+                      disabled={seoImageUploading}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-[3px] border border-[#2f9488] px-4 text-[11px] uppercase tracking-[0.16em] text-[#2f9488] transition-colors hover:bg-[#2f9488] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <path d="M12 4v12m0-12-4 4m4-4 4 4M4 20h16" />
+                      </svg>
+                      {seoImageUploading ? "Завантаження…" : "З ПК"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onOpenMedia}
+                      className="inline-flex h-9 items-center justify-center rounded-[3px] border border-[#e6eaec] px-4 text-[11px] uppercase tracking-[0.16em] text-[#2b2d42] transition-colors hover:border-[#2b2d42] hover:bg-white"
+                    >
+                      Медіатека
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[#8a94a0]">Можна вставити URL вручну або швидко завантажити файл з комп’ютера.</p>
                   {content.seo.ogImage && (
                     <div className="mt-2 overflow-hidden rounded-[3px] border border-[#e6eaec]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2740,9 +2782,9 @@ function SettingsSection() {
 
       <Card title="Інфраструктура">
         <div className="space-y-3">
-          <InfoRow label="Сайт" value="shop.maniagroup.com.ua" />
+          <InfoRow label="Сайт" value="maniagroup.munister.com.ua" />
           <InfoRow label="База даних" value="PostgreSQL · maniagroup" />
-          <InfoRow label="Сервер" value="173.242.49.73 · pm2 maniagroup" />
+          <InfoRow label="Сервер" value="173.242.54.98 · pm2 maniagroup" />
         </div>
       </Card>
     </div>
