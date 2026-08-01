@@ -107,11 +107,20 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           <p className="hero-rise mt-5 max-w-[40ch] text-[14px] leading-relaxed text-paper/70" style={{ animationDelay: "150ms" }}>
             {hero.subtitle}
           </p>
-          <div className="hero-rise mt-10 flex flex-wrap items-center gap-3 md:mt-7" style={{ animationDelay: "220ms" }}>
-            <Link href="/catalog" className="inline-flex h-12 items-center bg-paper px-8 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-opacity hover:opacity-90">
+          <div
+            className="hero-rise mt-9 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center md:mt-7"
+            style={{ animationDelay: "220ms" }}
+          >
+            <Link
+              href="/catalog"
+              className="inline-flex h-12 items-center justify-center bg-paper px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-opacity hover:opacity-90 sm:h-[52px] sm:min-w-[210px] sm:px-8"
+            >
               До каталогу
             </Link>
-            <Link href="/sale" className="inline-flex h-12 items-center bg-[#c1352a] px-8 text-[12px] font-bold uppercase tracking-[0.14em] text-paper transition-opacity hover:opacity-90">
+            <Link
+              href="/sale"
+              className="inline-flex h-12 items-center justify-center bg-[#c1352a] px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-paper transition-opacity hover:opacity-90 sm:h-[52px] sm:min-w-[210px] sm:px-8"
+            >
               Sale −50%
             </Link>
           </div>
@@ -133,13 +142,13 @@ function BenefitsBar() {
   ];
   return (
     <div className="border-b border-line bg-white">
-      <div className="wrap grid grid-cols-2 gap-x-4 gap-y-4 py-5 lg:grid-cols-4">
+      <div className="wrap grid grid-cols-1 divide-y divide-line py-2 min-[480px]:grid-cols-2 min-[480px]:divide-y-0 min-[480px]:gap-x-6 min-[480px]:gap-y-5 min-[480px]:py-5 lg:grid-cols-4">
         {items.map((it) => (
-          <div key={it.t} className="flex items-center gap-3">
+          <div key={it.t} className="flex items-center gap-3 py-3 min-[480px]:py-0">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6 shrink-0 text-ink"><path d={it.d} strokeLinecap="round" strokeLinejoin="round" /></svg>
             <div className="min-w-0">
-              <p className="text-[12px] font-semibold leading-tight text-ink">{it.t}</p>
-              <p className="text-[11px] leading-tight text-muted">{it.s}</p>
+              <p className="text-[12.5px] font-semibold leading-tight text-ink">{it.t}</p>
+              <p className="mt-0.5 text-[11.5px] leading-tight text-muted">{it.s}</p>
             </div>
           </div>
         ))}

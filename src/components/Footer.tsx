@@ -32,7 +32,7 @@ export async function Footer() {
   const telegramHandle = telegram ? socialHandle(telegram, "@ManiaGroupKiev") : "@ManiaGroupKiev";
 
   return (
-    <footer className="mt-20 border-t border-line pb-16 md:pb-0">
+    <footer className="mt-16 border-t border-line md:mt-20">
       <div className="wrap py-10 md:py-16">
         <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)] md:gap-12">
           <div className="border-b border-line/80 pb-8 md:border-b-0 md:pb-0">

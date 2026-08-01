@@ -112,7 +112,7 @@ export default async function RootLayout({
         <WishlistProvider>
           <AnnouncementBar />
           <Header brands={brands} brandLogos={brandLogos} />
-          <main className="flex-1 pb-14 md:pb-0">{children}</main>
+          <main className="flex-1">{children}</main>
           <Footer />
         </WishlistProvider>
       </body>
