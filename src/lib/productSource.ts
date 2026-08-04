@@ -60,6 +60,9 @@ function rowToProduct(row: any): Product {
     tone: toneFor(id),
     tag: !inStock ? undefined : onSale ? "sale" : undefined,
     image: images[0]?.src || undefined,
+    // Більше 4 у картці не потрібно: смужок стає не видно, а важать вони як
+    // повноцінні зображення.
+    images: images.slice(0, 4).map((i) => i.src).filter(Boolean),
     inStock,
     color: row.color ? colorLabel(row.color) : undefined,
     composition: translateMaterials(row.composition) || undefined,

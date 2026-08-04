@@ -26,6 +26,8 @@ export type Product = {
   season?: string;
   /** Розміри в наявності — показуються прямо на картці в каталозі. */
   sizes?: string[];
+  /** Решта фото товару — для перегортання прямо в картці каталогу. */
+  images?: string[];
 };
 
 export const BRANDS = [

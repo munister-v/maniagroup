@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ProductMedia } from "./ProductMedia";
+import { ProductCardMedia } from "./ProductCardMedia";
 import { WishButton } from "./WishButton";
 import {
   discountPercent,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/catalog";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { brand, name, price, oldPrice, tag, tone, slug, category, image, sizes } = product;
+  const { brand, name, price, oldPrice, tag, tone, slug, image, images, sizes } = product;
   const discount = discountPercent(product);
   const archived = product.inStock === false;
 
@@ -17,7 +17,7 @@ export function ProductCard({ product }: { product: Product }) {
     <Link href={`/product/${slug}`} className="group block rounded-[2px] focus-visible:outline-offset-4">
       <div className="surface-card surface-card-hover relative overflow-hidden rounded-[2px]">
         <div className={archived ? "opacity-60 grayscale-[35%]" : ""}>
-          <ProductMedia tone={tone} brand={brand} category={category} image={image} />
+          <ProductCardMedia tone={tone} brand={brand} image={image} images={images} />
         </div>
 
         {archived ? (
