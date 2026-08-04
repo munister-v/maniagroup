@@ -36,9 +36,11 @@ export async function GET() {
 /** POST {brand, logoUrl} — set a manual logo (after upload or paste URL). */
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
-  const { brand, logoUrl } = await req.json();
+  const { brand, logoUrl, bg } = await req.json();
   if (!brand || !logoUrl) return NextResponse.json({ error: "brand і logoUrl обов'язкові" }, { status: 400 });
-  await setBrandLogo(String(brand), String(logoUrl), "manual");
+  // bg керує підкладкою плитки: світлі логотипи на білому зникають, для них
+  // потрібен темний фон.
+  await setBrandLogo(String(brand), String(logoUrl), "manual", bg === "dark" ? "dark" : "light");
   return NextResponse.json({ ok: true });
 }
 
