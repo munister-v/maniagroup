@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SlideOver } from "./intertop/primitives";
 
 type SizeChartType = "clothing" | "shoes" | "accessories" | "jewelry" | "home";
 type SizeRow = { size: string; [propKey: string]: string };
-type SizeChart = { id: string; code: string; type: SizeChartType; brand: string; name: string; gender: string; chart: SizeRow[]; created_at: string; updated_at: string };
+type SizeChart = { id: string; code: string; type: SizeChartType; brand: string; name: string; gender: string; chart: SizeRow[]; public_order: number | null; public_note: string; created_at: string; updated_at: string };
 
 const TYPES: { value: SizeChartType; label: string; properties: { key: string; label: string }[] }[] = [
   {
@@ -58,8 +58,11 @@ function normalizeRow(row: SizeRow & { label?: string }): SizeRow {
 
 const emptyRow = (): SizeRow => ({ size: "" });
 
-function emptyForm(): { code: string; type: SizeChartType; brand: string; name: string; gender: string; chart: SizeRow[] } {
-  return { code: "", type: "clothing", brand: "", name: "", gender: "", chart: [emptyRow()] };
+function emptyForm(): {
+  code: string; type: SizeChartType; brand: string; name: string; gender: string;
+  chart: SizeRow[]; public_order: string; public_note: string;
+} {
+  return { code: "", type: "clothing", brand: "", name: "", gender: "", chart: [emptyRow()], public_order: "", public_note: "" };
 }
 
 export function AdminSizeCharts() {
@@ -69,29 +72,38 @@ export function AdminSizeCharts() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
 
-  const load = () => {
-    setLoading(true);
+  // spinner=false на монтуванні: loading вже true початковим станом.
+  const load = useCallback((spinner = true) => {
+    if (spinner) setLoading(true);
     fetch("/api/admin/size-charts")
       .then((r) => r.json())
       .then((d) => setCharts((d.charts ?? []) as SizeChart[]))
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(load, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load(false); }, [load]);
 
   const openNew = () => { setForm(emptyForm()); setEditing("new"); };
   const openEdit = (c: SizeChart) => {
     setForm({
       code: c.code, type: c.type || "clothing", brand: c.brand, name: c.name, gender: c.gender,
       chart: c.chart.length ? c.chart.map(normalizeRow) : [emptyRow()],
+      public_order: c.public_order == null ? "" : String(c.public_order),
+      public_note: c.public_note ?? "",
     });
     setEditing(c);
   };
 
   const save = async () => {
     setSaving(true);
-    const body = { ...form, chart: form.chart.filter((r) => r.size.trim() !== "") };
+    const body = {
+      ...form,
+      chart: form.chart.filter((r) => r.size.trim() !== ""),
+      // Порожнє поле = сітка службова, на публічну сторінку не потрапляє.
+      public_order: form.public_order.trim() === "" ? null : Number(form.public_order),
+    };
     try {
       if (editing === "new") {
         await fetch("/api/admin/size-charts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -147,6 +159,7 @@ export function AdminSizeCharts() {
               <th className={thCls}>Бренд</th>
               <th className={thCls}>Назва</th>
               <th className={thCls}>Стать</th>
+              <th className={thCls}>На сайті</th>
               <th className={`${thCls} text-right`}>Розмірів</th>
               <th className={thCls}>Оновлено</th>
               <th className={thCls}></th>
@@ -154,9 +167,9 @@ export function AdminSizeCharts() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
+              <tr><td colSpan={9} className="px-3 py-12 text-center text-[#8a94a0]">Завантаження…</td></tr>
             ) : charts.length === 0 ? (
-              <tr><td colSpan={8} className="px-3 py-12 text-center text-[#8a94a0]">Ще немає розмірних сіток</td></tr>
+              <tr><td colSpan={9} className="px-3 py-12 text-center text-[#8a94a0]">Ще немає розмірних сіток</td></tr>
             ) : charts.map((c) => (
               <tr key={c.id} className="cursor-pointer border-b border-[#eef2f3] transition-colors hover:bg-[#f7f9fa]" onClick={() => openEdit(c)}>
                 <td className="px-3 py-2.5 font-medium text-[#2b2d42]">{c.code || "—"}</td>
@@ -164,6 +177,16 @@ export function AdminSizeCharts() {
                 <td className="px-3 py-2.5 text-[#2b2d42]">{c.brand || "—"}</td>
                 <td className="px-3 py-2.5 text-[#2b2d42]">{c.name || "—"}</td>
                 <td className="px-3 py-2.5 text-[#5a6472]">{genderLabel(c.gender)}</td>
+                <td className="px-3 py-2.5">
+                  {c.public_order == null ? (
+                    <span className="text-[#aab4bf]">—</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-[#2b2d42]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#2f9488]" />
+                      {c.public_order}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-[#2b2d42]">{c.chart.length}</td>
                 <td className="px-3 py-2.5 text-[#5a6472]">{new Date(c.updated_at).toLocaleDateString("uk-UA")}</td>
                 <td className="px-3 py-2.5 text-right">
@@ -200,7 +223,7 @@ export function AdminSizeCharts() {
             <input value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
               placeholder="Напр. Jewelry_Test4"
               className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none" />
-            <span className="mt-1 block text-[11px] text-[#c3ccd4]">Саме цей код вказується в товарі (поле «Розмірна сітка»), щоб прив'язати його до цієї сітки</span>
+            <span className="mt-1 block text-[11px] text-[#c3ccd4]">Саме цей код вказується в товарі (поле «Розмірна сітка»), щоб прив&apos;язати його до цієї сітки</span>
           </label>
           <label className="block">
             <span className="mb-1 block text-[12px] text-[#8a94a0]">Тип розмірної сітки</span>
@@ -227,6 +250,32 @@ export function AdminSizeCharts() {
               {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
             </select>
           </label>
+
+          <div className="rounded-[4px] border border-[#e6eaec] bg-[#f7f9fa] p-3">
+            <p className="mb-2 text-[12px] font-medium text-[#2b2d42]">Публічна сторінка розмірів</p>
+            <label className="block">
+              <span className="mb-1 block text-[12px] text-[#8a94a0]">Порядок показу</span>
+              <input
+                value={form.public_order}
+                onChange={(e) => setForm((f) => ({ ...f, public_order: e.target.value.replace(/\D/g, "") }))}
+                placeholder="порожньо — не показувати на сайті"
+                inputMode="numeric"
+                className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none"
+              />
+            </label>
+            <label className="mt-2 block">
+              <span className="mb-1 block text-[12px] text-[#8a94a0]">Підпис під заголовком</span>
+              <input
+                value={form.public_note}
+                onChange={(e) => setForm((f) => ({ ...f, public_note: e.target.value }))}
+                placeholder="Напр.: італійський розмірний ряд"
+                className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none"
+              />
+            </label>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#8a94a0]">
+              Сітки з заповненим порядком показуються на /rozmiry-vzuttya у вказаній послідовності.
+            </p>
+          </div>
 
           <div>
             <span className="mb-2 block text-[12px] text-[#8a94a0]">Властивості розмірів</span>

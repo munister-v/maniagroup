@@ -75,27 +75,54 @@ export type SizeChart = {
   name: string;
   gender: string;
   chart: SizeRow[];
+  /** Порядок на публічній сторінці /rozmiry-vzuttya. null = не показувати. */
+  public_order: number | null;
+  public_note: string;
   created_at: string;
   updated_at: string;
 };
-export type SizeChartInput = { code: string; type: SizeChartType; brand: string; name: string; gender: string; chart: SizeRow[] };
+export type SizeChartInput = {
+  code: string; type: SizeChartType; brand: string; name: string; gender: string;
+  chart: SizeRow[]; public_order?: number | null; public_note?: string;
+};
+
+const COLS = `id::text, code, type, brand, name, gender, chart,
+  public_order, public_note, created_at::text, updated_at::text`;
 
 export async function listSizeCharts(): Promise<SizeChart[]> {
-  return q<SizeChart>(`SELECT id::text, code, type, brand, name, gender, chart, created_at::text, updated_at::text FROM size_charts ORDER BY updated_at DESC`);
+  return q<SizeChart>(`SELECT ${COLS} FROM size_charts ORDER BY updated_at DESC`);
+}
+
+/**
+ * Сітки для публічної сторінки розмірів — лише позначені до показу, у заданому
+ * адміном порядку. Сторінка нічого не вигадує: що тут пусто, того на сайті нема.
+ */
+export async function listPublicSizeCharts(type?: SizeChartType): Promise<SizeChart[]> {
+  const where = type ? "AND type = $1" : "";
+  return q<SizeChart>(
+    `SELECT ${COLS} FROM size_charts
+      WHERE public_order IS NOT NULL ${where}
+      ORDER BY public_order, id`,
+    type ? [type] : [],
+  );
 }
 
 export async function createSizeChart(input: SizeChartInput): Promise<{ id: string }> {
   const rows = await q<{ id: string }>(
-    `INSERT INTO size_charts (code, type, brand, name, gender, chart) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id::text`,
-    [input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart)],
+    `INSERT INTO size_charts (code, type, brand, name, gender, chart, public_order, public_note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+    [input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart),
+     input.public_order ?? null, input.public_note ?? ""],
   );
   return { id: rows[0].id };
 }
 
 export async function updateSizeChart(id: number, input: SizeChartInput): Promise<void> {
   await q(
-    `UPDATE size_charts SET code = $2, type = $3, brand = $4, name = $5, gender = $6, chart = $7, updated_at = now() WHERE id = $1`,
-    [id, input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart)],
+    `UPDATE size_charts SET code = $2, type = $3, brand = $4, name = $5, gender = $6, chart = $7,
+            public_order = $8, public_note = $9, updated_at = now() WHERE id = $1`,
+    [id, input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart),
+     input.public_order ?? null, input.public_note ?? ""],
   );
 }
 

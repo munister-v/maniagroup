@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { Reveal } from "@/components/Reveal";
+import { listPublicSizeCharts, SIZE_CHART_TYPES, type SizeChart } from "@/lib/sizeCharts";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Таблиця розмірів взуття",
@@ -9,59 +12,78 @@ export const metadata = {
 };
 
 /**
- * Публічна таблиця розмірів взуття.
+ * Публічна сторінка розмірів взуття.
  *
- * Числа — це фактична відповідність розміру довжині стопи, галузевий стандарт
- * італійського/європейського розмірного ряду. Тексти й пояснення власні.
+ * Джерело даних — розмірні сітки з адмінки (`size_charts`, позначені
+ * `public_order`), тому клієнт правит таблиці сам, без деплою. Сторінка нічого
+ * не вигадує: якщо сітку не позначили до показу — її тут не буде.
  *
- * Аксесуари свідомо не додаємо — у них своя логіка розмірів (обхват голови,
- * довжина ременя), і зводити їх у ту саму таблицю було б неправильно.
+ * Аксесуари свідомо не виводимо: у них своя логіка (обхват голови, довжина
+ * ременя), і в таблиці «розмір ↔ стопа» їм не місце.
  */
 
-type SizeTable = {
-  id: string;
-  title: string;
-  note: string;
-  /** Підпис першого рядка — у дітей ряд європейський, у дорослих італійський. */
-  sizeLabel: string;
-  sizes: string[];
-  cm: string[];
-};
+const SHOE_PROPS = SIZE_CHART_TYPES.find((t) => t.value === "shoes")?.properties ?? [];
 
-const TABLES: SizeTable[] = [
-  {
-    id: "women",
-    title: "Жіноче взуття",
-    note: "Італійський розмірний ряд — саме він вказаний на коробках більшості брендів, з якими ми працюємо.",
-    sizeLabel: "Розмір (IT)",
-    sizes: ["34", "34.5", "35", "35.5", "36", "36.5", "37", "37.5", "38", "38.5", "39", "39.5", "40", "40.5", "41", "42"],
-    cm: ["21.5", "22", "22.5", "22.7", "23", "23.5", "24", "24.3", "24.5", "24.7", "25", "25.2", "25.5", "26", "26.5", "27"],
-  },
-  {
-    id: "men",
-    title: "Чоловіче взуття",
-    note: "Італійський розмірний ряд. Піврозміри трапляються не в усіх моделей — якщо вашого немає, беріть найближчий більший.",
-    sizeLabel: "Розмір (IT)",
-    sizes: ["39", "40", "40.5", "41", "42", "43", "43.5", "44", "45", "46", "46.5", "47", "48"],
-    cm: ["25", "25.5", "26", "26.5", "27", "27.5", "28", "28.5", "29", "29.5", "30", "30.5", "31"],
-  },
-  {
-    id: "kids",
-    title: "Дитяче взуття",
-    note: "Європейський ряд. Дитяча стопа росте швидко, тому закладайте 5–10 мм запасу.",
-    sizeLabel: "Розмір (EU)",
-    sizes: ["15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31"],
-    cm: ["10", "10.5", "11", "11.5", "12", "12.5", "13", "13.5", "14.5", "15.5", "16", "16.5", "17", "18", "18.5", "19", "19.5"],
-  },
-  {
-    id: "teen",
-    title: "Підліткове взуття",
-    note: "Європейський ряд. Від 38-го розміру діапазон уже перетинається з дорослим.",
-    sizeLabel: "Розмір (EU)",
-    sizes: ["32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43"],
-    cm: ["20", "21", "21.5", "22.5", "23", "24", "24.5", "25", "25.5", "26", "26.5", "27"],
-  },
-];
+/** Колонка показується, лише якщо хоч в одному рядку вона заповнена. */
+function usedProps(chart: SizeChart) {
+  return SHOE_PROPS.filter((p) => chart.chart.some((r) => (r[p.key] ?? "").trim() !== ""));
+}
+
+function ChartTable({ chart }: { chart: SizeChart }) {
+  const props = usedProps(chart);
+  const rows = chart.chart.filter((r) => (r.size ?? "").trim() !== "");
+  if (rows.length === 0) return null;
+
+  return (
+    <Reveal>
+      <div className="border border-line bg-paper">
+        <div className="border-b border-line px-6 py-5 md:px-8">
+          <h2 className="font-display text-2xl text-ink">{chart.name || chart.code}</h2>
+          {chart.public_note && (
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{chart.public_note}</p>
+          )}
+        </div>
+
+        {/* Ряд довгий — таблиця гортається всередині себе, щоб не тягнути
+            горизонтальний скрол усієї сторінки. */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-sm">
+            <tbody>
+              <tr className="border-b border-line">
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud/60 px-5 py-3 text-left text-[11px] uppercase tracking-luxe text-muted"
+                >
+                  Розмір
+                </th>
+                {rows.map((r, i) => (
+                  <td key={i} className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-ink">
+                    {r.size}
+                  </td>
+                ))}
+              </tr>
+              {props.map((p) => (
+                <tr key={p.key} className="border-b border-line last:border-0">
+                  <th
+                    scope="row"
+                    className="sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud/60 px-5 py-3 text-left text-[11px] uppercase tracking-luxe text-muted"
+                  >
+                    {p.label}
+                  </th>
+                  {rows.map((r, i) => (
+                    <td key={i} className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-muted">
+                      {r[p.key] || "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Reveal>
+  );
+}
 
 const STEPS = [
   {
@@ -86,55 +108,9 @@ const STEPS = [
   },
 ];
 
-function Table({ t }: { t: SizeTable }) {
-  return (
-    <Reveal>
-      <div className="border border-line bg-paper">
-        <div className="border-b border-line px-6 py-5 md:px-8">
-          <h2 className="font-display text-2xl text-ink">{t.title}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">{t.note}</p>
-        </div>
+export default async function ShoeSizesPage() {
+  const charts = await listPublicSizeCharts("shoes").catch(() => []);
 
-        {/* Ряд довгий — на вузькому екрані таблиця гортається всередині себе,
-            щоб не тягнути горизонтальний скрол усієї сторінки. */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-sm">
-            <tbody>
-              <tr className="border-b border-line">
-                <th
-                  scope="row"
-                  className="sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud/60 px-5 py-3 text-left text-[11px] uppercase tracking-luxe text-muted"
-                >
-                  {t.sizeLabel}
-                </th>
-                {t.sizes.map((s) => (
-                  <td key={s} className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-ink">
-                    {s}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <th
-                  scope="row"
-                  className="sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud/60 px-5 py-3 text-left text-[11px] uppercase tracking-luxe text-muted"
-                >
-                  Стопа, см
-                </th>
-                {t.cm.map((c, i) => (
-                  <td key={i} className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-muted">
-                    {c}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </Reveal>
-  );
-}
-
-export default function ShoeSizesPage() {
   return (
     <div>
       <div className="border-b border-line bg-cloud/40">
@@ -150,13 +126,15 @@ export default function ShoeSizesPage() {
         </div>
       </div>
 
-      <section className="wrap space-y-8 py-14 md:py-20">
-        {TABLES.map((t) => (
-          <Table key={t.id} t={t} />
-        ))}
-      </section>
+      {charts.length > 0 && (
+        <section className="wrap space-y-8 py-14 md:py-20">
+          {charts.map((c) => (
+            <ChartTable key={c.id} chart={c} />
+          ))}
+        </section>
+      )}
 
-      <section className="border-t border-line bg-cloud/30">
+      <section className={charts.length > 0 ? "border-t border-line bg-cloud/30" : "bg-cloud/30"}>
         <div className="wrap py-14 md:py-20">
           <p className="text-[11px] uppercase tracking-luxe text-muted">Як виміряти</p>
           <h2 className="mt-3 font-display text-3xl text-ink md:text-4xl">Довжина стопи за чотири кроки</h2>

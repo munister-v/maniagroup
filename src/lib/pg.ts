@@ -581,6 +581,11 @@ CREATE TABLE IF NOT EXISTS size_charts (
   chart      JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Порядок на публічній сторінці розмірів. NULL = сітка службова, на сайті не
+-- показується (напр. чернетка або сітка під конкретний бренд).
+ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS public_order INT;
+-- Підпис під заголовком таблиці на публічній сторінці.
+ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS public_note TEXT NOT NULL DEFAULT '';
 
 -- ── ERP: Price rules / правила цін ──
 CREATE TABLE IF NOT EXISTS price_rules (
