@@ -74,25 +74,28 @@ export default async function Home() {
 }
 
 /* ─────────────────────────────────────────────────────────── Hero */
-// Answear-style: full-bleed campaign photo, bold uppercase sans headline,
-// clean CTAs, followed by a thin benefits bar.
+// Кампейн-кадр на всю ширину + тонка розріджена типографіка. Жирний гротеск
+// (стиль масмаркету) свідомо прибрано: зйомка преміальна, і важкий шрифт
+// зчитувався б дешевше за саме фото.
 function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string; stats: { value: string; label: string }[] } }) {
   return (
     <>
       <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(440px, 50vw, 580px)" }}>
         <Image
-          src="/images/hero.webp"
+          src="/images/hero-terrace.webp"
           alt="Mania Group — нова колекція"
           fill
           priority
           sizes="100vw"
-          className="absolute inset-0 -z-20 object-cover object-[60%_top]"
+          // Пара стоїть лівіше центру: тримаємо фокус трохи правіше, щоб на
+          // вузьких екранах не зрізало обличчя, а зліва лишалось місце під текст.
+          className="absolute inset-0 -z-20 object-cover object-[58%_center]"
         />
         <div
           className="absolute inset-0 -z-10"
           style={{
             background:
-              "linear-gradient(95deg, rgba(12,10,8,0.78) 0%, rgba(12,10,8,0.55) 32%, rgba(12,10,8,0.18) 58%, rgba(12,10,8,0.0) 78%)",
+              "linear-gradient(95deg, rgba(28,20,14,0.82) 0%, rgba(28,20,14,0.62) 30%, rgba(28,20,14,0.26) 56%, rgba(28,20,14,0.05) 76%)",
           }}
         />
 
@@ -100,9 +103,9 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           <p className="hero-rise text-[11px] font-semibold uppercase tracking-[0.25em] text-paper/70" style={{ animationDelay: "0ms" }}>
             {hero.eyebrow}
           </p>
-          <h1 className="hero-rise mt-3 max-w-[16ch] font-sans leading-[0.92] tracking-tight text-paper" style={{ animationDelay: "80ms" }}>
-            <span className="block text-[clamp(2.4rem,5.4vw,4.6rem)] font-black uppercase">{hero.titleLine1}</span>
-            <span className="block text-[clamp(2.4rem,5.4vw,4.6rem)] font-black uppercase">{hero.titleAccent}</span>
+          <h1 className="hero-rise mt-4 max-w-[18ch] font-sans leading-[1.06] text-paper" style={{ animationDelay: "80ms" }}>
+            <span className="block text-[clamp(2rem,4.4vw,3.6rem)] font-light uppercase tracking-[0.13em]">{hero.titleLine1}</span>
+            <span className="block text-[clamp(2rem,4.4vw,3.6rem)] font-light uppercase tracking-[0.13em]">{hero.titleAccent}</span>
           </h1>
           <p className="hero-rise mt-5 max-w-[40ch] text-[14px] leading-relaxed text-paper/70" style={{ animationDelay: "150ms" }}>
             {hero.subtitle}
@@ -113,13 +116,13 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           >
             <Link
               href="/catalog"
-              className="inline-flex h-12 items-center justify-center bg-paper px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-opacity hover:opacity-90 sm:h-[52px] sm:min-w-[210px] sm:px-8"
+              className="inline-flex h-12 items-center justify-center bg-paper px-6 text-[11px] font-medium uppercase tracking-[0.2em] text-ink transition-opacity hover:opacity-90 sm:h-[52px] sm:min-w-[210px] sm:px-8"
             >
               До каталогу
             </Link>
             <Link
               href="/sale"
-              className="inline-flex h-12 items-center justify-center bg-[#c1352a] px-6 text-[12px] font-bold uppercase tracking-[0.14em] text-paper transition-opacity hover:opacity-90 sm:h-[52px] sm:min-w-[210px] sm:px-8"
+              className="inline-flex h-12 items-center justify-center border border-paper/70 px-6 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-colors hover:bg-paper hover:text-ink sm:h-[52px] sm:min-w-[210px] sm:px-8"
             >
               Sale −50%
             </Link>
@@ -174,13 +177,13 @@ function PromoTiles() {
                 className="object-cover transition-transform duration-[1100ms] ease-out group-hover:scale-[1.05]" />
               <div className="absolute inset-0" style={{ backgroundImage: t.dark
                 ? "linear-gradient(180deg, rgba(193,53,42,0.15) 0%, rgba(120,20,14,0.85) 100%)"
-                : "linear-gradient(180deg, rgba(23,19,15,0) 38%, rgba(23,19,15,0.74) 100%)" }} />
+                : "linear-gradient(180deg, rgba(28,20,14,0) 40%, rgba(28,20,14,0.78) 100%)" }} />
               <div className="relative p-6 text-paper md:p-7">
                 {t.dark && <span className="mb-2 inline-block bg-paper px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.12em] text-[#c1352a]">−50%</span>}
-                <h3 className="text-[2rem] font-black uppercase leading-none tracking-tight md:text-[2.6rem]">{t.label}</h3>
-                {t.caption && <p className="mt-2 text-[12px] text-paper/75">{t.caption}</p>}
-                <span className="mt-5 inline-flex h-11 items-center bg-paper px-6 text-[11px] font-bold uppercase tracking-[0.14em] text-ink transition-colors group-hover:bg-ink group-hover:text-paper">
-                  Переглянути →
+                <h3 className="text-[1.9rem] font-light uppercase leading-none tracking-[0.14em] md:text-[2.4rem]">{t.label}</h3>
+                {t.caption && <p className="mt-2.5 text-[12px] tracking-wide text-paper/70">{t.caption}</p>}
+                <span className="mt-6 inline-flex h-11 items-center border border-paper/70 px-6 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-colors group-hover:bg-paper group-hover:text-ink">
+                  Переглянути
                 </span>
               </div>
             </Link>
@@ -233,17 +236,17 @@ function PromoBanner() {
     <section id="men" className="wrap py-10 md:py-14">
       <Reveal>
         <Link href="/catalog" className="group relative flex min-h-[300px] items-center overflow-hidden md:min-h-[420px]">
-          <Image src="/images/origine-authentic-detail.png" alt="Нова колекція — Mania Group" fill
+          <Image src="/images/promo-golden-hour.webp" alt="Нова колекція — Mania Group" fill
             sizes="100vw" className="object-cover object-center transition-transform duration-[1200ms] ease-out group-hover:scale-[1.04]" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(12,10,8,0.8) 0%, rgba(12,10,8,0.4) 45%, rgba(12,10,8,0) 75%)" }} />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(28,20,14,0.84) 0%, rgba(28,20,14,0.46) 45%, rgba(28,20,14,0.04) 75%)" }} />
           <div className="relative max-w-[44ch] px-7 py-12 text-paper md:px-14">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-paper/65">Нова колекція</p>
-            <h2 className="mt-3 text-[2.2rem] font-black uppercase leading-[0.9] tracking-tight md:text-[3.4rem]">Сезон<br />оригіналів</h2>
+            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-paper/60">Нова колекція</p>
+            <h2 className="mt-4 text-[1.9rem] font-light uppercase leading-[1.08] tracking-[0.13em] md:text-[2.8rem]">Сезон<br />оригіналів</h2>
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-paper/70">
               Європейські бренди напряму — без реплік, із гарантією та доставкою Новою Поштою.
             </p>
-            <span className="mt-7 inline-flex h-12 items-center bg-paper px-8 text-[12px] font-bold uppercase tracking-[0.14em] text-ink transition-colors group-hover:bg-[#c1352a] group-hover:text-paper">
-              Дивитись колекцію →
+            <span className="mt-8 inline-flex h-12 items-center border border-paper/70 px-8 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-colors group-hover:bg-paper group-hover:text-ink">
+              Дивитись колекцію
             </span>
           </div>
         </Link>

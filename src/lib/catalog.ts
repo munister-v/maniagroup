@@ -100,14 +100,14 @@ export const CATEGORIES: {
     caption: "Сукні · верхній одяг · взуття · аксесуари",
     href: "/catalog?category=zhenskoe",
     tone: "#d8cfc1",
-    image: "/images/cat-women.webp",
+    image: "/images/cat-women-editorial.webp",
   },
   {
     label: "Чоловікам",
     caption: "Сорочки · поло · костюми · взуття",
     href: "/catalog?category=muzhskoe",
     tone: "#c4bcb0",
-    image: "/images/cat-men.webp",
+    image: "/images/cat-men-editorial.webp",
   },
 ];
 
