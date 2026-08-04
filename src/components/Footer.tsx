@@ -38,7 +38,7 @@ export async function Footer() {
           <div className="border-b border-line/80 pb-8 md:border-b-0 md:pb-0">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:block">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.26em] text-muted">Official contacts</p>
+                <p className="text-[10px] uppercase tracking-[0.26em] text-muted">Контакти магазину</p>
                 <p className="mt-3 font-display text-xl tracking-wordmark text-ink md:text-2xl">
                   MANIA&nbsp;GROUP
                 </p>
@@ -79,6 +79,16 @@ export async function Footer() {
                     <span>Telegram · {telegramHandle}</span>
                   </a>
                 )}
+                {facebook && (
+                  <a
+                    href={facebook}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-11 items-center rounded-full border border-line px-4 py-2.5 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink"
+                  >
+                    Facebook
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -109,32 +119,14 @@ export async function Footer() {
       </div>
 
       <div className="border-t border-line">
-        <div className="wrap flex flex-col gap-4 py-5 text-[10px] uppercase tracking-luxe text-muted md:flex-row md:items-center md:justify-between md:py-6 md:text-[11px]">
-          <p className="max-w-[24rem] text-center leading-relaxed sm:text-left">© {new Date().getFullYear()} Mania Group · Усі права захищені</p>
-          <div className="flex w-full flex-wrap items-center justify-center gap-2.5 sm:justify-start md:w-auto md:justify-end">
-            <a
-              href={instagram || "https://instagram.com/mania.group"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-3 py-2 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink"
-            >
-              <SocialIcon kind="instagram" />
-              Instagram
-            </a>
-            <a
-              href={telegram || "https://t.me/ManiaGroupKiev"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-line px-3 py-2 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink"
-            >
-              <SocialIcon kind="telegram" />
-              Telegram
-            </a>
-            {facebook && (
-              <a href={facebook} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center rounded-full border border-line px-3 py-2 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink">
-                Facebook
-              </a>
-            )}
+        <div className="wrap flex flex-col gap-3 py-5 text-[10px] uppercase tracking-luxe text-muted md:flex-row md:items-center md:justify-between md:py-6 md:text-[11px]">
+          <p className="text-center leading-relaxed sm:text-left">
+            © {new Date().getFullYear()} Mania Group · Усі права захищені
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 md:justify-end">
+            <Link href="/delivery" className="transition-colors hover:text-ink">Доставка</Link>
+            <Link href="/returns" className="transition-colors hover:text-ink">Повернення</Link>
+            <Link href="/contacts" className="transition-colors hover:text-ink">Контакти</Link>
           </div>
         </div>
       </div>

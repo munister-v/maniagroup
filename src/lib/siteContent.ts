@@ -27,6 +27,14 @@ export type SiteContent = {
     subtitle: string;
     stats: { value: string; label: string }[];
   };
+  /** Фонові зображення секцій головної — міняються з адмінки, без деплою.
+   *  Порожній рядок = лишається зображення за замовчуванням із коду. */
+  media: {
+    heroImage: string;
+    categoryWomen: string;
+    categoryMen: string;
+    promoImage: string;
+  };
   services: { title: string; text: string }[];
   homeSections: { id: string; enabled: boolean }[];
   contacts: {
@@ -100,6 +108,7 @@ export const DEFAULT_CONTENT: SiteContent = {
         links: [
           { label: "Доставка та оплата", href: "/delivery" },
           { label: "Розміри взуття", href: "/rozmiry-vzuttya" },
+          { label: "Розміри одягу", href: "/rozmiry-odyagu" },
           { label: "Обмін і повернення", href: "/returns" },
           { label: "Контакти", href: "/contacts" },
         ],
@@ -142,6 +151,12 @@ export const DEFAULT_CONTENT: SiteContent = {
       { value: "100%", label: "оригінал" },
       { value: "1–3 дні", label: "доставка" },
     ],
+  },
+  media: {
+    heroImage: "/images/hero-terrace.webp",
+    categoryWomen: "/images/cat-women-editorial.webp",
+    categoryMen: "/images/cat-men-editorial.webp",
+    promoImage: "/images/promo-golden-hour.webp",
   },
   services: [
     { title: "Тільки оригінал", text: "Прямі поставки від брендів та офіційних дистриб'юторів" },

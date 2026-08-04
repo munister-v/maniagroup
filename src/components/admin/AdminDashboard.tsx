@@ -1201,6 +1201,26 @@ function ContentSection({
     update((c) => ({ ...c, returns: { ...c.returns, [field]: v } }));
   }
 
+  function mediaF(field: keyof SiteContent["media"], v: string) {
+    update((c) => ({ ...c, media: { ...(c.media ?? {} as SiteContent["media"]), [field]: v } }));
+  }
+
+  /** Завантажує файл і кладе його адресу у вказане поле фонів секцій. */
+  async function uploadSectionImage(field: keyof SiteContent["media"], file: File | null) {
+    if (!file) return;
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) { onToast?.(data.error ?? "Не вдалося завантажити"); return; }
+      mediaF(field, data.url);
+      onToast?.("Зображення оновлено — не забудьте зберегти");
+    } catch {
+      onToast?.("Не вдалося завантажити зображення");
+    }
+  }
+
   async function uploadSeoImage(list: FileList | File[] | null) {
     const file = list ? Array.from(list)[0] : null;
     if (!file) return;
@@ -1313,6 +1333,58 @@ function ContentSection({
                       onChange={(v) => set("services", content.services.map((x, j) => j === i ? { ...x, text: v } : x))} />
                   </div>
                 ))}
+              </div>
+            </Card>
+
+            <Card title="Фонові зображення секцій" subtitle="Замініть кадри головної без деплою. Порожнє поле — зображення за замовчуванням">
+              <div className="space-y-4">
+                {([
+                  { key: "heroImage",     label: "Перший екран (hero)",   hint: "Горизонтальний кадр, від 1600 px завширшки" },
+                  { key: "categoryWomen", label: "Плитка «Жінкам»",       hint: "Вертикальний або квадратний кадр" },
+                  { key: "categoryMen",   label: "Плитка «Чоловікам»",    hint: "Вертикальний або квадратний кадр" },
+                  { key: "promoImage",    label: "Editorial-смуга",       hint: "Широкий кадр, текст лягає ліворуч" },
+                ] as const).map((f) => {
+                  const val = content.media?.[f.key] ?? "";
+                  return (
+                    <div key={f.key} className="rounded-[3px] border border-[#eef2f3] p-4">
+                      <div className="flex flex-wrap items-start gap-4">
+                        <div className="h-20 w-32 flex-none overflow-hidden rounded-[3px] border border-[#e6eaec] bg-[#f7f9fa]">
+                          {val ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={val} alt={f.label} className="h-full w-full object-cover" />
+                          ) : (
+                            <span className="flex h-full items-center justify-center px-2 text-center text-[10px] text-[#aab4bf]">
+                              за замовчуванням
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-medium text-[#2b2d42]">{f.label}</p>
+                          <p className="mt-0.5 text-[11px] text-[#8a94a0]">{f.hint}</p>
+                          <input
+                            value={val}
+                            onChange={(e) => mediaF(f.key, e.target.value)}
+                            placeholder="/images/… або повна адреса"
+                            className="mt-2 h-9 w-full rounded-[3px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none"
+                          />
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <label className="cursor-pointer rounded-[3px] border border-[#e6eaec] px-3 py-1.5 text-[11px] uppercase tracking-wider text-[#5a6472] hover:border-[#2f9488] hover:text-[#2f9488]">
+                              Завантажити
+                              <input type="file" accept="image/*" className="hidden"
+                                onChange={(e) => { uploadSectionImage(f.key, e.target.files?.[0] ?? null); e.target.value = ""; }} />
+                            </label>
+                            {val && (
+                              <button onClick={() => mediaF(f.key, "")}
+                                className="rounded-[3px] border border-[#e6eaec] px-3 py-1.5 text-[11px] uppercase tracking-wider text-[#c0524a] hover:bg-[#fdecea]">
+                                Скинути
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
 

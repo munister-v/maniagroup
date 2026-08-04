@@ -50,12 +50,12 @@ export default async function Home() {
     : content.hero;
 
   const sectionMap: Record<string, React.ReactNode> = {
-    hero: <Hero hero={hero} />,
+    hero: <Hero hero={hero} image={content.media?.heroImage} />,
     marquee: <BrandStrip brands={brands} logoMap={brandLogos} display={brandDisplay} />,
-    categories: <PromoTiles />,
+    categories: <PromoTiles women={content.media?.categoryWomen} men={content.media?.categoryMen} />,
     featured: <ProductRail title="Обране" eyebrow="Кураторський вибір" href="/catalog" products={featured} />,
     newArrivals: <ProductRail title="Нові надходження" eyebrow="Щойно завезли" href="/catalog" products={products} />,
-    editorial: <PromoBanner />,
+    editorial: <PromoBanner image={content.media?.promoImage} />,
     services: <ServiceRow services={content.services} />,
     newsletter: <Newsletter />,
   };
@@ -81,12 +81,15 @@ export default async function Home() {
 // Кампейн-кадр на всю ширину + тонка розріджена типографіка. Жирний гротеск
 // (стиль масмаркету) свідомо прибрано: зйомка преміальна, і важкий шрифт
 // зчитувався б дешевше за саме фото.
-function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string; stats: { value: string; label: string }[] } }) {
+function Hero({ hero, image }: {
+  hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string; stats: { value: string; label: string }[] };
+  image?: string;
+}) {
   return (
     <>
       <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(540px, 60vw, 720px)" }}>
         <Image
-          src="/images/hero-terrace.webp"
+          src={image?.trim() || "/images/hero-terrace.webp"}
           alt="Mania Group — нова колекція"
           fill
           priority
@@ -168,10 +171,10 @@ function BenefitsBar() {
 
 /* ──────────────────────────────────────────────── Promo tiles */
 // Answear-style promo grid: two big category tiles + a bold SALE tile.
-function PromoTiles() {
+function PromoTiles({ women, men }: { women?: string; men?: string }) {
   const tiles = [
-    { label: CATEGORIES[0]?.label ?? "Жінкам", caption: CATEGORIES[0]?.caption ?? "", href: CATEGORIES[0]?.href ?? "/catalog", image: CATEGORIES[0]?.image ?? "/images/cat-women.webp", dark: false },
-    { label: CATEGORIES[1]?.label ?? "Чоловікам", caption: CATEGORIES[1]?.caption ?? "", href: CATEGORIES[1]?.href ?? "/catalog", image: CATEGORIES[1]?.image ?? "/images/cat-men.webp", dark: false },
+    { label: CATEGORIES[0]?.label ?? "Жінкам", caption: CATEGORIES[0]?.caption ?? "", href: CATEGORIES[0]?.href ?? "/catalog", image: women?.trim() || CATEGORIES[0]?.image || "/images/cat-women-editorial.webp", dark: false },
+    { label: CATEGORIES[1]?.label ?? "Чоловікам", caption: CATEGORIES[1]?.caption ?? "", href: CATEGORIES[1]?.href ?? "/catalog", image: men?.trim() || CATEGORIES[1]?.image || "/images/cat-men-editorial.webp", dark: false },
   ];
   return (
     <section className="wrap py-10 md:py-14">
@@ -255,12 +258,12 @@ function BrandStrip({ brands, logoMap, display }: {
 
 /* ─────────────────────────────────────────────────── Promo banner */
 // Wide full-bleed campaign strip (Answear "shop the collection" banner).
-function PromoBanner() {
+function PromoBanner({ image }: { image?: string }) {
   return (
     <section id="men" className="wrap py-10 md:py-14">
       <Reveal>
         <Link href="/catalog" className="group relative flex min-h-[300px] items-center overflow-hidden md:min-h-[420px]">
-          <Image src="/images/promo-golden-hour.webp" alt="Нова колекція — Mania Group" fill
+          <Image src={image?.trim() || "/images/promo-golden-hour.webp"} alt="Нова колекція — Mania Group" fill
             sizes="100vw" className="object-cover object-center transition-transform duration-[1200ms] ease-out group-hover:scale-[1.04]" />
           <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(28,20,14,0.84) 0%, rgba(28,20,14,0.46) 45%, rgba(28,20,14,0.04) 75%)" }} />
           <div className="relative max-w-[44ch] px-7 py-12 text-paper md:px-14">
