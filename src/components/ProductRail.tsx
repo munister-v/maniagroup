@@ -36,7 +36,7 @@ export function ProductRail({
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
             {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#c1352a]">{eyebrow}</p>}
-            <h2 className="mt-1 text-[1.6rem] font-extrabold uppercase leading-none tracking-tight text-ink md:text-[2.1rem]">{title}</h2>
+            <h2 className="mt-1 text-[1.6rem] font-light uppercase leading-tight tracking-[0.13em] text-ink md:text-[2.1rem]">{title}</h2>
           </div>
           <div className="flex items-center gap-2">
             <Link href={href} className="hidden text-[12px] font-semibold uppercase tracking-[0.12em] text-ink underline-offset-4 hover:underline sm:block">
