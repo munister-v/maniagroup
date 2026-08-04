@@ -347,8 +347,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
-      <div className={`overflow-hidden transition-all ${open ? "mt-4 max-h-[640px]" : "max-h-0"}`}>
-        {children}
+      {/* Фіксована max-height була потрібна лише для анімації згортання, але
+          вона різала довгі списки (кольорів більше, ніж 640 px). grid-rows
+          анімує так само плавно й не обмежує висоту вмісту. */}
+      <div
+        className={`grid transition-[grid-template-rows,margin] duration-300 ease-out ${
+          open ? "mt-4 grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">{children}</div>
       </div>
     </div>
   );
