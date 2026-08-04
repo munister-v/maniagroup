@@ -5,7 +5,7 @@ import { SlideOver } from "./intertop/primitives";
 
 type SizeChartType = "clothing" | "shoes" | "accessories" | "jewelry" | "home";
 type SizeRow = { size: string; [propKey: string]: string };
-type SizeChart = { id: string; code: string; type: SizeChartType; brand: string; name: string; gender: string; chart: SizeRow[]; public_order: number | null; public_note: string; created_at: string; updated_at: string };
+type SizeChart = { id: string; code: string; type: SizeChartType; brand: string; name: string; gender: string; chart: SizeRow[]; public_order: number | null; public_note: string; size_label: string; created_at: string; updated_at: string };
 
 const TYPES: { value: SizeChartType; label: string; properties: { key: string; label: string }[] }[] = [
   {
@@ -60,9 +60,9 @@ const emptyRow = (): SizeRow => ({ size: "" });
 
 function emptyForm(): {
   code: string; type: SizeChartType; brand: string; name: string; gender: string;
-  chart: SizeRow[]; public_order: string; public_note: string;
+  chart: SizeRow[]; public_order: string; public_note: string; size_label: string;
 } {
-  return { code: "", type: "clothing", brand: "", name: "", gender: "", chart: [emptyRow()], public_order: "", public_note: "" };
+  return { code: "", type: "clothing", brand: "", name: "", gender: "", chart: [emptyRow()], public_order: "", public_note: "", size_label: "" };
 }
 
 export function AdminSizeCharts() {
@@ -92,6 +92,7 @@ export function AdminSizeCharts() {
       chart: c.chart.length ? c.chart.map(normalizeRow) : [emptyRow()],
       public_order: c.public_order == null ? "" : String(c.public_order),
       public_note: c.public_note ?? "",
+      size_label: c.size_label ?? "",
     });
     setEditing(c);
   };
@@ -260,6 +261,15 @@ export function AdminSizeCharts() {
                 onChange={(e) => setForm((f) => ({ ...f, public_order: e.target.value.replace(/\D/g, "") }))}
                 placeholder="порожньо — не показувати на сайті"
                 inputMode="numeric"
+                className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none"
+              />
+            </label>
+            <label className="mt-2 block">
+              <span className="mb-1 block text-[12px] text-[#8a94a0]">Підпис рядка розмірів</span>
+              <input
+                value={form.size_label}
+                onChange={(e) => setForm((f) => ({ ...f, size_label: e.target.value }))}
+                placeholder="Напр.: Розмір (IT) — порожньо означає просто «Розмір»"
                 className="h-9 w-full rounded-[4px] border border-[#e6eaec] px-3 text-[13px] focus:border-[#2f9488] focus:outline-none"
               />
             </label>

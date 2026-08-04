@@ -591,6 +591,9 @@ CREATE TABLE IF NOT EXISTS size_charts (
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS public_order INT;
 -- Підпис під заголовком таблиці на публічній сторінці.
 ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS public_note TEXT NOT NULL DEFAULT '';
+-- Підпис рядка розмірів: у дорослому взутті ряд італійський, у дитячому
+-- європейський — без цієї позначки таблиця вводить в оману.
+ALTER TABLE size_charts ADD COLUMN IF NOT EXISTS size_label TEXT NOT NULL DEFAULT '';
 
 -- ── ERP: Price rules / правила цін ──
 CREATE TABLE IF NOT EXISTS price_rules (

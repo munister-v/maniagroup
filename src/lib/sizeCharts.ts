@@ -33,7 +33,7 @@ export const SIZE_CHART_TYPES: { value: SizeChartType; label: string; properties
   {
     value: "shoes", label: "Взуття",
     properties: [
-      { key: "foot_length", label: "Довжина стопи, см" },
+      { key: "foot_length", label: "Стопа, см" },
       { key: "insole_length", label: "Довжина устілки, см" },
     ],
   },
@@ -78,16 +78,18 @@ export type SizeChart = {
   /** Порядок на публічній сторінці /rozmiry-vzuttya. null = не показувати. */
   public_order: number | null;
   public_note: string;
+  /** Підпис першого рядка, напр. «Розмір (IT)». Порожньо → «Розмір». */
+  size_label: string;
   created_at: string;
   updated_at: string;
 };
 export type SizeChartInput = {
   code: string; type: SizeChartType; brand: string; name: string; gender: string;
-  chart: SizeRow[]; public_order?: number | null; public_note?: string;
+  chart: SizeRow[]; public_order?: number | null; public_note?: string; size_label?: string;
 };
 
 const COLS = `id::text, code, type, brand, name, gender, chart,
-  public_order, public_note, created_at::text, updated_at::text`;
+  public_order, public_note, size_label, created_at::text, updated_at::text`;
 
 export async function listSizeCharts(): Promise<SizeChart[]> {
   return q<SizeChart>(`SELECT ${COLS} FROM size_charts ORDER BY updated_at DESC`);
@@ -109,10 +111,10 @@ export async function listPublicSizeCharts(type?: SizeChartType): Promise<SizeCh
 
 export async function createSizeChart(input: SizeChartInput): Promise<{ id: string }> {
   const rows = await q<{ id: string }>(
-    `INSERT INTO size_charts (code, type, brand, name, gender, chart, public_order, public_note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+    `INSERT INTO size_charts (code, type, brand, name, gender, chart, public_order, public_note, size_label)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id::text`,
     [input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart),
-     input.public_order ?? null, input.public_note ?? ""],
+     input.public_order ?? null, input.public_note ?? "", input.size_label ?? ""],
   );
   return { id: rows[0].id };
 }
@@ -120,9 +122,9 @@ export async function createSizeChart(input: SizeChartInput): Promise<{ id: stri
 export async function updateSizeChart(id: number, input: SizeChartInput): Promise<void> {
   await q(
     `UPDATE size_charts SET code = $2, type = $3, brand = $4, name = $5, gender = $6, chart = $7,
-            public_order = $8, public_note = $9, updated_at = now() WHERE id = $1`,
+            public_order = $8, public_note = $9, size_label = $10, updated_at = now() WHERE id = $1`,
     [id, input.code, input.type, input.brand, input.name, input.gender, JSON.stringify(input.chart),
-     input.public_order ?? null, input.public_note ?? ""],
+     input.public_order ?? null, input.public_note ?? "", input.size_label ?? ""],
   );
 }
 

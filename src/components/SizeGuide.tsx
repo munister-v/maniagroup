@@ -48,7 +48,7 @@ function ChartTable({ chart, type }: { chart: SizeChart; type: SizeChartType }) 
           <table className="w-full min-w-max border-collapse text-sm">
             <tbody>
               <tr className="border-b border-line">
-                <th scope="row" className={th}>Розмір</th>
+                <th scope="row" className={th}>{chart.size_label?.trim() || "Розмір"}</th>
                 {rows.map((r, i) => (
                   <td key={i} className="whitespace-nowrap px-4 py-3 text-center tabular-nums text-ink">
                     {r.size}
