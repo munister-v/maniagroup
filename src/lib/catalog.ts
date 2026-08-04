@@ -24,6 +24,8 @@ export type Product = {
   color?: string;
   composition?: string;
   season?: string;
+  /** Розміри в наявності — показуються прямо на картці в каталозі. */
+  sizes?: string[];
 };
 
 export const BRANDS = [

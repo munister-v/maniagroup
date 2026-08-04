@@ -219,7 +219,50 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
     bind.slice(0, bind.length - 2),
   );
 
-  return { products: rows.map(rowToProduct), total: Number(countRow?.cnt ?? 0), source: "db" };
+  const products = rows.map(rowToProduct);
+  await attachSizes(products, rows);
+  return { products, total: Number(countRow?.cnt ?? 0), source: "db" };
+}
+
+/**
+ * Дозаписує розміри в наявності на картки списку.
+ *
+ * Одним запитом на всю сторінку, а не по товару — інакше на 24 картки вийшло б
+ * 24 звернення до БД. Джерело те саме, що й на сторінці товару: спершу ERP-
+ * варіанти (там реальний залишок по розміру), інакше — атрибути з імпорту.
+ */
+async function attachSizes(products: Product[], rows: unknown[]): Promise<void> {
+  const ids = products.map((p) => Number(p.id)).filter(Number.isFinite);
+  if (ids.length === 0) return;
+
+  const variantRows = await q<{ product_id: string; size: string }>(
+    `SELECT product_id::text AS product_id, size
+       FROM product_variants
+      WHERE product_id = ANY($1) AND active = TRUE AND stock_qty > 0
+      ORDER BY product_id, size`,
+    [ids],
+  ).catch(() => []);
+
+  const byId = new Map<string, string[]>();
+  for (const v of variantRows) {
+    if (!v.size) continue;
+    const list = byId.get(v.product_id) ?? [];
+    list.push(v.size);
+    byId.set(v.product_id, list);
+  }
+
+  products.forEach((prod, i) => {
+    const fromVariants = byId.get(prod.id);
+    if (fromVariants?.length) { prod.sizes = fromVariants; return; }
+    // Фолбек на атрибути імпорту: там немає залишку по розміру, тому показуємо
+    // їх лише поки товар взагалі в наявності.
+    if (prod.inStock === false) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const attrs = asAttrs((rows[i] as any)?.attributes) as { taxonomy: string; terms: { name: string }[] }[];
+    const terms = attrs.find((a) => a.taxonomy === "pa_size")?.terms ?? [];
+    const names = terms.map((t) => t.name).filter(Boolean);
+    if (names.length) prod.sizes = names;
+  });
 }
 
 // ── Size facets ──────────────────────────────────────────────────────────
@@ -291,9 +334,10 @@ export async function dbProductById(idOrSlug: string): Promise<DbProductDetail |
   // The [slug] route always passes products.slug (readable, e.g. "платье-16162"
   // for imported rows; admin-created products default to the bare numeric id
   // when no slug was set) — match on slug first, numeric id as a legacy fallback.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   const row = await q1<any>("SELECT * FROM products WHERE slug = $1", [idOrSlug])
     ?? (/^\d+$/.test(idOrSlug) ? await q1<any>("SELECT * FROM products WHERE id = $1", [Number(idOrSlug)]) : null);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   if (!row) return null;
   if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null;
 

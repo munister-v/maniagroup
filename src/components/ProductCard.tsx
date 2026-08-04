@@ -9,7 +9,7 @@ import {
 } from "@/lib/catalog";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { brand, name, price, oldPrice, tag, tone, slug, category, image } = product;
+  const { brand, name, price, oldPrice, tag, tone, slug, category, image, sizes } = product;
   const discount = discountPercent(product);
   const archived = product.inStock === false;
 
@@ -61,6 +61,16 @@ export function ProductCard({ product }: { product: Product }) {
             </span>
           )}
         </div>
+
+        {/* Розміри видно завжди, без наведення: покупець одразу бачить, чи є
+            його розмір, і не заходить у картку дарма. Довгі ряди обрізаємо —
+            повний перелік усе одно на сторінці товару. */}
+        {!archived && sizes && sizes.length > 0 && (
+          <p className="mt-1.5 truncate text-[11px] uppercase tracking-[0.08em] text-muted">
+            {sizes.slice(0, 8).join(" · ")}
+            {sizes.length > 8 && " …"}
+          </p>
+        )}
       </div>
     </Link>
   );

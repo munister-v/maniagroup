@@ -277,7 +277,7 @@ export default async function CatalogPage({
 
           {/* Grid */}
           {products.length > 0 ? (
-            <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-10 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className="mt-8 grid grid-cols-2 gap-x-5 gap-y-12 md:grid-cols-3 xl:grid-cols-4">
               {products.map((product, i) => (
                 <Reveal key={product.id} delay={(i % 4) * 70}>
                   <ProductCard product={product} />
