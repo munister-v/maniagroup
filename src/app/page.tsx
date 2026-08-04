@@ -99,26 +99,25 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           className="absolute inset-0 -z-10"
           style={{
             background:
-              // Жінка у світлому жакеті стоїть якраз під заголовком, тому ліва
-              // третина затемнена сильніше — інакше тонкий світлий шрифт по ній
-              // просто зникає.
-              "linear-gradient(95deg, rgba(24,17,12,0.90) 0%, rgba(24,17,12,0.74) 26%, rgba(24,17,12,0.40) 50%, rgba(24,17,12,0.08) 74%)",
+              // Достатньо, щоб тонкий світлий шрифт читався по світлому жакету,
+              // але не перетворює лівий край на чорну плашку поверх заходу.
+              "linear-gradient(95deg, rgba(24,17,12,0.76) 0%, rgba(24,17,12,0.58) 28%, rgba(24,17,12,0.28) 52%, rgba(24,17,12,0.04) 76%)",
           }}
         />
 
-        <div className="wrap relative flex min-h-[inherit] flex-col justify-center py-14 md:py-16">
+        <div className="wrap relative flex min-h-[inherit] flex-col justify-end py-14 md:py-20">
           <p className="hero-rise text-[11px] font-semibold uppercase tracking-[0.25em] text-paper/70" style={{ animationDelay: "0ms" }}>
             {hero.eyebrow}
           </p>
-          <h1 className="hero-rise mt-4 max-w-[18ch] font-sans leading-[1.06] text-paper" style={{ animationDelay: "80ms" }}>
-            <span className="block text-[clamp(2rem,4.4vw,3.6rem)] font-light uppercase tracking-[0.13em]">{hero.titleLine1}</span>
-            <span className="block text-[clamp(2rem,4.4vw,3.6rem)] font-light uppercase tracking-[0.13em]">{hero.titleAccent}</span>
+          <h1 className="hero-rise mt-4 max-w-[16ch] font-sans leading-[1.02] text-paper" style={{ animationDelay: "80ms" }}>
+            <span className="block text-[clamp(2.3rem,5vw,4.2rem)] font-light uppercase tracking-[0.05em]">{hero.titleLine1}</span>
+            <span className="block text-[clamp(2.3rem,5vw,4.2rem)] font-light uppercase tracking-[0.05em]">{hero.titleAccent}</span>
           </h1>
           <p className="hero-rise mt-5 max-w-[40ch] text-[14px] leading-relaxed text-paper/70" style={{ animationDelay: "150ms" }}>
             {hero.subtitle}
           </p>
           <div
-            className="hero-rise mt-auto grid grid-cols-2 gap-3 pt-16 sm:flex sm:flex-wrap sm:items-center sm:gap-4 md:pt-24"
+            className="hero-rise mt-9 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-4 md:mt-11"
             style={{ animationDelay: "220ms" }}
           >
             <Link
@@ -129,7 +128,7 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
             </Link>
             <Link
               href="/sale"
-              className="inline-flex h-12 items-center justify-center border border-paper/70 px-6 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-colors hover:bg-paper hover:text-ink sm:h-[52px] sm:min-w-[210px] sm:px-8"
+              className="inline-flex h-12 items-center justify-center bg-[#a8412f] px-6 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-opacity hover:opacity-90 sm:h-[52px] sm:min-w-[210px] sm:px-8"
             >
               Sale −50%
             </Link>
@@ -179,9 +178,11 @@ function PromoTiles() {
       <div className="grid gap-3 md:grid-cols-2 md:gap-4">
         {tiles.map((t, i) => (
           <Reveal key={t.label} delay={i * 60}>
-            <Link href={t.href} className="group relative flex aspect-[4/5] flex-col justify-end overflow-hidden md:aspect-[3/4]">
-              <Image src={t.image} alt={t.label} fill sizes="(min-width:768px) 33vw, 100vw"
-                className="object-cover transition-transform duration-[1100ms] ease-out group-hover:scale-[1.05]" />
+            <Link href={t.href} className="group relative flex aspect-[4/5] flex-col justify-end overflow-hidden md:aspect-[4/3] lg:aspect-[5/4]">
+              {/* Кадр вертикальний, плитка — горизонтальна: тримаємо верх кадру,
+                  інакше обрізало б по грудях і одягу було б не видно. */}
+              <Image src={t.image} alt={t.label} fill sizes="(min-width:768px) 50vw, 100vw"
+                className="object-cover object-[center_22%] transition-transform duration-[1100ms] ease-out group-hover:scale-[1.05]" />
               <div className="absolute inset-0" style={{ backgroundImage: t.dark
                 ? "linear-gradient(180deg, rgba(193,53,42,0.15) 0%, rgba(120,20,14,0.85) 100%)"
                 : "linear-gradient(180deg, rgba(28,20,14,0) 40%, rgba(28,20,14,0.78) 100%)" }} />
