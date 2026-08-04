@@ -99,6 +99,7 @@ export const DEFAULT_CONTENT: SiteContent = {
         title: "Допомога",
         links: [
           { label: "Доставка та оплата", href: "/delivery" },
+          { label: "Розміри взуття", href: "/rozmiry-vzuttya" },
           { label: "Обмін і повернення", href: "/returns" },
           { label: "Контакти", href: "/contacts" },
         ],
