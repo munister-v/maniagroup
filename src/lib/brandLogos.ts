@@ -14,7 +14,13 @@ import { q } from "./pg";
 import { BRAND_LOGO_BY_DBNAME } from "./catalog";
 import { downloadLogoForBrand, hasLocalLogo, localLogoUrl, clearLocalLogo, type LogoBg } from "./logoDownloader";
 
-export type BrandLogoRow = { brand: string; logo_url: string; source: "manual" | "auto"; bg: LogoBg };
+export type BrandLogoRow = {
+  brand: string; logo_url: string; source: "manual" | "auto"; bg: LogoBg;
+  /** Показувати в стрічці брендів на головній. */
+  visible: boolean;
+  /** Порядок у стрічці; null — ще не сортували вручну. */
+  sort_order: number | null;
+};
 
 /** Curated domains for well-known brands in the catalog (best-effort). */
 const BRAND_DOMAINS: Record<string, string> = {
@@ -122,8 +128,10 @@ export function cdnLogoUrl(_domain: string): string {
 
 /** All stored brand logos as a {brand: url} map. */
 export async function getBrandLogoMap(): Promise<Record<string, string>> {
+  // Порожній logo_url буває у рядків, створених лише заради порядку/видимості
+  // — це не логотип, і віддавати його вітрині не можна.
   const rows = await q<{ brand: string; logo_url: string }>(
-    "SELECT brand, logo_url FROM brand_logos",
+    "SELECT brand, logo_url FROM brand_logos WHERE btrim(logo_url) <> ''",
   );
   const out: Record<string, string> = {};
   for (const r of rows) out[r.brand] = r.logo_url;
@@ -132,7 +140,40 @@ export async function getBrandLogoMap(): Promise<Record<string, string>> {
 
 /** Full rows (with source) for the admin manager. */
 export async function listBrandLogos(): Promise<BrandLogoRow[]> {
-  return q<BrandLogoRow>("SELECT brand, logo_url, source, bg FROM brand_logos ORDER BY brand");
+  return q<BrandLogoRow>(
+    `SELECT brand, logo_url, source, bg, visible, sort_order
+       FROM brand_logos
+      ORDER BY sort_order NULLS LAST, brand`,
+  );
+}
+
+/**
+ * Налаштування показу стрічки брендів: які приховані і в якому порядку.
+ * Вітрина питає це одним запитом і не тягне решту полів.
+ */
+export async function getBrandDisplayMap(): Promise<Record<string, { visible: boolean; order: number | null }>> {
+  const rows = await q<{ brand: string; visible: boolean; sort_order: number | null }>(
+    "SELECT brand, visible, sort_order FROM brand_logos",
+  );
+  const out: Record<string, { visible: boolean; order: number | null }> = {};
+  for (const r of rows) out[r.brand] = { visible: r.visible, order: r.sort_order };
+  return out;
+}
+
+/** Зберігає порядок і видимість. Рядки без логотипа теж створюються — інакше
+ *  сховати бренд без лого було б неможливо. */
+export async function saveBrandDisplay(
+  items: { brand: string; visible: boolean; sort_order: number }[],
+): Promise<void> {
+  for (const it of items) {
+    await q(
+      `INSERT INTO brand_logos (brand, logo_url, source, visible, sort_order, updated_at)
+       VALUES ($1, '', 'manual', $2, $3, now())
+       ON CONFLICT (brand) DO UPDATE
+         SET visible = EXCLUDED.visible, sort_order = EXCLUDED.sort_order, updated_at = now()`,
+      [it.brand, it.visible, it.sort_order],
+    );
+  }
 }
 
 /** Resolve the best logo URL for one brand: DB → bundled PNG → null (text). */

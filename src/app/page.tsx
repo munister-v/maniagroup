@@ -6,7 +6,7 @@ import { NewsletterForm } from "@/components/NewsletterForm";
 import { ProductRail } from "@/components/ProductRail";
 import { CATEGORIES, type Product } from "@/lib/catalog";
 import { getProducts, getFeaturedProducts, dbBrands } from "@/lib/productSource";
-import { getResolvedBrandLogoMap, resolveBrandLogo } from "@/lib/brandLogos";
+import { getResolvedBrandLogoMap, resolveBrandLogo, getBrandDisplayMap } from "@/lib/brandLogos";
 import { BrandLogo } from "@/components/BrandLogo";
 import { getSiteContent } from "@/lib/siteContent";
 
@@ -34,6 +34,10 @@ export default async function Home() {
   let brandLogos: Record<string, string> = {};
   try { brandLogos = await getResolvedBrandLogoMap(); } catch { brandLogos = {}; }
 
+  // Порядок і видимість стрічки брендів задає адмінка.
+  let brandDisplay: Record<string, { visible: boolean; order: number | null }> = {};
+  try { brandDisplay = await getBrandDisplayMap(); } catch { brandDisplay = {}; }
+
   const hero = brands.length
     ? {
         ...content.hero,
@@ -47,7 +51,7 @@ export default async function Home() {
 
   const sectionMap: Record<string, React.ReactNode> = {
     hero: <Hero hero={hero} />,
-    marquee: <BrandStrip brands={brands} logoMap={brandLogos} />,
+    marquee: <BrandStrip brands={brands} logoMap={brandLogos} display={brandDisplay} />,
     categories: <PromoTiles />,
     featured: <ProductRail title="Обране" eyebrow="Кураторський вибір" href="/catalog" products={featured} />,
     newArrivals: <ProductRail title="Нові надходження" eyebrow="Щойно завезли" href="/catalog" products={products} />,
@@ -198,16 +202,32 @@ function PromoTiles() {
 }
 
 /* ───────────────────────────────────────────────── Brand strip */
-function BrandStrip({ brands, logoMap }: { brands: { name: string; slug: string }[]; logoMap: Record<string, string> }) {
+function BrandStrip({ brands, logoMap, display }: {
+  brands: { name: string; slug: string }[];
+  logoMap: Record<string, string>;
+  display?: Record<string, { visible: boolean; order: number | null }>;
+}) {
   if (brands.length === 0) return null;
   const byLogoUrl = new Map<string, { name: string; slug: string; logo: string }>();
   for (const b of brands) {
+    // Приховані в адмінці не показуємо взагалі.
+    if (display?.[b.name]?.visible === false) continue;
     const logo = resolveBrandLogo(b.name, logoMap);
     if (!logo) continue;
     const existing = byLogoUrl.get(logo);
     if (!existing || b.name.length < existing.name.length) byLogoUrl.set(logo, { ...b, logo });
   }
-  const ordered = [...byLogoUrl.values()].slice(0, 18);
+  // Спершу впорядковані вручну, далі решта — у тому порядку, як прийшли.
+  const ordered = [...byLogoUrl.values()]
+    .sort((a, z) => {
+      const ao = display?.[a.name]?.order ?? null;
+      const zo = display?.[z.name]?.order ?? null;
+      if (ao != null && zo != null) return ao - zo;
+      if (ao != null) return -1;
+      if (zo != null) return 1;
+      return 0;
+    })
+    .slice(0, 18);
   return (
     <section id="brands" className="border-y border-line bg-white py-9 md:py-12">
       <div className="wrap">

@@ -532,6 +532,11 @@ CREATE TABLE IF NOT EXISTS brand_logos (
   source     TEXT NOT NULL DEFAULT 'manual', -- 'manual' | 'auto'
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Керування стрічкою брендів на головній з адмінки: показувати чи ні та в
+-- якому порядку. sort_order NULL = бренд ще не сортували вручну — такі йдуть
+-- після впорядкованих, у звичайному порядку.
+ALTER TABLE brand_logos ADD COLUMN IF NOT EXISTS visible    BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE brand_logos ADD COLUMN IF NOT EXISTS sort_order INT;
 
 -- ── ERP: SEO fields per-product ──
 ALTER TABLE products ADD COLUMN IF NOT EXISTS meta_title       TEXT NOT NULL DEFAULT '';

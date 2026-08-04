@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Row = { brand: string; slug: string; logo: string | null; source: string };
+type Row = { brand: string; slug: string; logo: string | null; source: string; visible: boolean; sort_order: number | null };
 
 const SOURCE_LABEL: Record<string, { t: string; bg: string; c: string }> = {
   manual: { t: "Вручну", bg: "#e8f5e9", c: "#2e7d32" },
@@ -17,7 +17,10 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
   const [busy, setBusy] = useState(false);
   const [busyDownload, setBusyDownload] = useState(false);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "none">("all");
+  const [filter, setFilter] = useState<"all" | "none" | "hidden">("all");
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
   const uploadFor = useRef<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -73,6 +76,55 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
     await load();
   }
 
+  /* ── порядок і видимість стрічки на головній ── */
+
+  // Перетягування працює лише без пошуку/фільтра: інакше індекси у видимому
+  // списку не збігаються з повним, і рядок «стрибав» би не туди.
+  const reorderable = !search && filter === "all";
+
+  function onDrop(target: number) {
+    if (dragIdx === null || dragIdx === target) { setDragIdx(null); return; }
+    setRows((cur) => {
+      const next = [...cur];
+      const [moved] = next.splice(dragIdx, 1);
+      next.splice(target, 0, moved);
+      return next;
+    });
+    setDragIdx(null);
+    setDirty(true);
+  }
+
+  function move(idx: number, dir: -1 | 1) {
+    const to = idx + dir;
+    if (to < 0 || to >= rows.length) return;
+    setRows((cur) => {
+      const next = [...cur];
+      [next[idx], next[to]] = [next[to], next[idx]];
+      return next;
+    });
+    setDirty(true);
+  }
+
+  function toggleVisible(brand: string) {
+    setRows((cur) => cur.map((r) => (r.brand === brand ? { ...r, visible: !r.visible } : r)));
+    setDirty(true);
+  }
+
+  async function saveOrder() {
+    setSavingOrder(true);
+    try {
+      const items = rows.map((r, i) => ({ brand: r.brand, visible: r.visible, sort_order: i }));
+      const res = await fetch("/api/admin/brand-logos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (!res.ok) { onToast?.("Не вдалося зберегти порядок"); return; }
+      setDirty(false);
+      onToast?.("Порядок і видимість збережено");
+    } finally { setSavingOrder(false); }
+  }
+
   function pickFile(brand: string) {
     uploadFor.current = brand;
     fileInput.current?.click();
@@ -97,9 +149,11 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
 
   const filtered = rows.filter((r) => {
     if (filter === "none" && r.logo) return false;
+    if (filter === "hidden" && r.visible) return false;
     if (search && !r.brand.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
+  const hiddenCount = rows.filter((r) => !r.visible).length;
   const withLogo = rows.filter((r) => r.logo).length;
 
   return (
@@ -149,27 +203,63 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
           className="w-64 rounded border border-line bg-white px-3 py-2 text-sm text-ink"
         />
         <div className="flex gap-1 text-[12px] uppercase tracking-luxe">
-          {(["all", "none"] as const).map((f) => (
+          {(["all", "none", "hidden"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={`rounded px-3 py-1.5 ${filter === f ? "bg-ink text-paper" : "bg-[#f0ede8] text-ink/70"}`}
             >
-              {f === "all" ? "Усі" : "Без лого"}
+              {f === "all" ? "Усі" : f === "none" ? "Без лого" : `Приховані${hiddenCount ? ` (${hiddenCount})` : ""}`}
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded border border-line bg-[#f7f9fa] px-4 py-3">
+        <p className="text-[12px] leading-relaxed text-ink/70">
+          {reorderable
+            ? "Перетягніть картку (або стрілками ↑↓), щоб змінити порядок у стрічці брендів на головній. Око — показати чи сховати бренд."
+            : "Щоб міняти порядок, зніміть пошук і фільтр — інакше перетягування переставляло б не ті картки."}
+          {" "}На головній показуються перші 18 видимих брендів із лого.
+        </p>
+        <button
+          onClick={saveOrder}
+          disabled={!dirty || savingOrder}
+          className="ml-auto rounded bg-ink px-4 py-2 text-[12px] uppercase tracking-luxe text-paper disabled:opacity-40"
+        >
+          {savingOrder ? "Збереження…" : dirty ? "Зберегти порядок" : "Збережено"}
+        </button>
       </div>
 
       {loading ? (
         <p className="py-8 text-center text-sm text-muted">Завантаження…</p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((r) => {
+          {filtered.map((r, i) => {
             const src = SOURCE_LABEL[r.source] ?? SOURCE_LABEL.none;
             const isBroken = r.logo?.includes("clearbit.com") || r.logo?.includes("logo.clearbit");
             return (
-              <div key={r.brand} className={`flex items-center gap-3 rounded border bg-white p-3 ${isBroken ? "border-amber-300" : "border-line"}`}>
+              <div
+                key={r.brand}
+                draggable={reorderable}
+                onDragStart={() => reorderable && setDragIdx(i)}
+                onDragOver={(e) => reorderable && e.preventDefault()}
+                onDrop={() => reorderable && onDrop(i)}
+                onDragEnd={() => setDragIdx(null)}
+                className={`flex items-center gap-3 rounded border bg-white p-3 transition-opacity ${
+                  isBroken ? "border-amber-300" : "border-line"
+                } ${reorderable ? "cursor-grab active:cursor-grabbing" : ""} ${
+                  dragIdx === i ? "opacity-40" : ""
+                } ${!r.visible ? "opacity-55" : ""}`}
+              >
+                {reorderable && (
+                  <div className="flex flex-none flex-col text-ink/30">
+                    <button onClick={() => move(i, -1)} disabled={i === 0}
+                      className="px-1 leading-none hover:text-ink disabled:opacity-30" aria-label="Вище">↑</button>
+                    <button onClick={() => move(i, 1)} disabled={i === filtered.length - 1}
+                      className="px-1 leading-none hover:text-ink disabled:opacity-30" aria-label="Нижче">↓</button>
+                  </div>
+                )}
                 <div className="flex h-12 w-24 flex-none items-center justify-center rounded bg-[#f7f9fa]">
                   {r.logo && !isBroken ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -188,6 +278,15 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
                   </span>
                 </div>
                 <div className="flex flex-none flex-col gap-1">
+                  <button
+                    onClick={() => toggleVisible(r.brand)}
+                    title={r.visible ? "Сховати зі стрічки на головній" : "Показувати на головній"}
+                    className={`rounded border px-2 py-1 text-[11px] ${
+                      r.visible ? "border-line text-ink hover:bg-[#f5f2ee]" : "border-[#c0524a] text-[#c0524a] hover:bg-[#fdecea]"
+                    }`}
+                  >
+                    {r.visible ? "👁 Видно" : "🚫 Сховано"}
+                  </button>
                   <button
                     onClick={() => pickFile(r.brand)}
                     disabled={busy}
