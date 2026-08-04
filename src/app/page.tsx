@@ -80,7 +80,7 @@ export default async function Home() {
 function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAccent: string; subtitle: string; stats: { value: string; label: string }[] } }) {
   return (
     <>
-      <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(440px, 50vw, 580px)" }}>
+      <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(540px, 60vw, 720px)" }}>
         <Image
           src="/images/hero-terrace.webp"
           alt="Mania Group — нова колекція"
@@ -102,7 +102,7 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
           }}
         />
 
-        <div className="wrap relative flex h-full flex-col justify-center py-14 md:py-16">
+        <div className="wrap relative flex min-h-[inherit] flex-col justify-center py-14 md:py-16">
           <p className="hero-rise text-[11px] font-semibold uppercase tracking-[0.25em] text-paper/70" style={{ animationDelay: "0ms" }}>
             {hero.eyebrow}
           </p>
@@ -114,7 +114,7 @@ function Hero({ hero }: { hero: { eyebrow: string; titleLine1: string; titleAcce
             {hero.subtitle}
           </p>
           <div
-            className="hero-rise mt-16 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-4 md:mt-20"
+            className="hero-rise mt-auto grid grid-cols-2 gap-3 pt-16 sm:flex sm:flex-wrap sm:items-center sm:gap-4 md:pt-24"
             style={{ animationDelay: "220ms" }}
           >
             <Link
