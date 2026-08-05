@@ -153,9 +153,9 @@ export const DEFAULT_CONTENT: SiteContent = {
     ],
   },
   media: {
-    heroImage: "/images/hero-terrace.webp",
-    categoryWomen: "/images/cat-women-editorial.webp",
-    categoryMen: "/images/cat-men-editorial.webp",
+    heroImage: "/images/hero-terrace-ss26.webp",
+    categoryWomen: "/images/cat-women-editorial-ss26.webp",
+    categoryMen: "/images/cat-men-editorial-ss26.webp",
     promoImage: "/images/promo-golden-hour.webp",
   },
   services: [

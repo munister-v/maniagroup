@@ -89,7 +89,7 @@ function Hero({ hero, image }: {
     <>
       <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(540px, 60vw, 720px)" }}>
         <Image
-          src={image?.trim() || "/images/hero-terrace.webp"}
+          src={image?.trim() || "/images/hero-terrace-ss26.webp"}
           alt="Mania Group — нова колекція"
           fill
           priority
@@ -173,8 +173,8 @@ function BenefitsBar() {
 // Answear-style promo grid: two big category tiles + a bold SALE tile.
 function PromoTiles({ women, men }: { women?: string; men?: string }) {
   const tiles = [
-    { label: CATEGORIES[0]?.label ?? "Жінкам", caption: CATEGORIES[0]?.caption ?? "", href: CATEGORIES[0]?.href ?? "/catalog", image: women?.trim() || CATEGORIES[0]?.image || "/images/cat-women-editorial.webp", dark: false },
-    { label: CATEGORIES[1]?.label ?? "Чоловікам", caption: CATEGORIES[1]?.caption ?? "", href: CATEGORIES[1]?.href ?? "/catalog", image: men?.trim() || CATEGORIES[1]?.image || "/images/cat-men-editorial.webp", dark: false },
+    { label: CATEGORIES[0]?.label ?? "Жінкам", caption: CATEGORIES[0]?.caption ?? "", href: CATEGORIES[0]?.href ?? "/catalog", image: women?.trim() || CATEGORIES[0]?.image || "/images/cat-women-editorial-ss26.webp", dark: false },
+    { label: CATEGORIES[1]?.label ?? "Чоловікам", caption: CATEGORIES[1]?.caption ?? "", href: CATEGORIES[1]?.href ?? "/catalog", image: men?.trim() || CATEGORIES[1]?.image || "/images/cat-men-editorial-ss26.webp", dark: false },
   ];
   return (
     <section className="wrap py-10 md:py-14">
@@ -182,8 +182,10 @@ function PromoTiles({ women, men }: { women?: string; men?: string }) {
         {tiles.map((t, i) => (
           <Reveal key={t.label} delay={i * 60}>
             <Link href={t.href} className="group relative flex aspect-[4/5] flex-col justify-end overflow-hidden md:aspect-[4/3] lg:aspect-[5/4]">
-              {/* Кадр вертикальний, плитка — горизонтальна: тримаємо верх кадру,
-                  інакше обрізало б по грудях і одягу було б не видно. */}
+              {/* Кадри — горизонтальні 5:4, тобто рівно як плитка на lg (там
+                  кроп нульовий). Вужчі брейкпоінти ріжуть з боків, а 22%
+                  тримають верх кадру: інакше обрізало б по грудях і одягу
+                  було б не видно. */}
               <Image src={t.image} alt={t.label} fill sizes="(min-width:768px) 50vw, 100vw"
                 className="object-cover object-[center_22%] transition-transform duration-[1100ms] ease-out group-hover:scale-[1.05]" />
               <div className="absolute inset-0" style={{ backgroundImage: t.dark
