@@ -240,7 +240,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe", href: "/catalog?gender=women", image: "/images/02_dropdown-zhinocha-kolektsiya.webp" },
+    featured: { title: "Жіноча колекція", caption: "Дивитися все", tone: "#d8cfc1", slug: "zhenskoe", href: "/catalog?gender=women", image: "/images/cat-women-editorial-ss26.webp" },
   },
   {
     label: "Чоловікам",
@@ -277,7 +277,7 @@ export const MEGA_MENU: MegaMenu[] = [
         ],
       },
     ],
-    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe", href: "/catalog?gender=men", image: "/images/03_dropdown-cholovicha-kolektsiya.webp" },
+    featured: { title: "Чоловіча колекція", caption: "Дивитися все", tone: "#c4bcb0", slug: "muzhskoe", href: "/catalog?gender=men", image: "/images/cat-men-editorial-ss26.webp" },
   },
 ];
 
