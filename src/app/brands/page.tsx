@@ -63,12 +63,12 @@ export default async function BrandsPage() {
               <Link
                 href={`/catalog?brand=${b.slug}`}
                 title={`${b.name} · ${b.count}`}
-                className="group relative flex h-[84px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
+                className="group relative flex h-[84px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-4 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
               >
                 <BrandLogo
                   name={b.name}
                   src={b.logo}
-                  imgClass="max-h-[48px] max-w-full object-contain"
+                  imgClass="max-h-[58px] max-w-full object-contain"
                   textClass="text-center font-display text-[16px] leading-tight tracking-wide text-ink/75"
                 />
                 <span className="absolute bottom-1.5 right-2 text-[10px] tabular-nums text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">{b.count}</span>

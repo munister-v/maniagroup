@@ -243,9 +243,11 @@ function BrandStrip({ brands, logoMap, display }: {
           {ordered.map((brand, i) => (
             <li key={brand.slug} className={i >= 9 ? "hidden sm:block" : ""}>
               <Link href={`/catalog?brand=${brand.slug}`} aria-label={brand.name} title={brand.name}
-                className="flex h-[64px] items-center justify-center border border-line bg-white px-3 transition-all hover:border-ink/30 hover:shadow-[0_2px_12px_-6px_rgba(23,19,15,0.3)] md:h-[76px] md:px-4">
+                className="flex h-[64px] items-center justify-center border border-line bg-white px-2.5 transition-all hover:border-ink/30 hover:shadow-[0_2px_12px_-6px_rgba(23,19,15,0.3)] md:h-[76px] md:px-3">
+                {/* Ширина тут дорожча за висоту: майже всі логотипи — витягнуті
+                    написи, і саме ширина плитки, а не max-h, обмежує їх розмір. */}
                 <BrandLogo name={brand.name} src={brand.logo}
-                  imgClass="max-h-[40px] max-w-full object-contain md:max-h-[46px]"
+                  imgClass="max-h-[44px] max-w-full object-contain md:max-h-[52px]"
                   textClass="whitespace-nowrap font-display text-[13px] tracking-wide text-ink/65 md:text-[15px]" />
               </Link>
             </li>
@@ -270,7 +272,7 @@ function PromoBanner({ image }: { image?: string }) {
             <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-paper/60">Нова колекція</p>
             <h2 className="mt-4 text-[1.9rem] font-light uppercase leading-[1.08] tracking-[0.13em] md:text-[2.8rem]">Сезон<br />оригіналів</h2>
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-paper/70">
-              Європейські бренди напряму — без реплік, із гарантією та доставкою Новою Поштою.
+              Європейські бренди напряму — з гарантією та доставкою Новою Поштою.
             </p>
             <span className="mt-8 inline-flex h-12 items-center border border-paper/70 px-8 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-colors group-hover:bg-paper group-hover:text-ink">
               Дивитись колекцію

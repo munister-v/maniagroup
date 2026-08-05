@@ -608,24 +608,15 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
               <li key={b.slug}>
                 <Link
                   href={`/catalog?brand=${b.slug}`}
-                  className="flex h-[72px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
+                  className="flex h-[72px] items-center justify-center rounded-[3px] border border-line/60 bg-white px-3.5 transition-all hover:border-ink/25 hover:shadow-[0_4px_14px_-8px_rgba(23,19,15,0.4)]"
                   title={b.name}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={b.logo!}
-                    alt={b.name}
-                    loading="lazy"
-                    className="max-h-[44px] max-w-full object-contain"
-                    onError={(e) => {
-                      // Fall back to a text wordmark when the logo is broken
-                      const img = e.target as HTMLImageElement;
-                      img.style.display = "none";
-                      const span = img.nextElementSibling as HTMLElement | null;
-                      if (span) span.style.display = "block";
-                    }}
-                  />
-                  <span className="hidden font-display text-[15px] text-ink/70">{b.name}</span>
+                  {/* Було власне падіння на текст через onError — воно не
+                      спрацьовувало для картинок, що впали до гідратації.
+                      BrandLogo перевіряє це ще й після монтування. */}
+                  <BrandLogo name={b.name} src={b.logo}
+                    imgClass="max-h-[50px] max-w-full object-contain"
+                    textClass="text-center font-display text-[15px] leading-tight text-ink/70" />
                 </Link>
               </li>
             ))}

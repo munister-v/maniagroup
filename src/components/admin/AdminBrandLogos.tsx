@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 /**
  * Редактор логотипів брендів і стрічки на головній.
@@ -247,8 +248,11 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
                 className={`flex h-[58px] items-center justify-center rounded border border-line px-2 ${
                   r.bg === "dark" ? "bg-ink" : "bg-white"
                 }`}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={r.logo!} alt={r.brand} className="max-h-8 max-w-full object-contain" />
+                {/* BrandLogo, а не голий <img>: якщо файл із бази вже видалено,
+                    тут показувалась іконка розбитої картинки — тепер напис. */}
+                <BrandLogo name={r.brand} src={r.logo}
+                  imgClass="max-h-9 max-w-full object-contain"
+                  textClass={`px-1 text-center text-[10px] uppercase tracking-wide ${r.bg === "dark" ? "text-paper/70" : "text-ink/50"}`} />
               </li>
             ))}
           </ul>
@@ -339,12 +343,9 @@ export function AdminBrandLogos({ onToast }: { onToast?: (m: string) => void }) 
                 <div className={`flex h-11 w-24 flex-none items-center justify-center rounded border border-line ${
                   r.bg === "dark" ? "bg-ink" : "bg-[#f7f9fa]"
                 }`}>
-                  {r.logo && !dead ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.logo} alt={r.brand} className="max-h-8 max-w-[86px] object-contain" />
-                  ) : (
-                    <span className="px-1 text-center text-[10px] uppercase tracking-wide text-ink/50">{r.brand}</span>
-                  )}
+                  <BrandLogo name={r.brand} src={dead ? null : r.logo}
+                    imgClass="max-h-9 max-w-[86px] object-contain"
+                    textClass="px-1 text-center text-[10px] uppercase tracking-wide text-ink/50" />
                 </div>
 
                 <div className="min-w-0 flex-1">
