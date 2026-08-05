@@ -29,7 +29,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const categoryPages: MetadataRoute.Sitemap = categories
     .filter((c) => c.count > 0)
     .map((c) => ({
-      url: `${BASE}/catalog?category=${c.slug}`,
+      // encodeURIComponent обов'язковий: слаги категорій кирилицею
+      // («жіночі-джинси»), а canonical на самій сторінці будується через
+      // URLSearchParams і теж закодований — без цього мапа й сторінка вказували
+      // б на візуально різні URL.
+      url: `${BASE}/catalog?category=${encodeURIComponent(c.slug)}`,
       changeFrequency: "daily" as const,
       priority: 0.6,
     }));
@@ -40,7 +44,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const brandPages: MetadataRoute.Sitemap = brands
     .filter((b) => b.count > 0)
     .map((b) => ({
-      url: `${BASE}/catalog?brand=${b.slug}`,
+      url: `${BASE}/catalog?brand=${encodeURIComponent(b.slug)}`,
       changeFrequency: "daily" as const,
       priority: 0.6,
     }));

@@ -8,6 +8,7 @@ import { ActiveFilterChips } from "@/components/ActiveFilterChips";
 import { CatalogSort } from "@/components/CatalogSort";
 import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets, dbSeasonFacets, dbPriceRange, resolveBrandSlugs } from "@/lib/productSource";
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
+import { SITE_URL } from "@/lib/siteUrl";
 
 /** React-cache: generateMetadata і сам рендер сторінки виконуються в одному
  *  запиті, і без цього кожен із них ходив би в базу за тим самим списком. */
@@ -229,11 +230,43 @@ export default async function CatalogPage({
     return qs ? `/catalog?${qs}` : "/catalog";
   }
 
+  // Крихти показують, ДЕ саме опинився покупець. Пошук і «усі товари» окремою
+  // сходинкою не є: перше — не місце в каталозі, друге і є сам каталог.
+  const landingHref =
+    brandSlugs.length === 1 ? `/catalog?brand=${brandSlugs[0]}`
+    : categorySlug ? `/catalog?category=${categorySlug}`
+    : gender ? `/catalog?gender=${gender}`
+    : onSale ? "/catalog?sale=1"
+    : undefined;
+  const landingName = landingHref && !q ? title : undefined;
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Головна", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: "Каталог", item: `${SITE_URL}/catalog` },
+      landingName && landingHref
+        ? { "@type": "ListItem", position: 3, name: landingName, item: `${SITE_URL}${landingHref}` }
+        : null,
+    ].filter(Boolean),
+  };
+
   return (
     <section className="wrap py-12 md:py-16">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <Reveal>
         <p className="text-[11px] uppercase tracking-luxe text-muted">
-          <Link href="/" className="link-underline">Головна</Link> / Каталог
+          <Link href="/" className="link-underline">Головна</Link>{" / "}
+          {landingName ? (
+            <>
+              <Link href="/catalog" className="link-underline">Каталог</Link>
+              {" / "}
+              <span className="text-ink/70">{landingName}</span>
+            </>
+          ) : (
+            "Каталог"
+          )}
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
           <h1 className="font-display text-3xl text-ink md:text-4xl">{title}</h1>
