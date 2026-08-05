@@ -3,13 +3,7 @@ import { cookies } from "next/headers";
 import { findAccountByEmail, verifyPassword, createSession } from "@/lib/accountsDb";
 import { checkLoginRateLimit, recordFailedLogin, clearLoginAttempts } from "@/lib/adminAuth";
 import { baseCookie } from "@/lib/cookieOptions";
-
-/** Client IP behind nginx — x-forwarded-for's first entry is the real client. */
-function clientIp(req: Request): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
-}
+import { clientIp } from "@/lib/clientIp";
 
 export async function POST(req: Request) {
   try {

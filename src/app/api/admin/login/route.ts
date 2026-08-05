@@ -1,13 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkPassword, setAdminSession, checkLoginRateLimit, recordFailedLogin, clearLoginAttempts } from "@/lib/adminAuth";
 import { logActivity } from "@/lib/activity";
-
-/** Client IP behind nginx: x-forwarded-for is a comma-separated list, first = original client. */
-function clientIp(req: Request): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
-}
+import { clientIp } from "@/lib/clientIp";
 
 export async function POST(req: Request) {
   const ip = clientIp(req);
