@@ -4,7 +4,7 @@ import { getOrder } from "@/lib/orders";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Оплата замовлення — Mania Group",
+  title: "Оплата замовлення",
   robots: { index: false, follow: false },
 };
 

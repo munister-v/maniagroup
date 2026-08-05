@@ -14,7 +14,13 @@ export function ProductCard({ product }: { product: Product }) {
   const archived = product.inStock === false;
 
   return (
-    <Link href={`/product/${slug}`} className="group block rounded-[2px] focus-visible:outline-offset-4">
+    // `group` тримає обгортка, а не саме посилання: кнопка «в обране» мусить
+    // бути ПОЗА <a>. Кнопка всередині посилання — невалідна розмітка: клавіатура
+    // й читалки бачать два вкладені інтерактивні елементи, а клік по серцю не
+    // відкривав картку лише завдяки preventDefault. Наведення при цьому має
+    // підсвічувати картку цілком, тож group спільна для посилання й кнопки.
+    <div className="group relative rounded-[2px]">
+    <Link href={`/product/${slug}`} className="block rounded-[2px] focus-visible:outline-offset-4">
       <div className="surface-card surface-card-hover relative overflow-hidden rounded-[2px]">
         <div className={archived ? "opacity-60 grayscale-[35%]" : ""}>
           <ProductCardMedia tone={tone} brand={brand} image={image} images={images} />
@@ -35,16 +41,9 @@ export function ProductCard({ product }: { product: Product }) {
         ) : null}
 
         {!archived && (
-          <>
-            <WishButton
-              productId={product.id}
-              className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 text-ink shadow-[0_8px_20px_-14px_rgba(26,23,20,0.65)] backdrop-blur-sm transition-all duration-200 hover:scale-105 md:opacity-0 md:group-hover:opacity-100 [.wished_&]:opacity-100"
-            />
-
-            <div className="absolute inset-x-0 bottom-0 z-20 hidden translate-y-full bg-ink/95 py-3 text-center text-[10px] uppercase tracking-luxe text-paper backdrop-blur-sm transition-transform duration-300 ease-out group-hover:translate-y-0 md:block">
-              Переглянути товар
-            </div>
-          </>
+          <div className="absolute inset-x-0 bottom-0 z-20 hidden translate-y-full bg-ink/95 py-3 text-center text-[10px] uppercase tracking-luxe text-paper backdrop-blur-sm transition-transform duration-300 ease-out group-hover:translate-y-0 md:block">
+            Переглянути товар
+          </div>
         )}
       </div>
 
@@ -73,5 +72,13 @@ export function ProductCard({ product }: { product: Product }) {
         )}
       </div>
     </Link>
+
+      {!archived && (
+        <WishButton
+          productId={product.id}
+          className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-paper/92 text-ink shadow-[0_8px_20px_-14px_rgba(26,23,20,0.65)] backdrop-blur-sm transition-all duration-200 hover:scale-105 md:opacity-0 md:group-hover:opacity-100 [.wished_&]:opacity-100"
+        />
+      )}
+    </div>
   );
 }

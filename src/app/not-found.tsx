@@ -1,4 +1,13 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+
+// Без цього вкладка на 404 підписана як головна («Mania Group — брендовий
+// одяг…»), і у списку вкладок чи в історії неможливо зрозуміти, що сторінки
+// просто немає.
+export const metadata: Metadata = {
+  title: "Сторінку не знайдено",
+  robots: { index: false, follow: false },
+};
 
 export default function NotFound() {
   return (

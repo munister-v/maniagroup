@@ -3,7 +3,7 @@ import { Reveal } from "@/components/Reveal";
 import { ResetPasswordForm } from "@/components/account/ResetPasswordForm";
 import { getValidResetToken } from "@/lib/accountsDb";
 
-export const metadata = { title: "Новий пароль — Mania Group" };
+export const metadata = { title: "Новий пароль" };
 
 export default async function ResetPasswordPage({
   searchParams,

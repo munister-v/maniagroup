@@ -4,7 +4,7 @@ import { AccountRegisterForm } from "@/components/account/AccountRegisterForm";
 import { Reveal } from "@/components/Reveal";
 import Link from "next/link";
 
-export const metadata = { title: "Реєстрація — Mania Group" };
+export const metadata = { title: "Реєстрація" };
 
 export default async function RegisterPage() {
   const account = await getSessionAccount();

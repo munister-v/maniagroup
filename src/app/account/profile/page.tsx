@@ -2,7 +2,7 @@ import { getSessionAccount } from "@/lib/accountAuth";
 import { AccountDashboard } from "@/components/account/AccountDashboard";
 import { redirect } from "next/navigation";
 
-export const metadata = { title: "Мій кабінет — Mania Group" };
+export const metadata = { title: "Мій кабінет" };
 
 export default async function ProfilePage() {
   const account = await getSessionAccount();

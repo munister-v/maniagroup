@@ -4,7 +4,7 @@ import { getResolvedBrandLogoMap, resolveBrandLogo } from "@/lib/brandLogos";
 import { BrandLogo } from "@/components/BrandLogo";
 
 export const metadata = {
-  title: "Усі бренди — Mania Group",
+  title: "Усі бренди",
   description: "Повний перелік брендів у каталозі Mania Group — оригінальний одяг, взуття та аксесуари європейських марок.",
   alternates: { canonical: "/brands" },
 };

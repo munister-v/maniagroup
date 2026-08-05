@@ -39,6 +39,9 @@ export function NewsletterForm({ source = "home", tone = "light" }: { source?: s
       <form onSubmit={submit} className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
         <input
           type="email"
+          name="email"
+          autoComplete="email"
+          aria-label="E-mail для розсилки"
           required
           value={email}
           onChange={(e) => { setEmail(e.target.value); if (status !== "idle") setStatus("idle"); }}

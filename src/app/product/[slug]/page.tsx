@@ -20,7 +20,7 @@ export async function generateMetadata({
   const detail = await dbProductById(decodeURIComponent(slug));
   if (!detail) return {};
   // Prefer ERP-managed SEO fields, fallback to auto-generated
-  const t = detail.metaTitle || `${detail.product.name} — ${detail.product.brand} | Mania Group`;
+  const t = detail.metaTitle || `${detail.product.name} — ${detail.product.brand}`;
   const description = detail.metaDescription ||
     `${detail.product.name} від ${detail.product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`;
   return {

@@ -4,7 +4,7 @@ import { AccountLoginForm } from "@/components/account/AccountLoginForm";
 import { Reveal } from "@/components/Reveal";
 import Link from "next/link";
 
-export const metadata = { title: "Вхід — Mania Group" };
+export const metadata = { title: "Вхід" };
 
 export default async function LoginPage({
   searchParams,

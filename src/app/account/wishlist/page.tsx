@@ -3,7 +3,7 @@ import { AccountDashboard } from "@/components/account/AccountDashboard";
 import { redirect } from "next/navigation";
 import { getWishlist } from "@/lib/accountsDb";
 
-export const metadata = { title: "Список бажань — Mania Group" };
+export const metadata = { title: "Список бажань" };
 
 export default async function WishlistPage() {
   const account = await getSessionAccount();

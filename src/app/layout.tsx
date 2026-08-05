@@ -35,7 +35,10 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: seo.description,
     keywords: seo.keywords,
-    alternates: { canonical: "/" },
+    // Canonical свідомо НЕ ставимо на рівні layout: він успадковується всіма
+    // сторінками, які не оголосили власний, і тоді /checkout та /account/*
+    // заявляли себе головною сторінкою. Кожна публічна сторінка задає canonical
+    // сама (див. page.tsx кожної), а службовим він не потрібен — вони noindex.
     robots: { index: true, follow: true },
     openGraph: {
       type: "website",
