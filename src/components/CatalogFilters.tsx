@@ -223,6 +223,7 @@ export function CatalogFilters({
             inputMode="numeric"
             value={min}
             onChange={(e) => setMin(e.target.value)}
+            aria-label="Ціна від"
             placeholder={range ? `від ${range.min}` : "від"}
             className="h-11 w-full rounded-[2px] border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
           />
@@ -232,6 +233,7 @@ export function CatalogFilters({
             inputMode="numeric"
             value={max}
             onChange={(e) => setMax(e.target.value)}
+            aria-label="Ціна до"
             placeholder={range ? `до ${range.max}` : "до"}
             className="h-11 w-full rounded-[2px] border border-line bg-white px-3 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none"
           />

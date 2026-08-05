@@ -460,6 +460,7 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Шукати товари…"
+              aria-label="Пошук товарів"
               className="min-w-0 flex-1 border-b border-line bg-transparent py-3 font-display text-2xl text-ink placeholder:text-muted focus:border-ink focus:outline-none md:text-3xl"
             />
             <button

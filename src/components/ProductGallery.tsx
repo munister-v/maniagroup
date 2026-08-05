@@ -94,6 +94,10 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
                   <button
                     key={i}
                     onClick={() => setActive(i)}
+                    // Крапка не має ні тексту, ні іконки — без назви читалка
+                    // оголошує просто «кнопка», шість разів поспіль.
+                    aria-label={`Фото ${i + 1} з ${shown.length}`}
+                    aria-current={i === active}
                     className={`h-1 rounded-full transition-all ${
                       i === active ? "w-5 bg-ink" : "w-1.5 bg-ink/25"
                     }`}
