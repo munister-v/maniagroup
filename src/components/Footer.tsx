@@ -99,12 +99,15 @@ export async function Footer() {
                 <h4 className="text-[10px] uppercase tracking-luxe text-ink md:text-[11px]">
                   {col.title}
                 </h4>
-                <ul className="mt-3 space-y-2 md:mt-4 md:space-y-2.5">
+                <ul className="mt-2 md:mt-4 md:space-y-2.5">
                   {col.links.map((l) => (
                     <li key={l.label}>
                       <Link
                         href={l.href}
-                        className="text-[13px] text-muted transition-colors hover:text-ink md:text-sm"
+                        // inline-flex + min-h: на телефоні сам рядок тексту дає
+                        // ціль висотою 19px, у яку важко влучити пальцем. На
+                        // desktop висота ні на що не впливає — там курсор.
+                        className="inline-flex min-h-[34px] items-center text-[13px] text-muted transition-colors hover:text-ink md:min-h-0 md:text-sm"
                       >
                         {l.label}
                       </Link>

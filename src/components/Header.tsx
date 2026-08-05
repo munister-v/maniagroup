@@ -552,21 +552,21 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-4 border-t border-line bg-paper/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-18px_42px_-34px_rgba(26,23,20,0.65)] backdrop-blur-md md:hidden">
         <Link href="/catalog" className="flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud">
           <Icon d={ICONS.grid} />
-          <span className="text-[9px] uppercase tracking-luxe">Каталог</span>
+          <span className="text-[10px] uppercase tracking-luxe">Каталог</span>
         </Link>
         <button
           onClick={() => setSearchOpen(true)}
           className="flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud"
         >
           <Icon d={ICONS.search} />
-          <span className="text-[9px] uppercase tracking-luxe">Пошук</span>
+          <span className="text-[10px] uppercase tracking-luxe">Пошук</span>
         </button>
         <button
           onClick={() => setCartOpen(true)}
           className="relative flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud"
         >
           <Icon d={ICONS.bag} />
-          <span className="text-[9px] uppercase tracking-luxe">Кошик</span>
+          <span className="text-[10px] uppercase tracking-luxe">Кошик</span>
           {cartCount > 0 && (
             <span className="absolute right-6 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-1 text-[9px] font-medium text-paper">
               {cartCount}
@@ -575,7 +575,7 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
         </button>
         <Link href="/account/profile" className="flex min-h-14 flex-col items-center justify-center gap-1 py-2 text-ink active:bg-cloud">
           <Icon d={ICONS.user} />
-          <span className="text-[9px] uppercase tracking-luxe">Профіль</span>
+          <span className="text-[10px] uppercase tracking-luxe">Профіль</span>
         </Link>
       </nav>
 

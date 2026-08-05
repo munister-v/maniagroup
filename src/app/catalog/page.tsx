@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { cache } from "react";
+import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
 import { Reveal } from "@/components/Reveal";
 import { CatalogFilters, type Facets } from "@/components/CatalogFilters";
@@ -7,12 +9,95 @@ import { CatalogSort } from "@/components/CatalogSort";
 import { getCatalogProducts, getCatalogCategories, dbSizeFacets, dbBrands, dbColorFacets, dbSeasonFacets, dbPriceRange, resolveBrandSlugs } from "@/lib/productSource";
 import { resolveCatalogCategory } from "@/lib/categoryAliases";
 
-export const metadata = {
-  title: "Каталог",
-  description:
-    "Каталог брендового одягу, взуття та аксесуарів: EA7 Emporio Armani, Moschino, Antony Morato, MC2 Saint Barth, Harmont & Blaine та інші. Фільтри за брендом, розміром, кольором і ціною.",
-  alternates: { canonical: "/catalog" },
+/** React-cache: generateMetadata і сам рендер сторінки виконуються в одному
+ *  запиті, і без цього кожен із них ходив би в базу за тим самим списком. */
+const cachedCategories = cache(getCatalogCategories);
+const cachedBrandNames = cache(resolveBrandSlugs);
+
+/**
+ * Фільтри каталогу — це, по суті, окремі посадкові сторінки: /catalog?brand=prada
+ * і /catalog?category=sukni мають різний зміст. Раніше всі вони віддавали один
+ * заголовок «Каталог» і canonical на голий /catalog, тобто для пошуку 76 брендів
+ * і всі категорії просто не існували.
+ *
+ * Тепер: заголовок і опис збираються з активних фільтрів (той самий текст, що і
+ * в H1), canonical лишає в собі ЛИШЕ змістовні параметри — категорію, бренд,
+ * стать, знижку. Сортування, сторінка, ціна, колір, розмір, пошуковий запит з
+ * canonical випадають: вони не створюють нової сторінки, а лише переставляють ту
+ * саму добірку, і кожна така комбінація інакше плодила б дубль.
+ */
+const MEANINGFUL: (keyof CatalogParams)[] = ["category", "gender", "brand", "sale"];
+
+type CatalogParams = {
+  category?: string; brand?: string; brands?: string; brandGroup?: string;
+  gender?: string; color?: string; colors?: string; inStock?: string;
+  sale?: string; q?: string; sort?: string; size?: string; sizes?: string;
+  seasons?: string; min?: string; max?: string; page?: string;
 };
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<CatalogParams> }): Promise<Metadata> {
+  const sp = await searchParams;
+  const { category: categorySlug, gender } = resolveCatalogCategory(sp.category, sp.gender);
+  const brandSlugs = Array.from(new Set([...parseList(sp.brands), ...(sp.brand ? [sp.brand] : [])]));
+
+  const [categories, brandNames] = await Promise.all([
+    cachedCategories().catch(() => []),
+    cachedBrandNames(brandSlugs).catch(() => [] as string[]),
+  ]);
+
+  const categoryName = categories.find((c) => c.slug === categorySlug)?.name;
+  const genderLabel = GENDERS.find((g) => g.slug === gender)?.label;
+  const brandName = brandNames.length === 1 ? brandNames[0] : undefined;
+
+  // Той самий порядок пріоритетів, що й у видимого H1 нижче — вкладка й
+  // заголовок сторінки не повинні розходитись.
+  const heading =
+    brandName ??
+    (sp.brandGroup ? sp.brandGroup.charAt(0).toUpperCase() + sp.brandGroup.slice(1) : undefined) ??
+    categoryName ??
+    genderLabel ??
+    (sp.sale === "1" ? "Знижки" : undefined) ??
+    (sp.q ? `Пошук: ${sp.q}` : "Каталог");
+
+  // «Жіночі сукні PRADA» читається краще за просто «Сукні», і саме так люди шукають.
+  const parts = [brandName, categoryName ?? genderLabel].filter(Boolean);
+  const title = parts.length === 2 ? `${parts[1]} ${parts[0]}` : heading;
+
+  const description = brandName
+    ? `${brandName} — оригінал в Україні. ${categoryName ? categoryName + ", " : ""}актуальна колекція, доставка Новою Поштою, обмін 14 днів.`
+    : categoryName || genderLabel
+      ? `${categoryName ?? genderLabel} від європейських брендів. Оригінал, фільтри за розміром, кольором і ціною, доставка по всій Україні.`
+      : "Каталог брендового одягу, взуття та аксесуарів. Оригінал від офіційних дистриб'юторів, фільтри за брендом, розміром, кольором і ціною.";
+
+  // Canonical збираємо руками, а не з усього sp: порядок параметрів має бути
+  // стабільним, інакше ?brand=x&category=y і ?category=y&brand=x дадуть два
+  // різні canonical на ту саму добірку.
+  const canonicalParams = new URLSearchParams();
+  for (const k of MEANINGFUL) {
+    const v = sp[k];
+    if (typeof v === "string" && v) canonicalParams.set(k, v);
+  }
+  const qs = canonicalParams.toString();
+
+  // Індексуємо лише «чисті» посадкові: один бренд / категорія / стать / знижки.
+  // Сортування, сторінки, ціна, колір, розмір, пошук — те саме, що вже є під
+  // canonical, тож віддаємо follow, але noindex.
+  const noise =
+    !!sp.sort || !!sp.q || !!sp.min || !!sp.max || !!sp.inStock ||
+    parseList(sp.colors).length > 0 || !!sp.color ||
+    parseList(sp.sizes).length > 0 || !!sp.size ||
+    parseList(sp.seasons).length > 0 ||
+    brandSlugs.length > 1 ||
+    (parseInt(sp.page ?? "1", 10) || 1) > 1;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: qs ? `/catalog?${qs}` : "/catalog" },
+    robots: noise ? { index: false, follow: true } : { index: true, follow: true },
+    openGraph: { title, description },
+  };
+}
 
 const SORTS: Record<string, { orderby: "date" | "price"; order: "asc" | "desc"; label: string; short: string }> = {
   newest:     { orderby: "date",  order: "desc", label: "Спочатку нові",    short: "Новинки" },
@@ -31,25 +116,7 @@ const parseList = (v?: string) =>
 export default async function CatalogPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    category?: string;
-    brand?: string;
-    brands?: string;
-    brandGroup?: string;
-    gender?: string;
-    color?: string;
-    colors?: string;
-    inStock?: string;
-    sale?: string;
-    q?: string;
-    sort?: string;
-    size?: string;
-    sizes?: string;
-    seasons?: string;
-    min?: string;
-    max?: string;
-    page?: string;
-  }>;
+  searchParams: Promise<CatalogParams>;
 }) {
   const sp = await searchParams;
   // Map legacy WooCommerce nav/URL slugs to the store's own DB slugs so the
@@ -72,10 +139,10 @@ export default async function CatalogPage({
   const perPage = 24;
 
   // ── Categories + brands facets ────────────────────────────────────────
-  const categories = await getCatalogCategories();
+  const categories = await cachedCategories();
 
   const brands = (await dbBrands({ categorySlug, gender })).slice(0, 30);
-  const brandNames = await resolveBrandSlugs(brandSlugs);
+  const brandNames = await cachedBrandNames(brandSlugs);
 
   // ── Products ─────────────────────────────────────────────────────────
   const { products, total } = await getCatalogProducts({

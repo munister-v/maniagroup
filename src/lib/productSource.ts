@@ -503,3 +503,20 @@ export async function getProductsByIds(ids: string[]): Promise<Product[]> {
 export function priceToUah(v: string | number): number {
   return typeof v === "number" ? v : Number(v) || 0;
 }
+
+/**
+ * Мінімальні дані для sitemap: лише id та дата зміни.
+ *
+ * Окремий запит, а не getProducts({perPage: усе}), бо там тягнеться повний
+ * рядок з description, images та attributes — на 6+ тисяч товарів це десятки
+ * мегабайт у пам'ять заради двох полів.
+ */
+export async function listProductsForSitemap(): Promise<{ id: string; updatedAt: Date }[]> {
+  const rows = await q<{ id: string; updated_at: string }>(
+    `SELECT id::text, updated_at
+       FROM products
+      WHERE status = 'publish' AND is_in_stock = TRUE
+      ORDER BY updated_at DESC`,
+  );
+  return rows.map((r) => ({ id: r.id, updatedAt: new Date(r.updated_at) }));
+}
