@@ -126,10 +126,12 @@ export async function Footer() {
           <p className="text-center leading-relaxed sm:text-left">
             © {new Date().getFullYear()} Mania Group · Усі права захищені
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 md:justify-end">
-            <Link href="/delivery" className="transition-colors hover:text-ink">Доставка</Link>
-            <Link href="/returns" className="transition-colors hover:text-ink">Повернення</Link>
-            <Link href="/contacts" className="transition-colors hover:text-ink">Контакти</Link>
+          {/* inline-flex + min-h — щоб нижній ряд теж був пальцем, а не нігтем:
+              самі рядки тут заввишки 15px. На desktop висота знімається. */}
+          <div className="flex flex-wrap items-center justify-center gap-x-5 md:justify-end">
+            <Link href="/delivery" className="inline-flex min-h-[32px] items-center transition-colors hover:text-ink md:min-h-0">Доставка</Link>
+            <Link href="/returns" className="inline-flex min-h-[32px] items-center transition-colors hover:text-ink md:min-h-0">Повернення</Link>
+            <Link href="/contacts" className="inline-flex min-h-[32px] items-center transition-colors hover:text-ink md:min-h-0">Контакти</Link>
           </div>
         </div>
       </div>
