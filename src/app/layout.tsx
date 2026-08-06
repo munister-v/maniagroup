@@ -36,7 +36,13 @@ export async function generateMetadata(): Promise<Metadata> {
     description: seo.description,
     keywords: seo.keywords,
     icons: {
-      icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", type: "image/png", sizes: "192x192" }],
+      // SVG першим: на екранах з високою щільністю вкладка малює його чітко,
+      // а PNG/ICO лишаються для браузерів, які вектор у фавіконі не вміють.
+      icon: [
+        { url: "/favicon.svg", type: "image/svg+xml" },
+        { url: "/favicon.ico", sizes: "any" },
+        { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      ],
       apple: "/apple-touch-icon.png",
     },
     // Canonical свідомо НЕ ставимо на рівні layout: він успадковується всіма

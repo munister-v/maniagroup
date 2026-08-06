@@ -13,6 +13,7 @@ import { AdminClassifier } from "./AdminClassifier";
 import { AdminProperties } from "./AdminProperties";
 import { AdminPropertyMatching } from "./AdminPropertyMatching";
 import { AdminSizeCharts } from "./AdminSizeCharts";
+import { AdminHelp } from "@/components/admin/AdminHelp";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { MonitoringSection } from "./MonitoringSection";
@@ -21,7 +22,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings";
+type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings" | "help";
 
 type RecentOrder = {
   id: number;
@@ -158,6 +159,11 @@ const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
     id: "backup",
     label: "Резервні копії",
     d: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4",
+  },
+  {
+    id: "help",
+    label: "Довідка",
+    d: "M12 19a7 7 0 100-14 7 7 0 000 14zm0-10.5v.01M11 12h1v4h1",
   },
   {
     id: "settings",
@@ -441,6 +447,7 @@ export function AdminDashboard({
           {section === "accounting" && <AdminAccounting onToast={showToast} />}
           {section === "monitoring" && <MonitoringSection />}
           {section === "backup" && <BackupSection />}
+          {section === "help" && <AdminHelp />}
           {section === "settings" && <SettingsSection />}
         </main>
       </div>
