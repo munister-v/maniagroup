@@ -29,8 +29,12 @@ function ChartTable({ chart, type }: { chart: SizeChart; type: SizeChartType }) 
   const rows = chart.chart.filter((r) => (r.size ?? "").trim() !== "");
   if (rows.length === 0) return null;
 
+  // Фон НЕПРОЗОРИЙ — колонка залипає зліва, і при горизонтальному гортанні
+  // цифри проїжджають під нею. З напівпрозорим bg-cloud/60 вони просвічували
+  // крізь підпис: на телефоні виходило «РОЗМІР 39T)» одне поверх одного.
+  // Тінь праворуч показує, що колонка лежить над таблицею, а не в ній.
   const th =
-    "sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud/60 px-5 py-3 text-left text-[11px] uppercase tracking-luxe text-muted";
+    "sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud px-4 py-3 text-left text-[10px] uppercase tracking-[0.12em] text-muted shadow-[6px_0_8px_-6px_rgba(26,23,20,0.18)] sm:px-5 sm:text-[11px] sm:tracking-luxe";
 
   return (
     <Reveal>
