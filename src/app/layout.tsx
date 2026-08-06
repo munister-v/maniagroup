@@ -7,7 +7,7 @@ import { WishlistProvider } from "@/components/WishlistContext";
 import { getSiteContent, announcementActive } from "@/lib/siteContent";
 import { dbBrands } from "@/lib/productSource";
 import { getResolvedBrandLogoMap } from "@/lib/brandLogos";
-import { SITE_URL } from "@/lib/siteUrl";
+import { SITE_URL, SITE_INDEXABLE } from "@/lib/siteUrl";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -26,7 +26,7 @@ const jost = Jost({
 
 export async function generateMetadata(): Promise<Metadata> {
   const { seo } = await getSiteContent();
-  const ogImg = seo.ogImage || "/images/hero.webp";
+  const ogImg = seo.ogImage || "/images/og-default.jpg";
   return {
     metadataBase: new URL(SITE_URL),
     title: {
@@ -35,11 +35,22 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: seo.description,
     keywords: seo.keywords,
+    icons: {
+      icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/icon-192.png", type: "image/png", sizes: "192x192" }],
+      apple: "/apple-touch-icon.png",
+    },
     // Canonical свідомо НЕ ставимо на рівні layout: він успадковується всіма
     // сторінками, які не оголосили власний, і тоді /checkout та /account/*
     // заявляли себе головною сторінкою. Кожна публічна сторінка задає canonical
     // сама (див. page.tsx кожної), а службовим він не потрібен — вони noindex.
-    robots: { index: true, follow: true },
+
+    // Той самий прапорець, що і в robots.txt. Поки магазин не запущено, сайт
+    // має говорити «не індексувати» ОБОМА способами: robots.txt лише забороняє
+    // обхід, і сторінка, на яку є зовнішнє посилання, все одно може потрапити
+    // в індекс — самою лише адресою, без вмісту.
+    robots: SITE_INDEXABLE
+      ? { index: true, follow: true }
+      : { index: false, follow: false },
     openGraph: {
       type: "website",
       locale: "uk_UA",
@@ -47,7 +58,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title: seo.defaultTitle,
       description: seo.description,
       url: SITE_URL,
-      images: [{ url: ogImg, width: 1200, height: 800, alt: seo.siteName }],
+      // 1200×630 — те, що чекають і Facebook, і Telegram. Раніше тут стояло
+      // 1200×800, чого не відповідав жоден із файлів.
+      images: [{ url: ogImg, width: 1200, height: 630, alt: seo.siteName }],
     },
     twitter: {
       card: "summary_large_image",
@@ -67,7 +80,7 @@ async function orgJsonLd() {
     name: seo.siteName,
     url: SITE_URL,
     logo: `${SITE_URL}/favicon.ico`,
-    image: `${SITE_URL}${seo.ogImage || "/images/hero.webp"}`,
+    image: `${SITE_URL}${seo.ogImage || "/images/og-default.jpg"}`,
     telephone: contacts.phone.replace(/[^\d+]/g, "") || "+380963436035",
     description: seo.description,
     address: { "@type": "PostalAddress", addressCountry: "UA" },

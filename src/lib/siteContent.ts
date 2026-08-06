@@ -98,9 +98,11 @@ export const DEFAULT_CONTENT: SiteContent = {
         links: [
           { label: "Жінкам", href: "/catalog?gender=women" },
           { label: "Чоловікам", href: "/catalog?gender=men" },
-          { label: "Бренди", href: "/catalog" },
+          { label: "Бренди", href: "/brands" },
           { label: "Новинки", href: "/catalog?sort=newest" },
-          { label: "Sale", href: "/catalog?sort=price_asc" },
+          // Було ?sort=price_asc — це не розпродаж, а весь каталог від
+          // найдешевшого. Знижені товари живуть під ?sale=1.
+          { label: "Sale", href: "/catalog?sale=1" },
         ],
       },
       {
@@ -138,7 +140,7 @@ export const DEFAULT_CONTENT: SiteContent = {
       "Harmont & Blaine",
       "оригінальний одяг Україна",
     ],
-    ogImage: "/images/hero.webp",
+    ogImage: "/images/og-default.jpg",
   },
   hero: {
     eyebrow: "Колекція SS'26 · Україна",
