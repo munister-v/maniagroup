@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mania Group — інтернет-магазин
 
-## Getting Started
+Магазин брендового одягу та взуття: [shop.maniagroup.com.ua](https://shop.maniagroup.com.ua).
+Next.js 16 + React 19 + TypeScript + Tailwind, дані в PostgreSQL. Разом із вітриною
+в цьому ж застосунку живе адмінка та невелика ERP: каталог, торгові пропозиції
+(розміри й залишки), імпорт прайсів, замовлення, клієнти, облік.
 
-First, run the development server:
+Старий сайт `maniagroup.com.ua` (WordPress) працює окремо на чужому хостингу
+і до цього репозиторію стосунку не має.
+
+## Швидкий старт
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+# у .env.local щонайменше DATABASE_URL — див. таблицю нижче
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Без бази застосунок не підніметься: майже кожна сторінка вітрини читає товари
+з PostgreSQL. Схема створюється сама при першому запиті — окремих міграцій
+запускати не потрібно.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Команда | Що робить |
+|---|---|
+| `npm run dev` | Локальна розробка |
+| `npm run build` | Продакшн-збірка |
+| `npm run lint` | ESLint |
+| `npx tsc --noEmit` | Перевірка типів (у CI немає, робіть перед пушем) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Змінні оточення
 
-## Learn More
+Живуть у `.env.local`, який **ніколи не потрапляє в git** — репозиторій публічний.
 
-To learn more about Next.js, take a look at the following resources:
+| Змінна | Навіщо | Обов'язкова |
+|---|---|---|
+| `DATABASE_URL` | Підключення до PostgreSQL | так |
+| `ADMIN_PASSWORD` | Пароль входу в адмінку | так на проді |
+| `ADMIN_SECRET` | Підпис сесійної куки адміна | так на проді |
+| `NEXT_PUBLIC_ADMIN_PATH` | Нестандартний шлях адмінки; `/admin` віддає 404 | так на проді |
+| `NEXT_PUBLIC_SITE_URL` | Канонічна адреса для canonical / OG / sitemap | ні (дефолт — бойова) |
+| `SITE_INDEXABLE` | `1` вмикає індексацію пошуковиками | ні |
+| `NOVAPOSHTA_API_KEY` | Відділення й доставка | ні |
+| `LOGO_DEV_TOKEN` | Автозавантаження логотипів брендів | ні |
+| `OPENROUTER_API_KEY` | AI-помічник в адмінці, розбір імпортних файлів | ні |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Без `ADMIN_SECRET` у проді застосунок голосно лається в логи: сесійна кука тоді
+підписується публічним значенням із коду, і її можна підробити, не знаючи пароля.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Як влаштовані дані
 
-## Deploy on Vercel
+**Товар** (`products`) — картка: назва, бренд, категорія, ціни, фото, опис.
+**Торгова пропозиція** (`product_variants`) — конкретний розмір із власним
+залишком. Покупець бачить картку, а купує розмір.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Два різні коди, які легко переплутати:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `sku` — наш внутрішній номер. По ньому зшито імпорт і перехід зі старого сайту.
+- заводський артикул — код виробника з бирки, те, що присилає постачальник.
+
+`products.slug` дорівнює числовому `id`, а **не** артикулу. Тому `/product/23590`
+відкриє товар з ID 23590, а не з артикулом 23590 — для переходів за артикулом
+є окремий маршрут `/go/<sku>`.
+
+### Коли товар видно на вітрині
+
+Правила зібрані в `runQuery()` (`src/lib/productSource.ts`). Товар потрапляє
+в каталог, якщо:
+
+1. `status = 'publish'` (в адмінці — «Підтверджено» / «На сайті»);
+2. категорія не прихована (`aromatizator` вирізана навмисно);
+3. є хоч одне фото — або вимкнена вимога фото (`require_product_photo`), або
+   у товару стоїть `show_without_photo`.
+
+Нульовий залишок товар **не ховає** — картка лишається з позначкою «Немає
+в наявності». Це свідоме рішення: так позиція не втрачає місце в пошуку.
+
+## Деплой
+
+Код їде через git, збірка робиться на сервері:
+
+```bash
+git push origin main
+ssh mania
+cd /opt/maniagroup && ./deploy.sh
+```
+
+`deploy.sh` відмовиться працювати на брудному дереві — на сервері буває робота,
+яку писали руками і не закомітили. Далі він викликає `rebuild-safe.sh`: той
+зупиняє PM2 (щоб звільнити пам'ять), збирає з обмеженням heap, підміняє `.next`,
+перезапускає і робить смоук-тест із відкатом на попередню збірку, якщо сайт не
+піднявся. На сервері 1.7 ГБ пам'яті, і звичайний `next build` її з'їдає — тому
+саме так, а не `npm run build` руками.
+
+## Що лежить поза репозиторієм
+
+- **Фото каталогу і завантаження з адмінки** — `/var/lib/maniagroup/media` на
+  сервері. У git їх немає і бути не повинно: це гігабайти.
+- **`.env.local`** — тільки на сервері.
+
+⚠️ Ніколи не синхронізуйте теку сервера з локальною наосліп (`rsync --delete`):
+воно вже двічі зносило `.env.local` і фотографії каталогу.
+
+## Резервні копії
+
+Працюють самі на сервері: щодня 03:00 — дамп бази, 03:15 — копія на другий
+сервер і зашифрований дамп у приватну історію, щонеділі 03:30 — файли й фото.
+Дамп у GitHub зашифрований AES-256, бо репозиторій публічний.
+
+## Документація
+
+| Файл | Про що |
+|---|---|
+| [`docs/erp-plan.md`](docs/erp-plan.md) | Задум ERP: матриця розмірів, імпорт, склад |
+| [`docs/admin-upgrade-plan.md`](docs/admin-upgrade-plan.md) | План переробки адмінки |
+| [`docs/intertop-formats.md`](docs/intertop-formats.md) | Формати даних, на які рівнялись |
+| [`docs/wp-import-note.md`](docs/wp-import-note.md) | Як каталог переїжджав з WooCommerce |
+| [`docs/old-site-banner.html`](docs/old-site-banner.html) | Плашка на старому сайті, що веде сюди |
+| [`AGENTS.md`](AGENTS.md) | Правило для ІІ-агентів: цей Next не той, що ви пам'ятаєте |
+
+Інструкція для тих, хто працює з товарами щодня, живе не тут, а всередині
+адмінки — розділ **«Довідка»** поруч із «Налаштуваннями».
+
+## Корисні скрипти
+
+| Скрипт | Навіщо |
+|---|---|
+| `scripts/import-wc-csv.mjs` | Залив каталогу з експорту WooCommerce |
+| `scripts/refetch-brand-logos.mjs` | Перезавантажити логотипи брендів (запускати на сервері) |
+| `scripts/trim-brand-logos.mjs` | Обрізати порожні поля навколо вже завантажених логотипів |
+| `scripts/migrate-sqlite-to-pg.mts` | Разовий переїзд зі SQLite на PostgreSQL |
