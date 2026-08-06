@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { q1 } from "@/lib/pg";
+import { SITE_URL } from "@/lib/siteUrl";
 
 /**
  * Перехід зі старого сайту на цей — за артикулом WooCommerce.
@@ -23,7 +24,12 @@ export async function GET(
   const { sku } = await params;
   const clean = decodeURIComponent(sku).trim();
 
-  if (!clean) return NextResponse.redirect(new URL("/catalog", _req.url), 308);
+  // Абсолютний URL будуємо від SITE_URL, а НЕ від _req.url. За nginx запит
+  // приходить у Node як http://localhost:3010/... — і Location вийшов би
+  // «localhost:3010», тобто мертвим посиланням для всіх, крім самого сервера.
+  const to = (path: string) => NextResponse.redirect(new URL(path, SITE_URL), 308);
+
+  if (!clean) return to("/catalog");
 
   const row = await q1<{ id: string }>(
     `SELECT id::text FROM products
@@ -33,9 +39,6 @@ export async function GET(
     [clean],
   ).catch(() => null);
 
-  const target = row ? `/product/${row.id}` : `/catalog?q=${encodeURIComponent(clean)}`;
-
-  // 308, а не 301: старий сайт лишається робочим, і це саме «той самий товар
-  // тепер тут», а не тимчасова адреса. Метод запиту при цьому зберігається.
-  return NextResponse.redirect(new URL(target, _req.url), 308);
+  // 308, а не 302: це саме «той самий товар тепер тут», постійна адреса.
+  return to(row ? `/product/${row.id}` : `/catalog?q=${encodeURIComponent(clean)}`);
 }
