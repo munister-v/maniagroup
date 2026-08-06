@@ -1,0 +1,59 @@
+<!--
+  Плашка «магазин переїхав» для старого сайту maniagroup.com.ua.
+  Вставити цілком, як є.  WP-адмінка → Зовнішній вигляд → Віджети →
+  блок «Довільний HTML» у підвал → вставити → Оновити.
+  Закривається хрестиком і не показується 14 днів.
+-->
+<div id="mg-move">
+  <div class="mg-move__in">
+    <div class="mg-move__t">
+      <b>Ми переїхали</b>
+      <i>Новий магазин Mania Group — зручніший каталог і замовлення онлайн</i>
+    </div>
+    <a class="mg-move__go" href="https://shop.maniagroup.com.ua/?utm_source=maniagroup.com.ua&utm_medium=banner">
+      Перейти в новий магазин
+    </a>
+    <button class="mg-move__x" type="button" aria-label="Закрити">&times;</button>
+  </div>
+</div>
+
+<style>
+#mg-move{position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#1a1714;color:#fbfaf8;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  border-top:1px solid rgba(251,250,248,.14);box-shadow:0 -20px 44px -32px rgba(0,0,0,.9)}
+#mg-move .mg-move__in{max-width:1180px;margin:0 auto;padding:15px 48px 15px 20px;
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap;position:relative}
+#mg-move .mg-move__t{flex:1 1 280px;min-width:0}
+#mg-move .mg-move__t b{display:block;font-size:12px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.18em;color:#fbfaf8}
+#mg-move .mg-move__t i{display:block;font-style:normal;font-size:13.5px;line-height:1.5;
+  opacity:.7;margin-top:4px}
+#mg-move .mg-move__go{flex:0 0 auto;display:inline-flex;align-items:center;min-height:46px;
+  padding:0 26px;background:#fbfaf8;color:#1a1714;text-decoration:none;font-size:11.5px;
+  font-weight:600;text-transform:uppercase;letter-spacing:.16em;transition:opacity .2s}
+#mg-move .mg-move__go:hover{opacity:.86;color:#1a1714;text-decoration:none}
+#mg-move .mg-move__x{position:absolute;right:10px;top:50%;transform:translateY(-50%);
+  width:34px;height:34px;background:none;border:0;color:#fbfaf8;opacity:.5;font-size:24px;
+  line-height:1;cursor:pointer;padding:0}
+#mg-move .mg-move__x:hover{opacity:1}
+@media(max-width:640px){
+  #mg-move .mg-move__in{padding:14px 15px 16px;gap:12px}
+  #mg-move .mg-move__go{width:100%;justify-content:center}
+  #mg-move .mg-move__x{top:12px;transform:none}
+}
+</style>
+
+<script>
+(function(){
+  var K='mg_move_hidden', el=document.getElementById('mg-move');
+  if(!el) return;
+  try{ if((parseInt(localStorage.getItem(K)||'0',10)||0)>Date.now()){ el.style.display='none'; return; } }catch(e){}
+  // Смужка перекриває низ сторінки — звільняємо під неї місце.
+  document.body.style.paddingBottom=el.offsetHeight+'px';
+  el.querySelector('.mg-move__x').onclick=function(){
+    el.style.display='none';
+    document.body.style.paddingBottom='';
+    try{ localStorage.setItem(K,String(Date.now()+14*864e5)); }catch(e){}
+  };
+})();
+</script>
