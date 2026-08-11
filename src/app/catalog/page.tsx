@@ -177,13 +177,19 @@ export default async function CatalogPage({
     colorNames.length > 0 || sizeSlugs.length > 0 || seasonSlugs.length > 0 ||
     inStock || onSale || !!min || !!max;
 
-  if (q && page === 1 && total === 1 && products[0] && !hasNarrowingFilters) {
-    const only = products[0];
+  // Умова НЕ «знайшлась рівно одна річ»: код на кшталт «18768» через ILIKE
+  // ловить ще й чужі коди, де він трапляється підрядком, тож точний товар
+  // приїжджає в компанії трьох випадкових. Тому шукаємо серед знайденого
+  // товари, чий код ТОЧНО дорівнює запиту: якщо такий рівно один — це він і є.
+  if (q && page === 1 && !hasNarrowingFilters && q.trim().length >= 3) {
     const norm = (s: string) => s.replace(/[\s\-_.]/g, "").toLowerCase();
     const needle = norm(q);
-    const sizeCodes = only.code ? (only.sizes ?? []).map((s) => `${only.code}-${s}`) : [];
-    const codes = [only.article, only.code, only.id, ...sizeCodes].filter(Boolean) as string[];
-    if (needle && codes.some((c) => norm(c) === needle)) redirect(`/product/${only.slug}`);
+    const exact = products.filter((prod) => {
+      const sizeCodes = prod.code ? (prod.sizes ?? []).map((s) => `${prod.code}-${s}`) : [];
+      const codes = [prod.article, prod.code, prod.id, ...sizeCodes].filter(Boolean) as string[];
+      return codes.some((c) => norm(c) === needle);
+    });
+    if (exact.length === 1) redirect(`/product/${exact[0].slug}`);
   }
 
   // ── Size + color + price facets ──────────────────────────────────────────
