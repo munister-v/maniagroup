@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSessionAccount } from "@/lib/accountAuth";
 import { AccountLoginForm } from "@/components/account/AccountLoginForm";
-import { Reveal } from "@/components/Reveal";
+import { AuthShell } from "@/components/account/AuthShell";
 import Link from "next/link";
 
 export const metadata = { title: "Вхід" };
@@ -15,22 +15,22 @@ export default async function LoginPage({
   if (account) redirect("/account/profile");
   const { from } = await searchParams;
   return (
-    <div className="wrap flex min-h-[70vh] items-center justify-center py-16">
-      <Reveal className="w-full max-w-sm">
-        <div className="border border-line bg-white px-6 py-10 sm:px-10">
-          <p className="text-center text-[11px] uppercase tracking-luxe text-muted">Mania Group</p>
-          <h1 className="mt-3 text-center font-display text-3xl text-ink">Вхід до кабінету</h1>
-          <p className="mt-2 text-center text-sm text-muted">
-            Немає акаунту?{" "}
-            <Link href="/account/register" className="link-underline text-ink">
-              Зареєструватись
-            </Link>
-          </p>
-          <div className="mt-8">
-            <AccountLoginForm redirectTo={from ?? "/account/profile"} />
-          </div>
-        </div>
-      </Reveal>
-    </div>
+    <AuthShell
+      eyebrow="Особистий кабінет"
+      title="Вхід"
+      caption="Замовлення, обране та збережені дані доставки в одному місці."
+      footer={
+        // Посилання на реєстрацію було двічі: тут і всередині форми. Лишаємо
+        // один раз і внизу, після дії, заради якої людина прийшла.
+        <p className="text-[13px] text-muted">
+          Ще немає акаунту?{" "}
+          <Link href="/account/register" className="link-underline text-ink">
+            Зареєструватись
+          </Link>
+        </p>
+      }
+    >
+      <AccountLoginForm redirectTo={from ?? "/account/profile"} />
+    </AuthShell>
   );
 }

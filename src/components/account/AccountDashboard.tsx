@@ -103,22 +103,22 @@ export function AccountDashboard({
           </div>
         </div>
 
-        {/* Stats chips */}
-        <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setTab("orders")}
-              className="flex flex-col items-center rounded border border-line px-4 py-2 text-center transition-colors hover:border-ink">
-              <span className="font-display text-xl text-ink">{orderCount ?? "—"}</span>
-              <span className="text-[10px] uppercase tracking-luxe text-muted">замовлень</span>
+        {/* Лічильники. Були рамкові чипи зі скругленням — єдине місце на
+            сайті, де воно взагалі трапляється. Тепер цифра антиквою на
+            волосяній лінії, як у блоці переваг на головній і на /delivery. */}
+        <div className="flex items-end gap-8 sm:flex-col sm:items-end sm:gap-4">
+          <div className="flex items-start gap-8">
+            <button onClick={() => setTab("orders")} className="min-h-11 border-t border-line pt-3 text-left transition-colors hover:border-ink">
+              <span className="block font-display text-2xl leading-none text-ink">{orderCount ?? "—"}</span>
+              <span className="mt-1.5 block text-[10px] uppercase tracking-luxe text-muted">замовлень</span>
             </button>
-            <button onClick={() => setTab("wishlist")}
-              className="flex flex-col items-center rounded border border-line px-4 py-2 text-center transition-colors hover:border-ink">
-              <span className="font-display text-xl text-ink">{wishIds.size}</span>
-              <span className="text-[10px] uppercase tracking-luxe text-muted">в обраному</span>
+            <button onClick={() => setTab("wishlist")} className="min-h-11 border-t border-line pt-3 text-left transition-colors hover:border-ink">
+              <span className="block font-display text-2xl leading-none text-ink">{wishIds.size}</span>
+              <span className="mt-1.5 block text-[10px] uppercase tracking-luxe text-muted">в обраному</span>
             </button>
           </div>
           <button onClick={logout}
-            className="text-[11px] uppercase tracking-luxe text-muted transition-colors hover:text-ink">
+            className="inline-flex min-h-11 items-center text-[11px] uppercase tracking-luxe text-muted transition-colors hover:text-ink">
             Вийти →
           </button>
         </div>
@@ -140,12 +140,21 @@ export function AccountDashboard({
       <div className="grid gap-8 lg:grid-cols-[200px_1fr]">
         {/* ── Desktop sidebar ── */}
         <aside className="hidden lg:block">
-          <nav className="divide-y divide-line border border-line">
+          {/* Коробка з рамкою й чорною заливкою активного пункту важила більше
+              за весь вміст праворуч. Тепер список на волосяних лініях, активний
+              тримає тонкий маркер зліва — тихіше й ближче до решти сайту. */}
+          <nav className="divide-y divide-line border-t border-line">
             {TABS.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3.5 text-left text-[11px] uppercase tracking-luxe transition-colors ${
-                  tab === t.id ? "bg-ink text-paper" : "text-muted hover:bg-cloud/40 hover:text-ink"
+                className={`relative flex w-full items-center gap-3 py-3.5 pl-4 pr-2 text-left text-[11px] uppercase tracking-luxe transition-colors ${
+                  tab === t.id ? "text-ink" : "text-muted hover:text-ink"
                 }`}>
+                <span
+                  aria-hidden
+                  className={`absolute left-0 top-1/2 h-5 w-px -translate-y-1/2 transition-colors ${
+                    tab === t.id ? "bg-ink" : "bg-transparent"
+                  }`}
+                />
                 <SvgIcon d={t.icon} />
                 {t.label}
               </button>
@@ -199,7 +208,7 @@ function ProfileTab({ account, onUpdate }: { account: Account; onUpdate: (a: Acc
       <form onSubmit={save} className="max-w-lg space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <label className="block">
-            <span className="text-[11px] uppercase tracking-luxe text-muted">Ім'я</span>
+            <span className="text-[11px] uppercase tracking-luxe text-muted">Ім&apos;я</span>
             <input value={form.first_name} onChange={(e) => f("first_name", e.target.value)} className={inp} autoComplete="given-name" />
           </label>
           <label className="block">

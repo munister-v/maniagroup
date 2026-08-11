@@ -88,7 +88,7 @@ export function AccountLoginForm({ redirectTo }: { redirectTo: string }) {
           onChange={(e) => setRememberMe(e.target.checked)}
           className="h-4 w-4 accent-ink"
         />
-        <span className="text-[12px] text-muted">Запам'ятати мене на 30 днів</span>
+        <span className="text-[12px] text-muted">Запам&apos;ятати мене на 30 днів</span>
       </label>
 
       {error && <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -100,13 +100,6 @@ export function AccountLoginForm({ redirectTo }: { redirectTo: string }) {
       >
         {loading ? "Входимо…" : "Увійти"}
       </button>
-
-      <p className="text-center text-[11px] text-muted">
-        Немає акаунту?{" "}
-        <Link href="/account/register" className="link-underline text-ink">
-          Зареєструватись
-        </Link>
-      </p>
     </form>
   );
 }

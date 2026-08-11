@@ -40,7 +40,7 @@ export function AccountRegisterForm() {
     <form onSubmit={submit} className="space-y-4" autoComplete="on">
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
-          <span className={lbl}>Ім'я</span>
+          <span className={lbl}>Ім&apos;я</span>
           <input autoComplete="given-name" value={form.first_name} onChange={(e) => set("first_name", e.target.value)} className={inp} placeholder="Олексій" />
         </label>
         <label className="block">
