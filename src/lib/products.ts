@@ -183,11 +183,17 @@ function buildProductFilters(opts: ProductFilterOpts) {
     // size code — kept in sync with lib/variants.ts's Торгові пропозиції
     // search, which matches v.size, so the two screens agree on what a
     // number like "30" finds instead of silently disagreeing).
+    // Розмірний код (`18768-42`) і id додані слідом за вітриною: менеджер
+    // шукає рівно тим, що покупець продиктував із картки товару, і «на сайті
+    // знаходиться, в адмінці ні» — найгірший вид розбіжності.
+    const idCond = /^\d+$/.test(opts.q) && opts.q.length <= 9 ? ` OR products.id = ${Number(opts.q)}` : "";
     conds.push(`(name ILIKE $${i} OR brand ILIKE $${i} OR sku ILIKE $${i}
       OR replace(replace(replace(replace(sku,' ',''),'-',''),'.',''),'_','') ILIKE $${i}
       OR factory_article ILIKE $${i}
+      OR replace(replace(replace(replace(factory_article,' ',''),'-',''),'.',''),'_','') ILIKE $${i}
       OR EXISTS (SELECT 1 FROM product_variants v WHERE v.product_id = products.id
-                 AND (v.barcode ILIKE $${i} OR v.offer_code ILIKE $${i} OR v.size ILIKE $${i})))`);
+                 AND (v.barcode ILIKE $${i} OR v.offer_code ILIKE $${i} OR v.size ILIKE $${i}
+                   OR products.sku || '-' || v.size ILIKE $${i}))${idCond})`);
   }
   if (opts.stock === "in") conds.push("is_in_stock = TRUE");
   if (opts.stock === "out") conds.push("is_in_stock = FALSE");
