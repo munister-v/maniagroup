@@ -89,7 +89,7 @@ export default async function DeliveryPage() {
                   </div>
                   <span className="mt-1 h-2 w-2 rounded-full bg-line" />
                 </div>
-                <p className="mt-4 text-sm leading-relaxed text-muted/60">Visa, Mastercard — оплата прямо на сайті з'явиться найближчим часом.</p>
+                <p className="mt-4 text-sm leading-relaxed text-muted/60">Visa, Mastercard — оплата прямо на сайті з&apos;явиться найближчим часом.</p>
               </div>
             </Reveal>
           </div>
