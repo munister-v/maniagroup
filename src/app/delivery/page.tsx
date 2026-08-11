@@ -20,17 +20,40 @@ export default async function DeliveryPage() {
           </p>
           <h1 className="mt-3 font-display text-4xl text-ink md:text-5xl lg:text-6xl">Доставка та оплата</h1>
           <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted">{delivery.subtitle}</p>
+
+          {/* Три відповіді, по які сюди й заходять, — одразу, без гортання до
+              карток. «Скільки чекати», «скільки коштує», «коли платити». */}
+          <dl className="mt-9 grid max-w-2xl grid-cols-1 gap-x-10 gap-y-5 border-t border-line pt-7 sm:grid-cols-3">
+            {[
+              { k: "Відправка", v: "1–2 робочі дні" },
+              { k: "Безкоштовно від", v: "3 000 ₴" },
+              { k: "Оплата", v: "При отриманні" },
+            ].map((x) => (
+              <div key={x.k}>
+                <dt className="text-[10px] uppercase tracking-luxe text-muted">{x.k}</dt>
+                <dd className="mt-1.5 font-display text-xl text-ink md:text-2xl">{x.v}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
 
+      {/* Було: чотири однакові прямокутники в рамці 2×2 — сітка з нічого, яка
+          читається як таблиця, а не як розповідь. Тепер нумерований перелік із
+          тонкими лініями: та сама мова, що й у блоці переваг на головній. */}
       <section className="wrap py-14 md:py-20">
-        <div className="grid gap-px overflow-hidden border border-line bg-line sm:grid-cols-2">
+        <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
           {delivery.cards.map((c, i) => (
             <Reveal key={i} delay={i * 60}>
-              <div className="bg-paper p-8 md:p-10">
-                <p className="text-[11px] uppercase tracking-luxe text-muted">{c.eyebrow}</p>
-                <h2 className="mt-3 font-display text-2xl text-ink">{c.title}</h2>
-                <p className="mt-3 text-sm leading-relaxed text-muted">{c.text}</p>
+              <div className="border-t border-line pt-6">
+                <div className="flex items-baseline gap-3">
+                  <span className="font-display text-base leading-none text-ink/25">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <p className="text-[10px] uppercase tracking-luxe text-muted">{c.eyebrow}</p>
+                </div>
+                <h2 className="mt-3 font-display text-2xl text-ink md:text-[1.7rem]">{c.title}</h2>
+                <p className="mt-3 max-w-md text-sm leading-[1.75] text-muted">{c.text}</p>
               </div>
             </Reveal>
           ))}
