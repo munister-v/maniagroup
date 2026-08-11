@@ -114,10 +114,17 @@ export type CatalogResult = {
 
 // Home-fragrance section was removed from the storefront — these products stay
 // in the DB (visible in ERP/admin) but never surface on the public site.
-const HIDDEN_CATEGORY_SLUG = "aromatizator";
+//
+// ⚠️ "aromatizator" не збігається з жодним реальним category_slug (перевірено
+// в базі — 0 товарів). Справжні чотири категорії парфумерії для дому:
+// аромадифузори, змінні-блоки, інтер-єрні-парфуми, ароматичні-саше. Через
+// хибний слаг фільтр ніколи не спрацьовував — ці товари світились і в
+// каталозі, і в пошуку, попри explicit-рішення їх не публікувати.
+const HIDDEN_CATEGORY_SLUGS = ["аромадифузори", "змінні-блоки", "інтер-єрні-парфуми", "ароматичні-саше"];
+const HIDDEN_CATEGORY_SQL = HIDDEN_CATEGORY_SLUGS.map((s) => `'${s}'`).join(",");
 
 async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
-  const conds: string[] = ["status = 'publish'", `category_slug <> '${HIDDEN_CATEGORY_SLUG}'`];
+  const conds: string[] = ["status = 'publish'", `category_slug NOT IN (${HIDDEN_CATEGORY_SQL})`];
   const bind: unknown[] = [];
   const p = (v: unknown) => { bind.push(v); return `$${bind.length}`; };
 
@@ -374,10 +381,11 @@ export async function getCatalogCategories(): Promise<WcCategory[]> {
   const rows = await q<{ name: string; slug: string; count: string }>(
     `SELECT category AS name, category_slug AS slug, count(*)::text AS count
        FROM products
-      WHERE status = 'publish' AND category_slug <> '' AND category_slug <> $1
+      WHERE status = 'publish' AND category_slug <> ''
+        AND category_slug <> ALL($1::text[])
       GROUP BY category, category_slug
       ORDER BY count(*) DESC, category ASC`,
-    [HIDDEN_CATEGORY_SLUG],
+    [HIDDEN_CATEGORY_SLUGS],
   );
   return rows.map((c, i) => ({ id: i + 1, name: ukrainianize(c.name), slug: c.slug, parent: 0, count: Number(c.count) }));
 }
@@ -420,7 +428,9 @@ export async function dbProductById(idOrSlug: string): Promise<DbProductDetail |
     ?? (/^\d+$/.test(idOrSlug) ? await q1<any>("SELECT * FROM products WHERE id = $1", [Number(idOrSlug)]) : null);
   /* eslint-enable @typescript-eslint/no-explicit-any */
   if (!row) return null;
-  if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null;
+  // Пряме посилання на прихований товар теж має віддавати 404: він міг
+  // потрапити в чиїсь закладки чи в індекс за час, поки фільтр не працював.
+  if (HIDDEN_CATEGORY_SLUGS.includes(row.category_slug)) return null;
 
   // Load ERP variants — authoritative per-size stock
   const variantRows = await q<{ size: string; stock_qty: string; barcode: string | null; offer_code: string | null }>(
@@ -567,9 +577,10 @@ export async function getCatalogProducts(
 export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
   const rows = await q(
     `SELECT * FROM products WHERE featured AND status = 'publish'
+       AND category_slug <> ALL($2::text[])
        AND images IS NOT NULL AND images::text NOT IN ('[]','null','')
      ORDER BY is_in_stock DESC, id DESC LIMIT $1`,
-    [limit],
+    [limit, HIDDEN_CATEGORY_SLUGS],
   );
   return rows.map((r) => rowToProduct(r));
 }
@@ -578,7 +589,13 @@ export async function getFeaturedProducts(limit = 8): Promise<Product[]> {
 export async function getProductsByIds(ids: string[]): Promise<Product[]> {
   const numeric = ids.map((s) => Number(s)).filter((n) => Number.isFinite(n));
   if (numeric.length === 0) return [];
-  const rows = await q(`SELECT * FROM products WHERE id = ANY($1)`, [numeric]);
+  // Прихована категорія відсіюється й тут: інакше товар, який колись
+  // потрапив у «обране» або «нещодавно переглянуті», далі показувався б у
+  // цих блоках уже після того, як його прибрали з вітрини.
+  const rows = await q(
+    `SELECT * FROM products WHERE id = ANY($1) AND category_slug <> ALL($2::text[])`,
+    [numeric, HIDDEN_CATEGORY_SLUGS],
+  );
   const byId = new Map(rows.map((r) => [String((r as { id: unknown }).id), rowToProduct(r)]));
   return ids.map((id) => byId.get(id)).filter((p): p is Product => !!p);
 }
@@ -600,7 +617,9 @@ export async function listProductsForSitemap(): Promise<{ id: string; updatedAt:
     `SELECT id::text, updated_at
        FROM products
       WHERE status = 'publish' AND is_in_stock = TRUE
+        AND category_slug <> ALL($1::text[])
       ORDER BY updated_at DESC`,
+    [HIDDEN_CATEGORY_SLUGS],
   );
   return rows.map((r) => ({ id: r.id, updatedAt: new Date(r.updated_at) }));
 }

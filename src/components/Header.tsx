@@ -469,13 +469,32 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
             className="wrap flex items-center gap-4 py-6 md:py-8"
           >
             <Icon d={ICONS.search} />
+            {/* Рамка навколо поля на iOS мала дві можливі причини, тож
+                знімаємо обидві.
+                1) Глобальне правило :focus-visible у globals.css малює
+                   outline навколо будь-якого сфокусованого елемента. Текстовий
+                   інпут за специфікацією ЗАВЖДИ матчить :focus-visible, навіть
+                   від тапу, тож на телефоні воно спрацьовувало. Фокус тут і
+                   так видно: focus:border-ink підсвічує нижню лінію.
+                2) type="text" без autoComplete Safari вважає полем для
+                   AutoFill, показує панель «ключ/картка/адреса» (її видно на
+                   скріншоті) і підсвічує ціль. type="search" + autoComplete
+                   off прибирають і панель, і підсвітку, а enterKeyHint дає
+                   на клавіатурі кнопку «Пошук» замість «Ввід». */}
             <input
+              type="search"
+              name="q"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              enterKeyHint="search"
               autoFocus={searchOpen}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Шукати товари…"
               aria-label="Пошук товарів"
-              className="min-w-0 flex-1 border-b border-line bg-transparent py-3 font-display text-2xl text-ink placeholder:text-muted focus:border-ink focus:outline-none md:text-3xl"
+              className="min-w-0 flex-1 appearance-none border-b border-line bg-transparent py-3 font-display text-2xl text-ink placeholder:text-muted focus:border-ink focus:outline-none focus-visible:outline-none md:text-3xl [&::-webkit-search-cancel-button]:hidden"
             />
             <button
               type="button"
