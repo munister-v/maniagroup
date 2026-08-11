@@ -65,8 +65,14 @@ export function ProductRail({
           ))}
         </div>
 
+        {/* Ціль пальця, а не рядок тексту: сам напис заввишки 15px, у нього
+            важко влучити. inline-flex + min-h розсовують клікабельну область,
+            не змінюючи вигляду. */}
         <div className="mt-4 text-center sm:hidden">
-          <Link href={href} className="text-[12px] font-semibold uppercase tracking-[0.12em] text-ink underline-offset-4">
+          <Link
+            href={href}
+            className="inline-flex min-h-11 items-center justify-center px-6 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink underline-offset-4"
+          >
             {label} →
           </Link>
         </div>

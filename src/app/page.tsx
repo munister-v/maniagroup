@@ -239,7 +239,7 @@ function BrandStrip({ brands, logoMap, display }: {
       <div className="wrap">
         <div className="mb-6 flex items-end justify-between gap-4">
           <h2 className="text-[1.6rem] font-light uppercase leading-tight tracking-[0.13em] text-ink md:text-[2.1rem]">Бренди</h2>
-          <Link href="/brands" className="text-[12px] font-semibold uppercase tracking-[0.12em] text-ink underline-offset-4 hover:underline">Усі бренди →</Link>
+          <Link href="/brands" className="inline-flex min-h-11 shrink-0 items-center text-[12px] font-semibold uppercase tracking-[0.12em] text-ink underline-offset-4 hover:underline">Усі бренди →</Link>
         </div>
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-2.5 md:grid-cols-6">
           {ordered.map((brand, i) => (

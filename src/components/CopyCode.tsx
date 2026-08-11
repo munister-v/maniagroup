@@ -78,7 +78,10 @@ export function CopyCode({ value, label }: { value: string; label?: string }) {
       onClick={copy}
       title="Скопіювати"
       aria-label={`Скопіювати ${label ? `${label}: ` : ""}${value}`}
-      className="group/copy inline-flex items-center gap-1.5 text-left text-ink underline-offset-4 transition-colors hover:text-ink/70 focus-visible:underline"
+      // min-h-11: сам рядок коду заввишки 20px, у нього не влучити пальцем, а
+      // копіювання це основна дія цього елемента саме на телефоні. Висота
+      // росте за рахунок клікабельної області, набір не рухається.
+      className="group/copy inline-flex min-h-11 items-center gap-1.5 text-left text-ink underline-offset-4 transition-colors hover:text-ink/70 focus-visible:underline md:min-h-0"
     >
       <span className="tabular-nums">
         {label ? `${label}: ` : ""}

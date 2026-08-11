@@ -88,8 +88,11 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
                 <ChevronIcon dir="right" />
               </button>
 
-              {/* Dots on mobile */}
-              <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 md:hidden">
+              {/* Dots on mobile. Сама смужка заввишки 4px, і кнопка була рівно
+                  такою ж: у неї неможливо влучити пальцем. Тепер кнопка має
+                  висоту 24px і прозорі поля навколо смужки, а смужка лишається
+                  тонкою: клікабельна зона більша за намальоване. */}
+              <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-0.5 md:hidden">
                 {shown.map((_, i) => (
                   <button
                     key={i}
@@ -98,10 +101,14 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
                     // оголошує просто «кнопка», шість разів поспіль.
                     aria-label={`Фото ${i + 1} з ${shown.length}`}
                     aria-current={i === active}
-                    className={`h-1 rounded-full transition-all ${
-                      i === active ? "w-5 bg-ink" : "w-1.5 bg-ink/25"
-                    }`}
-                  />
+                    className="flex h-6 items-center px-1"
+                  >
+                    <span
+                      className={`block h-1 rounded-full transition-all ${
+                        i === active ? "w-5 bg-ink" : "w-1.5 bg-ink/25"
+                      }`}
+                    />
+                  </button>
                 ))}
               </div>
 

@@ -10,9 +10,16 @@ import {
 
 export function ProductCard({ product }: { product: Product }) {
   const { brand, name, article, code, price, oldPrice, tag, tone, slug, image, images, sizes } = product;
-  // Артикул виробника і внутрішній код — обидва, бо шукають то одним, то
-  // іншим. Дублікат не показуємо: у частини товарів це те саме значення.
-  const codes = [article, code && code !== article ? code : null].filter(Boolean).join(" · ");
+  // Артикул виробника і внутрішній код: шукають то одним, то іншим. Дублікат
+  // не показуємо, у частини товарів це те саме значення.
+  //
+  // На телефоні пара не влазить. Картка там 158px, і рядок
+  // «P26PTR8463ABUN 30005 · 27145» обрізався трикрапкою рівно посередині
+  // артикула, тобто код був на екрані й водночас нечитабельний. Тому на
+  // вузькому екрані лишається тільки артикул (він головний і саме його
+  // диктують), а пара показується від 640px, де вона вміщується.
+  const secondary = code && code !== article ? code : null;
+  const codes = [article, secondary].filter(Boolean).join(" · ");
   const discount = discountPercent(product);
   const archived = product.inStock === false;
 
@@ -61,7 +68,10 @@ export function ProductCard({ product }: { product: Product }) {
         {/* Без uppercase: 34 товари мають малі літери в артикулі («A53202-new»),
             і CSS-переверт показував би код, якого не існує — а його з екрана
             переписують у пошук і диктують менеджеру. */}
-        <p className="mt-1 min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums" title={codes || undefined}>
+        <p className="mt-1 min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums sm:hidden" title={codes || undefined}>
+          {article || ""}
+        </p>
+        <p className="mt-1 hidden min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums sm:block" title={codes || undefined}>
           {codes}
         </p>
 
