@@ -69,8 +69,29 @@ function ProductView({
     thumbnail: img.src,
     alt: `${product.name} — ${product.brand}`,
   }));
-  const specs: { label: string; value: string }[] = [
+  // Усі коди, які в товару взагалі є — покупець диктує менеджеру той, що
+  // бачить, а менеджер шукає ним же в адмінці. Тому показуємо повний набір, а
+  // не один «головний»: артикул виробника, внутрішній код і штрихкоди
+  // розмірів. Порожні поля відпадають самі — рядка «Штрихкод: —» не буде.
+  const barcodes = sizeVariants.filter((v) => v.barcode);
+  const offerCodes = sizeVariants.filter((v) => v.offerCode);
+  const codeSpecs: { label: string; value: string }[] = [
     { label: "Артикул", value: product.article ?? "" },
+    { label: "Код товару", value: product.code ?? "" },
+    {
+      label: barcodes.length > 1 ? "Штрихкоди" : "Штрихкод",
+      // З розміром, коли їх кілька: штрихкод у нас на варіант, і «13 штук
+      // підряд» без підпису розміру нікому не допоможе.
+      value: barcodes.map((v) => (barcodes.length > 1 ? `${v.size}: ${v.barcode}` : v.barcode!)).join(" · "),
+    },
+    {
+      label: offerCodes.length > 1 ? "Коди пропозицій" : "Код пропозиції",
+      value: offerCodes.map((v) => (offerCodes.length > 1 ? `${v.size}: ${v.offerCode}` : v.offerCode!)).join(" · "),
+    },
+  ].filter((s) => s.value);
+
+  const specs: { label: string; value: string }[] = [
+    ...codeSpecs,
     { label: "Бренд", value: product.brand },
     { label: "Колір", value: color ?? "" },
     { label: "Сезон", value: season ?? "" },
@@ -87,10 +108,13 @@ function ProductView({
     brand: { "@type": "Brand", name: product.brand },
     category: product.category,
     image: gallery.length > 0 ? gallery.map((g) => g.src) : product.image ? [product.image] : undefined,
-    sku: product.id,
+    sku: product.code || product.id,
     // Артикул виробника — окреме поле схеми. Google показує його в картці
     // товару й зіставляє наш лістинг з тим самим товаром в інших магазинів.
     mpn: product.article || undefined,
+    // gtin приймає EAN-8/12/13/14 — віддаємо лише коли штрихкод справді
+    // такої довжини, інакше Merchant Center відхиляє весь товар.
+    gtin: barcodes.map((v) => v.barcode!).find((b) => /^\d{8}$|^\d{12,14}$/.test(b)),
     color: color || undefined,
     offers: {
       "@type": "Offer",

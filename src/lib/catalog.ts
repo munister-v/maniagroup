@@ -32,6 +32,9 @@ export type Product = {
    *  товару. Береться з products.factory_article, а якщо його немає —
    *  виколупується з хвоста назви (див. splitArticleFromName). */
   article?: string;
+  /** Внутрішній код товару (products.sku) — те, чим товар живе в обліку й що
+   *  менеджер диктує по телефону. Показуємо поряд з артикулом. */
+  code?: string;
 };
 
 /**

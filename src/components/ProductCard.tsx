@@ -9,7 +9,10 @@ import {
 } from "@/lib/catalog";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { brand, name, article, price, oldPrice, tag, tone, slug, image, images, sizes } = product;
+  const { brand, name, article, code, price, oldPrice, tag, tone, slug, image, images, sizes } = product;
+  // Артикул виробника і внутрішній код — обидва, бо шукають то одним, то
+  // іншим. Дублікат не показуємо: у частини товарів це те саме значення.
+  const codes = [article, code && code !== article ? code : null].filter(Boolean).join(" · ");
   const discount = discountPercent(product);
   const archived = product.inStock === false;
 
@@ -55,8 +58,8 @@ export function ProductCard({ product }: { product: Product }) {
             тож він мусить бути видимий одразу, а не тільки в картці товару.
             Рядок тримаємо навіть порожнім (min-h), інакше картки без артикула
             з'їжджають по висоті відносно сусідів у сітці. */}
-        <p className="mt-1 min-h-[1.1em] truncate text-[10px] uppercase tracking-luxe text-muted/80 tabular-nums">
-          {article || ""}
+        <p className="mt-1 min-h-[1.1em] truncate text-[10px] uppercase tracking-luxe text-muted/80 tabular-nums" title={codes || undefined}>
+          {codes}
         </p>
 
         <div className="mt-1.5 flex items-baseline gap-2">

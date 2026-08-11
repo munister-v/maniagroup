@@ -95,6 +95,12 @@ function sizeAttributes(sizes: SizeQty[] | undefined): string {
  */
 async function syncManualVariants(productId: number, sizes: SizeQty[]): Promise<void> {
   const clean = sizes.filter((s) => s.size.trim());
+  // Розмірний код (внутрішній код + розмір) НЕ пишемо в offer_code: це ключ,
+  // за яким stockImport.ts зіставляє рядки постачальника з нашими варіантами
+  // (offer_code → barcode → article → factory_article). Підкласти туди
+  // вигадане нами значення означає ризикнути тим, що наступний файл залишків
+  // приліпиться не до того рядка. Код показуємо й шукаємо обчисленим із
+  // sku + size — див. lib/productSource.ts.
   for (const s of clean) {
     await q(
       `INSERT INTO product_variants (product_id, size, stock_qty, active, updated_at, updated_by)
@@ -298,12 +304,27 @@ export async function getAdminProduct(id: string) {
   return { ...product, variants };
 }
 
+/**
+ * Внутрішній код для товару, створеного руками. Порожній `sku` означав би
+ * товар, який неможливо знайти в каталозі за кодом — а вітрина тепер показує
+ * коди в картці й шукає по них, тож у кожного нового товару код мусить бути.
+ * Беремо id: він уже унікальний і саме так виглядають коди імпортованих
+ * товарів (`18768`).
+ */
+async function ensureInternalCode(sku: string | undefined, id: number): Promise<string> {
+  const given = (sku ?? "").trim();
+  if (given) return given;
+  const clash = await q1<{ id: string }>("SELECT id::text FROM products WHERE sku = $1", [String(id)]);
+  return clash ? `${id}-1` : String(id);
+}
+
 export async function createAdminProduct(input: AdminProductInput): Promise<{ id: string }> {
   const idRow = await q1<{ next: string }>(
     `SELECT (GREATEST(COALESCE(MAX(id),0), $1) + 1)::text AS next FROM products`,
     [ADMIN_ID_FLOOR],
   );
   const id = Number(idRow!.next);
+  const sku = await ensureInternalCode(input.sku, id);
   const slug = input.slug || String(id);
   const price = input.sale_price && input.sale_price > 0 && input.sale_price < input.regular_price
     ? input.sale_price
@@ -317,7 +338,7 @@ export async function createAdminProduct(input: AdminProductInput): Promise<{ id
        color, country, season, collection, composition, material, subtype, ever_published, size_chart_code)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
     [
-      id, input.sku ?? "", input.factory_article ?? "", input.name, input.name_uk ?? "", slug, input.brand ?? "Mania Group",
+      id, sku, input.factory_article ?? "", input.name, input.name_uk ?? "", slug, input.brand ?? "Mania Group",
       input.category ?? "Одяг", input.category_slug || slugify(input.category ?? "tovar") || "tovar",
       input.gender ?? "", price, input.regular_price, input.sale_price ?? null,
       input.is_in_stock ?? true, input.status ?? "draft", input.moderation_status ?? "draft",

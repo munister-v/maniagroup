@@ -57,6 +57,7 @@ function rowToProduct(row: any): Product {
     slug: row.slug || String(row.id),
     name: split.title,                  // RU→UK at display time; DB stays as imported
     article: (row.factory_article || "").trim() || split.article,
+    code: (row.sku || "").trim() || undefined,
     brand: row.brand,
     price: onSale ? (sale as number) : regular,
     oldPrice: onSale ? regular : undefined,
@@ -139,10 +140,17 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
     // Штрихкод і код пропозиції живуть на варіанті, не на товарі — тож
     // EXISTS. Дзеркалить пошук в адмінці (lib/products.ts
     // buildProductFilters), щоб вітрина й адмінка знаходили те саме.
+    // Розмірний код (`18768-M`) складається з sku та розміру. Більшість
+    // варіантів мають його тільки в такому, обчисленому вигляді — колонка
+    // offer_code заповнена лише там, де код прийшов від постачальника.
     ors.push(`EXISTS (SELECT 1 FROM product_variants v
                       WHERE v.product_id = products.id AND v.active = TRUE
                         AND (v.barcode ILIKE ${p("%" + term + "%")}
-                          OR v.offer_code ILIKE ${p("%" + term + "%")}))`);
+                          OR v.offer_code ILIKE ${p("%" + term + "%")}
+                          OR products.sku || '-' || v.size ILIKE ${p("%" + term + "%")}))`);
+    // Чистий номер — це ще й id товару: він стоїть в URL і в листі про
+    // замовлення, тож покупці цитують саме його.
+    if (/^\d+$/.test(term) && term.length <= 9) ors.push(`id = ${p(Number(term))}`);
     const compact = term.replace(/[\s\-_.]/g, "");
     // Always run for article-like queries: the TARGET (sku/name) may contain
     // separators even when the query doesn't — so "P26PAB8278ABUN00016" still
@@ -333,7 +341,15 @@ export async function getCatalogCategories(): Promise<WcCategory[]> {
 
 // ── Single product ─────────────────────────────────────────────────────
 
-export type SizeVariant = { size: string; qty: number; inStock: boolean };
+export type SizeVariant = {
+  size: string;
+  qty: number;
+  inStock: boolean;
+  /** Штрихкод конкретного розміру — він же те, що б'є сканер на складі. */
+  barcode?: string;
+  /** Код торгової пропозиції (розмірний SKU: внутрішній код + розмір). */
+  offerCode?: string;
+};
 
 export type DbProductDetail = {
   product: Product;
@@ -364,14 +380,20 @@ export async function dbProductById(idOrSlug: string): Promise<DbProductDetail |
   if (row.category_slug === HIDDEN_CATEGORY_SLUG) return null;
 
   // Load ERP variants — authoritative per-size stock
-  const variantRows = await q<{ size: string; stock_qty: string }>(
-    `SELECT size, stock_qty FROM product_variants WHERE product_id = $1 AND active = TRUE ORDER BY size`,
+  const variantRows = await q<{ size: string; stock_qty: string; barcode: string | null; offer_code: string | null }>(
+    `SELECT size, stock_qty, barcode, offer_code FROM product_variants
+      WHERE product_id = $1 AND active = TRUE ORDER BY size`,
     [Number(row.id)]
   );
   const sizeVariants: SizeVariant[] = variantRows.map((v) => ({
     size: v.size,
     qty: Number(v.stock_qty),
     inStock: Number(v.stock_qty) > 0,
+    barcode: (v.barcode || "").trim() || undefined,
+    // Постачальницький код, коли є; інакше складаємо свій із внутрішнього
+    // коду й розміру — рівно те, що покупець побачить і чим шукатиме.
+    offerCode: (v.offer_code || "").trim()
+      || ((row.sku || "").trim() ? `${String(row.sku).trim()}-${v.size}` : undefined),
   }));
 
   // Sizes: prefer ERP variants, fallback to WP attributes
