@@ -101,7 +101,7 @@ export function CartDrawer({
                 <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M6 8h12l1 13H5L6 8Zm3 0V6a3 3 0 0 1 6 0v2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </div>
               <p className="mt-4 font-display text-2xl text-ink">Кошик порожній</p>
-              <p className="mt-2 max-w-[28ch] text-sm leading-relaxed text-muted">Додайте річ у каталозі — вона з’явиться тут миттєво.</p>
+              <p className="mt-2 max-w-[28ch] text-sm leading-relaxed text-muted">Додайте річ у каталозі, і вона з’явиться тут миттєво.</p>
               <Link href="/catalog" onClick={onClose} className="mt-6 inline-flex h-11 items-center rounded-full border border-ink px-6 text-[11px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper">
                 До каталогу
               </Link>

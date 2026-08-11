@@ -18,7 +18,7 @@ export default function NotFound() {
       </h1>
       <p className="mt-5 max-w-md text-sm leading-relaxed text-muted">
         Можливо, товар розпродано або посилання застаріло. Спробуйте перейти до
-        каталогу — там завжди є щось нове.
+        каталогу, там завжди є щось нове.
       </p>
       <div className="mt-9 flex flex-wrap items-center justify-center gap-5">
         <Link
