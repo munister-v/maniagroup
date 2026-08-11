@@ -36,60 +36,66 @@ export async function Footer() {
       <div className="wrap py-10 md:py-16">
         <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)] md:gap-12">
           <div className="border-b border-line/80 pb-8 md:border-b-0 md:pb-0">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between md:block">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.26em] text-muted">Контакти магазину</p>
-                <p className="mt-3 font-display text-xl tracking-wordmark text-ink md:text-2xl">
-                  MANIA&nbsp;GROUP
-                </p>
-              </div>
-              {phone && (
+            {/* Було: телефон і кожна соцмережа — окрема велика «таблетка» з
+                рамкою. Три бордюрні капсули поспіль важили більше за саму
+                вивіску й на телефоні лягали в стовпчик на пів екрана. Тепер
+                головне велике (телефон антиквою — його й набирають), решта —
+                тихі рядки з іконкою. Ціль пальця тримає min-h, а не рамка. */}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.26em] text-muted">Контакти магазину</p>
+              <p className="mt-3 font-display text-xl tracking-wordmark text-ink md:text-2xl">
+                MANIA&nbsp;GROUP
+              </p>
+            </div>
+
+            {phone && (
+              <a
+                href={`tel:${phone.replace(/\s/g, "")}`}
+                className="group mt-5 inline-flex min-h-11 items-center font-display text-2xl text-ink transition-colors hover:text-ink/60 md:text-[1.75rem]"
+              >
+                {phone}
+                <span className="ml-3 h-px w-8 bg-line transition-all duration-300 group-hover:w-12 group-hover:bg-ink" />
+              </a>
+            )}
+            <p className="mt-1 text-[11px] uppercase tracking-luxe text-muted">Щодня 9:00—20:00</p>
+
+            <p className="mt-6 max-w-sm text-sm leading-relaxed text-muted md:text-[15px]">
+              {content.footer.about}
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-1 text-[11px] uppercase tracking-[0.16em] text-muted">
+              {instagram && (
                 <a
-                  href={`tel:${phone.replace(/\s/g, "")}`}
-                  className="inline-flex min-h-11 w-full items-center justify-center rounded-full border border-line px-4 py-3 text-center text-[13px] tracking-[0.14em] text-ink transition-colors hover:border-ink hover:bg-cloud/60 sm:w-auto sm:justify-start sm:text-left"
+                  href={instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-2 transition-colors hover:text-ink"
                 >
-                  {phone}
+                  <SocialIcon kind="instagram" />
+                  <span>{instagramHandle}</span>
                 </a>
               )}
-            </div>
-            <div className="mt-5 space-y-4">
-              <p className="max-w-sm text-sm leading-relaxed text-muted md:text-[15px]">
-                {content.footer.about}
-              </p>
-              <div className="flex flex-wrap gap-2.5 text-[11px] uppercase tracking-[0.16em] text-muted">
-                {instagram && (
-                  <a
-                    href={instagram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 py-2.5 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink"
-                  >
-                    <SocialIcon kind="instagram" />
-                    <span>Instagram · {instagramHandle}</span>
-                  </a>
-                )}
-                {telegram && (
-                  <a
-                    href={telegram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 py-2.5 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink"
-                  >
-                    <SocialIcon kind="telegram" />
-                    <span>Telegram · {telegramHandle}</span>
-                  </a>
-                )}
-                {facebook && (
-                  <a
-                    href={facebook}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-11 items-center rounded-full border border-line px-4 py-2.5 transition-colors hover:border-ink hover:bg-cloud/60 hover:text-ink"
-                  >
-                    Facebook
-                  </a>
-                )}
-              </div>
+              {telegram && (
+                <a
+                  href={telegram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-2 transition-colors hover:text-ink"
+                >
+                  <SocialIcon kind="telegram" />
+                  <span>{telegramHandle}</span>
+                </a>
+              )}
+              {facebook && (
+                <a
+                  href={facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center transition-colors hover:text-ink"
+                >
+                  Facebook
+                </a>
+              )}
             </div>
           </div>
 

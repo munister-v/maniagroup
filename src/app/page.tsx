@@ -292,12 +292,20 @@ function ServiceRow({ services }: { services: { title: string; text: string }[] 
     <section id="delivery" className="border-t border-line bg-cloud/40 py-12 md:py-16">
       <div className="wrap">
         <Reveal>
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            {services.map((s) => (
-              <div key={s.title}>
-                <h3 className="text-[12px] font-bold uppercase tracking-[0.16em] text-ink">{s.title}</h3>
-                <div className="mt-3 h-0.5 w-8 bg-[#c1352a]" />
-                <p className="mt-3 text-[13px] leading-[1.7] text-muted">{s.text}</p>
+          {/* Було: жирний гротеск капсом + червона риска під кожним пунктом —
+              чотири однакові акценти поспіль сперечались між собою і з
+              вивіскою. Лишаємо нумерацію антиквою і тонкий роздільник:
+              ритм читається, а кричить тільки ціна й знижки. */}
+          <div className="grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-4">
+            {services.map((s, i) => (
+              <div key={s.title} className="border-t border-line pt-5">
+                <div className="flex items-baseline gap-3">
+                  <span className="font-display text-base leading-none text-ink/25">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="text-[11px] uppercase tracking-luxe text-ink">{s.title}</h3>
+                </div>
+                <p className="mt-3 text-[13px] leading-[1.75] text-muted">{s.text}</p>
               </div>
             ))}
           </div>
@@ -313,17 +321,26 @@ function Newsletter() {
     <section id="home" className="bg-ink text-paper">
       <div className="wrap">
         <Reveal>
-          <div className="flex flex-col items-center py-16 text-center md:flex-row md:justify-between md:py-20 md:text-left">
-            <div className="md:max-w-[46%]">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-paper/50">−10% на перше замовлення</p>
-              <h2 className="mt-3 text-[2rem] font-black uppercase leading-[0.95] tracking-tight md:text-[2.8rem]">
-                Підпишись на розсилку
+          <div className="flex flex-col items-start gap-10 py-16 md:flex-row md:items-end md:justify-between md:gap-16 md:py-24">
+            <div className="md:max-w-[48%]">
+              {/* Було: font-black uppercase — важкий гротеск капсом у магазині,
+                  вивіска якого набрана тонкою антиквою. Заголовок повертаємо в
+                  ту саму гарнітуру, що й «MANIA GROUP» і назви розділів. */}
+              <h2 className="font-display text-[2.1rem] leading-[1.08] text-paper md:text-[2.9rem]">
+                Першими про те,
+                <br className="hidden sm:block" /> що щойно приїхало
               </h2>
-              <p className="mt-3 max-w-md text-[13px] leading-relaxed text-paper/55">
-                Нові надходження, закриті розпродажі та персональні пропозиції — раз на тиждень, без спаму.
+              <p className="mt-5 max-w-md text-[14px] leading-[1.75] text-paper/60">
+                Раз на тиждень — нові надходження, відкладені розміри та
+                приватні знижки для підписників. Нічого зайвого й ніколи не
+                частіше.
+              </p>
+              <p className="mt-6 inline-flex items-center gap-2.5 border border-paper/20 px-4 py-2 text-[11px] uppercase tracking-luxe text-paper/70">
+                <span className="font-display text-base leading-none text-paper">−10%</span>
+                на перше замовлення
               </p>
             </div>
-            <div className="mt-8 w-full md:mt-0 md:w-auto md:min-w-[360px]">
+            <div className="w-full md:w-auto md:min-w-[380px] md:pb-1">
               <NewsletterForm source="home" tone="dark" />
             </div>
           </div>
