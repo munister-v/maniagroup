@@ -8,7 +8,7 @@
  * for the mirror contract between the two.
  */
 
-import type { Product } from "./catalog";
+import { splitArticleFromName, type Product } from "./catalog";
 import { q, q1 } from "./pg";
 import { ukrainianize, expandSearchTerms, translateMaterials, translateSeason, translateCountry } from "./uk";
 import { colorLabel } from "./colors";
@@ -47,10 +47,16 @@ function rowToProduct(row: any): Product {
   const inStock = row.is_in_stock === true || row.is_in_stock === 1;
   const id = Number(row.id);
 
+  // Код у хвості назви — на вітрину його не пускаємо, він їде окремим полем
+  // `article`. factory_article авторитетніший: у назві трапляються описки
+  // (EW004079AF20252U1133 проти …1131 у полі), і довіряти треба полю.
+  const split = splitArticleFromName(ukrainianize(row.name));
+
   return {
     id: String(row.id),
     slug: row.slug || String(row.id),
-    name: ukrainianize(row.name),       // RU→UK at display time; DB stays as imported
+    name: split.title,                  // RU→UK at display time; DB stays as imported
+    article: (row.factory_article || "").trim() || split.article,
     brand: row.brand,
     price: onSale ? (sale as number) : regular,
     oldPrice: onSale ? regular : undefined,
@@ -129,6 +135,14 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
     // so "FM24 W24" or "fm24w24" both find "FM24W24FC_COFFEE".
     ors.push(`brand ILIKE ${p("%" + term + "%")}`);
     ors.push(`sku ILIKE ${p("%" + term + "%")}`);
+    ors.push(`factory_article ILIKE ${p("%" + term + "%")}`);
+    // Штрихкод і код пропозиції живуть на варіанті, не на товарі — тож
+    // EXISTS. Дзеркалить пошук в адмінці (lib/products.ts
+    // buildProductFilters), щоб вітрина й адмінка знаходили те саме.
+    ors.push(`EXISTS (SELECT 1 FROM product_variants v
+                      WHERE v.product_id = products.id AND v.active = TRUE
+                        AND (v.barcode ILIKE ${p("%" + term + "%")}
+                          OR v.offer_code ILIKE ${p("%" + term + "%")}))`);
     const compact = term.replace(/[\s\-_.]/g, "");
     // Always run for article-like queries: the TARGET (sku/name) may contain
     // separators even when the query doesn't — so "P26PAB8278ABUN00016" still
@@ -138,6 +152,7 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
         `replace(replace(replace(replace(${col},' ',''),'-',''),'.',''),'_','')`;
       ors.push(`${strip("sku")} ILIKE ${p("%" + compact + "%")}`);
       ors.push(`${strip("name")} ILIKE ${p("%" + compact + "%")}`);
+      ors.push(`${strip("factory_article")} ILIKE ${p("%" + compact + "%")}`);
     }
     // Trigram fuzzy match (pg_trgm) — catches typos/close spellings the exact
     // ILIKE patterns above miss (e.g. one wrong letter in a brand or product
@@ -154,9 +169,13 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
 
     // Relevance score for ORDER BY — otherwise matches come back in arbitrary
     // id order regardless of how well they match the query. name > sku > brand.
+    // Точний артикул — найсильніший сигнал: якщо покупець вбив код, він хоче
+    // саме цей товар, а не схожу назву. Тому 1.0, вище за будь-яку схожість.
     relevance = `GREATEST(
+      CASE WHEN factory_article ILIKE ${termParam} OR sku ILIKE ${termParam} THEN 1.0 ELSE 0 END,
       word_similarity(${termParam}, name),
       similarity(sku, ${termParam}) * 0.85,
+      similarity(coalesce(factory_article,''), ${termParam}) * 0.85,
       word_similarity(${termParam}, brand) * 0.7
     )`;
   }

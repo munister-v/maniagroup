@@ -9,7 +9,7 @@ import {
 } from "@/lib/catalog";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { brand, name, price, oldPrice, tag, tone, slug, image, images, sizes } = product;
+  const { brand, name, article, price, oldPrice, tag, tone, slug, image, images, sizes } = product;
   const discount = discountPercent(product);
   const archived = product.inStock === false;
 
@@ -50,6 +50,15 @@ export function ProductCard({ product }: { product: Product }) {
       <div className="mt-3 px-0.5">
         <p className="truncate text-[10px] uppercase tracking-luxe text-muted">{brand || "MANIA GROUP"}</p>
         <h3 className="mt-1 line-clamp-2 min-h-[2.45em] text-[13px] leading-snug text-ink md:text-sm">{name}</h3>
+
+        {/* Артикул — клієнт диктує його по телефону й шукає ним у каталозі,
+            тож він мусить бути видимий одразу, а не тільки в картці товару.
+            Рядок тримаємо навіть порожнім (min-h), інакше картки без артикула
+            з'їжджають по висоті відносно сусідів у сітці. */}
+        <p className="mt-1 min-h-[1.1em] truncate text-[10px] uppercase tracking-luxe text-muted/80 tabular-nums">
+          {article || ""}
+        </p>
+
         <div className="mt-1.5 flex items-baseline gap-2">
           <span className={`text-sm tabular-nums ${discount ? "font-medium text-[#b3392c]" : "text-ink"}`}>
             {formatPrice(price)}

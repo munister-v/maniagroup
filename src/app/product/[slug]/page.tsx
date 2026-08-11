@@ -70,6 +70,7 @@ function ProductView({
     alt: `${product.name} — ${product.brand}`,
   }));
   const specs: { label: string; value: string }[] = [
+    { label: "Артикул", value: product.article ?? "" },
     { label: "Бренд", value: product.brand },
     { label: "Колір", value: color ?? "" },
     { label: "Сезон", value: season ?? "" },
@@ -87,6 +88,9 @@ function ProductView({
     category: product.category,
     image: gallery.length > 0 ? gallery.map((g) => g.src) : product.image ? [product.image] : undefined,
     sku: product.id,
+    // Артикул виробника — окреме поле схеми. Google показує його в картці
+    // товару й зіставляє наш лістинг з тим самим товаром в інших магазинів.
+    mpn: product.article || undefined,
     color: color || undefined,
     offers: {
       "@type": "Offer",

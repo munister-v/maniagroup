@@ -28,7 +28,36 @@ export type Product = {
   sizes?: string[];
   /** Решта фото товару — для перегортання прямо в картці каталогу. */
   images?: string[];
+  /** Артикул виробника — показуємо окремим рядком у картці й на сторінці
+   *  товару. Береться з products.factory_article, а якщо його немає —
+   *  виколупується з хвоста назви (див. splitArticleFromName). */
+  article?: string;
 };
+
+/**
+ * Назви приїхали з WooCommerce із кодом у дужках на кінці:
+ * «Пуховик Женский GEOSPIRIT(HELIX NY 043)». Код там нікому не допомагає —
+ * він з'їдає два рядки заголовка в картці й обрізається трикрапкою. Тому в
+ * інтерфейсі показуємо назву без нього, а сам код — окремим полем «Артикул».
+ *
+ * У БД назва лишається як є: пошук по name якраз і ловить за цим кодом, і
+ * зачищати дані заради відображення означало б зламати пошук.
+ *
+ * Відрізаємо тільки те, що справді схоже на код: латиниця/цифри/розділювачі
+ * і хоча б одна цифра. Інакше постраждали б осмислені хвости на кшталт
+ * «Картридж сменный Lemon Grass (2 капсулы)» — там кирилиця, і ми його не
+ * чіпаємо.
+ */
+export function splitArticleFromName(raw: string): { title: string; article?: string } {
+  const name = (raw ?? "").trim();
+  const m = name.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
+  if (!m) return { title: name };
+  const [, head, inner] = m;
+  const code = inner.trim();
+  const codeLike = /^[A-Za-z0-9][A-Za-z0-9 ._/-]*$/.test(code) && /\d/.test(code);
+  if (!codeLike || !head.trim()) return { title: name };
+  return { title: head.trim(), article: code };
+}
 
 export const BRANDS = [
   "EA7 Emporio Armani",
