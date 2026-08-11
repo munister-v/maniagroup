@@ -34,6 +34,22 @@ export function ProductCardMedia({
   const [active, setActive] = useState(0);
   const multi = frames.length > 1;
 
+  /**
+   * Кадри для наведення довантажуємо лише тоді, коли миша реально зайшла в
+   * картку.
+   *
+   * До цього тут стояло loading="lazy" на всіх кадрах, окрім першого — і воно
+   * не працювало: усі кадри лежать один на одному в тій самій рамці, тобто
+   * У ПОЛІ ЗОРУ. «Lazy» відкладає тільки те, що за межами екрана, тож браузер
+   * чесно тягнув усі чотири одразу. Заміряно на каталозі: 94 запити за
+   * фото на 24 картки, з них 72 — кадри, яких ніхто не просив.
+   *
+   * На телефоні наведення не існує в принципі, тож там другий кадр не
+   * завантажиться ніколи — рівно 24 фото замість 94.
+   */
+  const [hovered, setHovered] = useState(false);
+  const visibleFrames = hovered ? frames : frames.slice(0, 1);
+
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!multi) return;
     const box = e.currentTarget.getBoundingClientRect();
@@ -45,18 +61,20 @@ export function ProductCardMedia({
   return (
     <div
       className={`relative overflow-hidden bg-cloud ${className}`}
+      // Вхід мишею — сигнал «зараз гортатимуть», саме тут і замовляємо решту
+      // кадрів. Спрацьовує раніше за перший рух, тож підміна встигає.
+      onMouseEnter={() => multi && setHovered(true)}
       onMouseMove={onMove}
       onMouseLeave={() => setActive(0)}
     >
-      {frames.length > 0 ? (
-        frames.map((src, i) => (
+      {visibleFrames.length > 0 ? (
+        visibleFrames.map((src, i) => (
           <Image
             key={src}
             src={src}
             alt={`${brand} product photo`}
             fill
-            // Перше фото вантажимо звичайно, решту — тільки коли знадобиться.
-            loading={i === 0 ? undefined : "lazy"}
+            loading={i === 0 ? undefined : "eager"}
             sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw"
             className={`object-cover transition-opacity duration-300 ease-out ${
               i === active ? "opacity-100" : "opacity-0"

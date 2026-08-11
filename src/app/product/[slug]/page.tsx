@@ -75,7 +75,6 @@ function ProductView({
   // не один «головний»: артикул виробника, внутрішній код і штрихкоди
   // розмірів. Порожні поля відпадають самі — рядка «Штрихкод: —» не буде.
   const barcodes = sizeVariants.filter((v) => v.barcode);
-  const offerCodes = sizeVariants.filter((v) => v.offerCode);
   // Кожен код — окрема одиниця, яку копіюють цілком. Підпис розміру ставимо
   // тільки коли кодів кілька: «13 штук підряд» без розміру нікому не поможе,
   // а при одному розмірі підпис — зайвий шум. У буфер лягає сам код.
@@ -86,10 +85,10 @@ function ProductView({
       label: barcodes.length > 1 ? "Штрихкоди" : "Штрихкод",
       items: barcodes.map((v) => ({ value: v.barcode!, size: barcodes.length > 1 ? v.size : undefined })),
     },
-    {
-      label: offerCodes.length > 1 ? "Коди пропозицій" : "Код пропозиції",
-      items: offerCodes.map((v) => ({ value: v.offerCode!, size: offerCodes.length > 1 ? v.size : undefined })),
-    },
+    // Код пропозиції на вітрині НЕ показуємо: покупцеві він нічого не каже, а
+    // рядок на 10 розмірів займав чотири рядки на телефоні. Пошук за ним
+    // працює і далі — менеджер знайде товар за розмірним кодом із накладної,
+    // просто на сторінці цього стовпчика немає. В адмінці колонка лишається.
   ].filter((r) => r.items.length > 0);
 
   const specs: { label: string; value: string }[] = [
