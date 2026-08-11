@@ -8,6 +8,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { ProductMedia } from "@/components/ProductMedia";
 import { ProductGallery } from "@/components/ProductGallery";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { CopyCode } from "@/components/CopyCode";
 import { SITE_URL } from "@/lib/siteUrl";
 import { dbProductById, getCatalogProducts, type DbProductDetail } from "@/lib/productSource";
 
@@ -75,23 +76,23 @@ function ProductView({
   // розмірів. Порожні поля відпадають самі — рядка «Штрихкод: —» не буде.
   const barcodes = sizeVariants.filter((v) => v.barcode);
   const offerCodes = sizeVariants.filter((v) => v.offerCode);
-  const codeSpecs: { label: string; value: string }[] = [
-    { label: "Артикул", value: product.article ?? "" },
-    { label: "Код товару", value: product.code ?? "" },
+  // Кожен код — окрема одиниця, яку копіюють цілком. Підпис розміру ставимо
+  // тільки коли кодів кілька: «13 штук підряд» без розміру нікому не поможе,
+  // а при одному розмірі підпис — зайвий шум. У буфер лягає сам код.
+  const codeRows: { label: string; items: { value: string; size?: string }[] }[] = [
+    { label: "Артикул", items: product.article ? [{ value: product.article }] : [] },
+    { label: "Код товару", items: product.code ? [{ value: product.code }] : [] },
     {
       label: barcodes.length > 1 ? "Штрихкоди" : "Штрихкод",
-      // З розміром, коли їх кілька: штрихкод у нас на варіант, і «13 штук
-      // підряд» без підпису розміру нікому не допоможе.
-      value: barcodes.map((v) => (barcodes.length > 1 ? `${v.size}: ${v.barcode}` : v.barcode!)).join(" · "),
+      items: barcodes.map((v) => ({ value: v.barcode!, size: barcodes.length > 1 ? v.size : undefined })),
     },
     {
       label: offerCodes.length > 1 ? "Коди пропозицій" : "Код пропозиції",
-      value: offerCodes.map((v) => (offerCodes.length > 1 ? `${v.size}: ${v.offerCode}` : v.offerCode!)).join(" · "),
+      items: offerCodes.map((v) => ({ value: v.offerCode!, size: offerCodes.length > 1 ? v.size : undefined })),
     },
-  ].filter((s) => s.value);
+  ].filter((r) => r.items.length > 0);
 
   const specs: { label: string; value: string }[] = [
-    ...codeSpecs,
     { label: "Бренд", value: product.brand },
     { label: "Колір", value: color ?? "" },
     { label: "Сезон", value: season ?? "" },
@@ -188,8 +189,18 @@ function ProductView({
               </div>
             )}
 
-            {specs.length > 0 && (
+            {(codeRows.length > 0 || specs.length > 0) && (
               <dl className="mt-8 space-y-2 border-t border-line pt-6 text-sm">
+                {codeRows.map((r) => (
+                  <div key={r.label} className="flex gap-3">
+                    <dt className="w-28 shrink-0 text-muted">{r.label}</dt>
+                    <dd className="flex flex-wrap gap-x-4 gap-y-1 text-ink">
+                      {r.items.map((it) => (
+                        <CopyCode key={`${r.label}-${it.size ?? ""}-${it.value}`} value={it.value} label={it.size} />
+                      ))}
+                    </dd>
+                  </div>
+                ))}
                 {specs.map((s) => (
                   <div key={s.label} className="flex gap-3">
                     <dt className="w-28 shrink-0 text-muted">{s.label}</dt>

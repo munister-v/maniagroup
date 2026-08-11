@@ -58,7 +58,10 @@ export function ProductCard({ product }: { product: Product }) {
             тож він мусить бути видимий одразу, а не тільки в картці товару.
             Рядок тримаємо навіть порожнім (min-h), інакше картки без артикула
             з'їжджають по висоті відносно сусідів у сітці. */}
-        <p className="mt-1 min-h-[1.1em] truncate text-[10px] uppercase tracking-luxe text-muted/80 tabular-nums" title={codes || undefined}>
+        {/* Без uppercase: 34 товари мають малі літери в артикулі («A53202-new»),
+            і CSS-переверт показував би код, якого не існує — а його з екрана
+            переписують у пошук і диктують менеджеру. */}
+        <p className="mt-1 min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums" title={codes || undefined}>
           {codes}
         </p>
 

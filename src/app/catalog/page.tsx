@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
@@ -164,6 +165,26 @@ export default async function CatalogPage({
     page,
     perPage,
   });
+
+  // Забив код — потрапив на товар. Коли запит точно збігається з кодом
+  // єдиної знахідки, показувати сітку з однієї плитки й змушувати клікнути в
+  // неї — зайвий крок: людина вже назвала конкретний товар. Ганяємо тільки на
+  // першій сторінці й без інших фільтрів, щоб не викидати покупця зі
+  // звуженого каталогу, і тільки за КОДОМ — збіг за назвою значить, що
+  // людина ще обирає.
+  const hasNarrowingFilters =
+    !!categorySlug || !!gender || !!brandGroup || brandSlugs.length > 0 ||
+    colorNames.length > 0 || sizeSlugs.length > 0 || seasonSlugs.length > 0 ||
+    inStock || onSale || !!min || !!max;
+
+  if (q && page === 1 && total === 1 && products[0] && !hasNarrowingFilters) {
+    const only = products[0];
+    const norm = (s: string) => s.replace(/[\s\-_.]/g, "").toLowerCase();
+    const needle = norm(q);
+    const sizeCodes = only.code ? (only.sizes ?? []).map((s) => `${only.code}-${s}`) : [];
+    const codes = [only.article, only.code, only.id, ...sizeCodes].filter(Boolean) as string[];
+    if (needle && codes.some((c) => norm(c) === needle)) redirect(`/product/${only.slug}`);
+  }
 
   // ── Size + color + price facets ──────────────────────────────────────────
   const sizes = await dbSizeFacets({ categorySlug, q });
