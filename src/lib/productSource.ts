@@ -8,7 +8,7 @@
  * for the mirror contract between the two.
  */
 
-import { splitArticleFromName, type Product } from "./catalog";
+import { splitArticleFromName, HIDDEN_CATEGORY_SLUGS, type Product } from "./catalog";
 import { q, q1 } from "./pg";
 import { ukrainianize, expandSearchTerms, translateMaterials, translateSeason, translateCountry } from "./uk";
 import { colorLabel } from "./colors";
@@ -112,15 +112,8 @@ export type CatalogResult = {
 
 // ── Core query ─────────────────────────────────────────────────────────
 
-// Home-fragrance section was removed from the storefront — these products stay
-// in the DB (visible in ERP/admin) but never surface on the public site.
-//
-// ⚠️ "aromatizator" не збігається з жодним реальним category_slug (перевірено
-// в базі — 0 товарів). Справжні чотири категорії парфумерії для дому:
-// аромадифузори, змінні-блоки, інтер-єрні-парфуми, ароматичні-саше. Через
-// хибний слаг фільтр ніколи не спрацьовував — ці товари світились і в
-// каталозі, і в пошуку, попри explicit-рішення їх не публікувати.
-const HIDDEN_CATEGORY_SLUGS = ["аромадифузори", "змінні-блоки", "інтер-єрні-парфуми", "ароматичні-саше"];
+// Список прихованих категорій живе в lib/catalog.ts — його ділять вітрина
+// і вивантаження прайсів, див. коментар там.
 const HIDDEN_CATEGORY_SQL = HIDDEN_CATEGORY_SLUGS.map((s) => `'${s}'`).join(",");
 
 async function runQuery(params: CatalogQuery): Promise<CatalogResult> {

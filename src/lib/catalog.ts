@@ -4,6 +4,20 @@
 // maps, journal teasers, and small formatting helpers (formatPrice,
 // discountPercent, brandMark) shared across storefront components.
 
+/**
+ * Категорії парфумерії для дому. Магазин їх не публікує: залишки просто
+ * роздаються. Список живе тут, бо його однаково потребують і вітрина
+ * (lib/productSource.ts), і вивантаження прайсів та фідів
+ * (lib/channelExport.ts) — розійтись вони не мають права, інакше товар
+ * зникає з сайту, але їде на маркетплейс.
+ */
+export const HIDDEN_CATEGORY_SLUGS = [
+  "аромадифузори",
+  "змінні-блоки",
+  "інтер-єрні-парфуми",
+  "ароматичні-саше",
+] as const;
+
 export type Gender = "women" | "men" | "home";
 export type Tag = "new" | "sale" | "last";
 
