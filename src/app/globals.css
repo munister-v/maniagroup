@@ -11,7 +11,7 @@
   --color-accent: #7a5c3e; /* bronze — used sparingly */
   --color-sale: #c1352a; /* sale / discount red */
 
-  --font-sans: var(--font-jost), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-cormorant), Georgia, "Times New Roman", serif;
 }
 

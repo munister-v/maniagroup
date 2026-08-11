@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Jost } from "next/font/google";
+import { Cormorant_Garamond, Montserrat } from "next/font/google";
 import "./globals.css";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -17,9 +17,14 @@ const cormorant = Cormorant_Garamond({
   display: "swap",
 });
 
-const jost = Jost({
-  variable: "--font-jost",
-  subsets: ["latin", "cyrillic"],
+// Було Jost. У нього є російська кирилиця, але НЕМАЄ жодної суто української
+// літери: І, Ї, Є, Ґ (перевірено вимірюванням гліфів — вони підставлялись
+// системним шрифтом). Через це в кожному заголовку «НОВІ НАДХОДЖЕННЯ» літера
+// «І» була з іншої гарнітури, і так у будь-якому українському слові.
+// Montserrat геометричний так само, а кирилицю закриває повністю.
+const montserrat = Montserrat({
+  variable: "--font-body",
+  subsets: ["latin", "cyrillic", "cyrillic-ext"],
   weight: ["300", "400", "500", "600"],
   display: "swap",
 });
@@ -127,7 +132,7 @@ export default async function RootLayout({
   return (
     <html
       lang="uk"
-      className={`${cormorant.variable} ${jost.variable} h-full`}
+      className={`${cormorant.variable} ${montserrat.variable} h-full`}
     >
       <body className="flex min-h-full flex-col font-sans">
         <script
