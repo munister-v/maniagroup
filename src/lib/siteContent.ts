@@ -91,7 +91,7 @@ export const DEFAULT_CONTENT: SiteContent = {
   announcementTo: "",
   footer: {
     about:
-      "EA7 Emporio Armani, Moschino, PINKO, TWINSET, Antony Morato. Італійський гардероб без черги за кордон, кожна річ з документами.",
+      "Італійський одяг напряму від брендів. Те саме, що в бутіках на батьківщині марки, тільки з доставкою Новою Поштою.",
     columns: [
       {
         title: "Магазин",
