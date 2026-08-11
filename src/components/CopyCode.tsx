@@ -16,18 +16,54 @@ import { useEffect, useRef, useState } from "react";
 export function CopyCode({ value, label }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const btn = useRef<HTMLButtonElement | null>(null);
 
   // Таймер живе довше за клік: без прибирання React лається на setState у
   // розмонтованому компоненті, коли покупець пішов зі сторінки одразу після
   // копіювання.
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
+  /**
+   * Запасний шлях для випадків, коли clipboard API недоступний: HTTP-контекст,
+   * заборонений дозвіл «clipboard-write», старий Safari. Кладемо код у
+   * прихований textarea і копіюємо старим execCommand — він працює без
+   * асинхронного дозволу.
+   */
+  function copyFallback(text: string): boolean {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    // Поза екраном, але не display:none — з невидимого елемента виділення не
+    // працює, а разом з ним і копіювання.
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
   async function copy() {
+    let ok = false;
     try {
       await navigator.clipboard.writeText(value);
+      ok = true;
     } catch {
-      // HTTP-контекст або заборонений дозвіл — тоді нехай лишається як звичайний
-      // текст, який можна виділити; мовчазна відмова краща за помилку в консолі.
+      ok = copyFallback(value);
+    }
+    // Якщо не вийшло жодним способом — виділяємо код на екрані, щоб лишався
+    // хоча б ручний Ctrl+C. Мовчазна бездіяльність тут гірша за все: людина
+    // тицяє й не розуміє, чому нічого не сталося.
+    if (!ok) {
+      const el = btn.current;
+      if (el) {
+        const range = document.createRange();
+        range.selectNodeContents(el.querySelector("[data-code]") ?? el);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
       return;
     }
     setCopied(true);
@@ -37,13 +73,18 @@ export function CopyCode({ value, label }: { value: string; label?: string }) {
 
   return (
     <button
+      ref={btn}
       type="button"
       onClick={copy}
       title="Скопіювати"
       aria-label={`Скопіювати ${label ? `${label}: ` : ""}${value}`}
       className="group/copy inline-flex items-center gap-1.5 text-left text-ink underline-offset-4 transition-colors hover:text-ink/70 focus-visible:underline"
     >
-      <span className="tabular-nums">{label ? `${label}: ` : ""}{value}</span>
+      <span className="tabular-nums">
+        {label ? `${label}: ` : ""}
+        {/* Позначка для ручного виділення: беремо сам код, без підпису розміру. */}
+        <span data-code>{value}</span>
+      </span>
       <span
         aria-hidden
         className={`text-[10px] uppercase tracking-luxe transition-opacity ${
