@@ -121,7 +121,9 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   const bind: unknown[] = [];
   const p = (v: unknown) => { bind.push(v); return `$${bind.length}`; };
 
-  let relevance: string | null = null;
+  // Терм для ранжування. Самі параметри для ORDER BY прив'язуємо ПІСЛЯ того,
+  // як зібрано весь WHERE — див. коментар про whereParamCount нижче.
+  let rankTerm: string | null = null;
   if (params.q && params.q.trim()) {
     const term = params.q.trim();
     const ors: string[] = [];
@@ -194,24 +196,13 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
     // noise and never crosses a sane threshold. word_similarity() instead
     // finds the best-matching substring, which is what "typo in one word"
     // actually needs.
-    const termParam = p(term);
     if (searchFuzzy) {
+      const termParam = p(term);
       ors.push(`word_similarity(${termParam}, name) > 0.4`);
       ors.push(`word_similarity(${termParam}, brand) > 0.4`);
     }
     conds.push(`(${ors.join(" OR ")})`);
-
-    // Relevance score for ORDER BY — otherwise matches come back in arbitrary
-    // id order regardless of how well they match the query. name > sku > brand.
-    // Точний артикул — найсильніший сигнал: якщо покупець вбив код, він хоче
-    // саме цей товар, а не схожу назву. Тому 1.0, вище за будь-яку схожість.
-    relevance = `GREATEST(
-      CASE WHEN factory_article ILIKE ${termParam} OR sku ILIKE ${termParam} THEN 1.0 ELSE 0 END,
-      word_similarity(${termParam}, name),
-      similarity(sku, ${termParam}) * 0.85,
-      similarity(coalesce(factory_article,''), ${termParam}) * 0.85,
-      word_similarity(${termParam}, brand) * 0.7
-    )`;
+    rankTerm = term;
   }
   if (params.categorySlug) conds.push(`category_slug = ${p(params.categorySlug)}`);
   if (params.brandName)     conds.push(`brand = ${p(params.brandName)}`);
@@ -254,6 +245,32 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   if (requireImage) conds.push(`(${hasImg} OR show_without_photo)`);
 
   const where = conds.join(" AND ");
+
+  // Межа між параметрами WHERE і всім, що додається лише заради ORDER BY /
+  // LIMIT. Рахунковий запит бере рівно цей префікс: у нього немає ні
+  // сортування, ні ліміту, і зайвий параметр валить його з
+  // «bind message supplies N parameters, but prepared statement requires N-1».
+  // Раніше тут стояло bind.length - 2 (ліміт і зсув), і це трималося тільки
+  // на тому, що параметр ранжування завжди дублювався десь у WHERE. Щойно
+  // нечіткий пошук перестав виконуватись на кодових запитах, дублікат зник —
+  // і пошук за кодом почав віддавати 500. Тому: спершу зафіксувати межу,
+  // потім прив'язувати параметри сортування.
+  const whereParamCount = bind.length;
+
+  let relevance: string | null = null;
+  if (rankTerm !== null) {
+    const t = p(rankTerm);
+    // Точний артикул — найсильніший сигнал: якщо покупець вбив код, він хоче
+    // саме цей товар, а не схожу назву. Тому 1.0, вище за будь-яку схожість.
+    relevance = `GREATEST(
+      CASE WHEN factory_article ILIKE ${t} OR sku ILIKE ${t} THEN 1.0 ELSE 0 END,
+      word_similarity(${t}, name),
+      similarity(sku, ${t}) * 0.85,
+      similarity(coalesce(factory_article,''), ${t}) * 0.85,
+      word_similarity(${t}, brand) * 0.7
+    )`;
+  }
+
   const order =
     params.orderby === "price"
       ? `ORDER BY is_in_stock DESC, ${hasImg}::int DESC, price ${(params.order ?? "asc").toUpperCase() === "DESC" ? "DESC" : "ASC"}`
@@ -272,7 +289,7 @@ async function runQuery(params: CatalogQuery): Promise<CatalogResult> {
   );
   const countRow = await q1<{ cnt: string }>(
     `SELECT count(*)::text AS cnt FROM products WHERE ${where}`,
-    bind.slice(0, bind.length - 2),
+    bind.slice(0, whereParamCount),
   );
 
   const products = rows.map(rowToProduct);
