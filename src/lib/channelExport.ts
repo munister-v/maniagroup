@@ -128,13 +128,25 @@ export async function getExportRows(f: ExportFilters = {}): Promise<ExportRow[]>
       // тепер є в будь-якому разі.
       article: (r.factory_article || "").trim(),
       barcodes: r.barcodes ?? "",
-      image: r.image_src || "",
+      // Абсолютний URL, а не «/catalog/…»: прайс і фід читають ЗЗОВНІ, і
+      // відносний шлях там означає просто відсутнє фото. Google на такий
+      // image_link відхиляє товар, а в CSV постачальник бачить нерозв'язне
+      // посилання.
+      image: absUrl(r.image_src),
       url: `${BASE}/product/${r.id}`,
     };
   });
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
+
+/** Відносний шлях із БД → повний URL. Порожнє лишається порожнім. */
+function absUrl(src: string | null | undefined): string {
+  const v = (src || "").trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `${BASE}${v.startsWith("/") ? "" : "/"}${v}`;
+}
 
 function xmlEscape(s: string): string {
   return String(s ?? "")
