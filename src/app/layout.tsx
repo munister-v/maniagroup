@@ -90,7 +90,7 @@ async function orgJsonLd() {
     telephone: contacts.phone.replace(/[^\d+]/g, "") || "+380963436035",
     description: seo.description,
     address: { "@type": "PostalAddress", addressCountry: "UA" },
-    sameAs: sameAs.length ? sameAs : ["https://instagram.com/maniagroup.ua", "https://t.me/maniagroup_ua"],
+    sameAs: sameAs.length ? sameAs : ["https://instagram.com/mania.group", "https://t.me/ManiaGroupKiev"],
     potentialAction: {
       "@type": "SearchAction",
       target: { "@type": "EntryPoint", urlTemplate: `${SITE_URL}/catalog?q={search_term_string}` },

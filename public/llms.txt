@@ -6,9 +6,9 @@ Mania Group продає виключно оригінальні товари з
 
 ## Каталог
 
-- [Каталог товарів](https://maniagroup.munister.com.ua/catalog): жіночий та чоловічий одяг, взуття, аксесуари, парфуми для дому. Фільтри за брендом, категорією, розміром, кольором та ціною.
-- [Жінкам](https://maniagroup.munister.com.ua/catalog?gender=women)
-- [Чоловікам](https://maniagroup.munister.com.ua/catalog?gender=men)
+- [Каталог товарів](https://shop.maniagroup.com.ua/catalog): жіночий та чоловічий одяг, взуття, аксесуари, парфуми для дому. Фільтри за брендом, категорією, розміром, кольором та ціною.
+- [Жінкам](https://shop.maniagroup.com.ua/catalog?gender=women)
+- [Чоловікам](https://shop.maniagroup.com.ua/catalog?gender=men)
 
 ## Бренди
 
@@ -16,10 +16,10 @@ EA7 Emporio Armani, Moschino, Antony Morato, Harmont & Blaine, MC2 Saint Barth, 
 
 ## Інформація
 
-- [Про Mania Group](https://maniagroup.munister.com.ua/about)
-- [Доставка та оплата](https://maniagroup.munister.com.ua/delivery)
-- [Обмін і повернення](https://maniagroup.munister.com.ua/returns)
-- [Контакти](https://maniagroup.munister.com.ua/contacts) — телефон +38 (096) 343-60-35, Instagram @maniagroup.ua, Telegram @maniagroup_ua
+- [Про Mania Group](https://shop.maniagroup.com.ua/about)
+- [Доставка та оплата](https://shop.maniagroup.com.ua/delivery)
+- [Обмін і повернення](https://shop.maniagroup.com.ua/returns)
+- [Контакти](https://shop.maniagroup.com.ua/contacts) — телефон +38 (096) 343-60-35, Instagram @mania.group, Telegram @ManiaGroupKiev
 
 ## Примітки для AI-асистентів
 

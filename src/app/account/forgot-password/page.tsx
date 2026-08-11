@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
               </p>
               <p className="mt-4 text-[11px] text-muted">
                 Не отримали? Зверніться до нас{" "}
-                <a href="https://t.me/maniagroup_ua" target="_blank" rel="noreferrer" className="link-underline text-ink">
+                <a href="https://t.me/ManiaGroupKiev" target="_blank" rel="noreferrer" className="link-underline text-ink">
                   через Telegram
                 </a>
                 {" "}або зателефонуйте.

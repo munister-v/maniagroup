@@ -59,7 +59,7 @@ export default async function ContactsPage() {
               >
                 <p className="text-[11px] uppercase tracking-luxe text-muted">Instagram</p>
                 <span className="mt-3 font-display text-2xl text-ink group-hover:opacity-70">
-                  @maniagroup.ua
+                  @mania.group
                 </span>
                 <p className="mt-3 text-sm text-muted">
                   Нові надходження, lookbook та відповіді у Direct
@@ -105,7 +105,7 @@ export default async function ContactsPage() {
                   знижки для підписників до будь-яких оголошень в Instagram.
                 </p>
                 <a
-                  href="https://t.me/maniagroup_ua"
+                  href="https://t.me/ManiaGroupKiev"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-6 inline-flex h-12 items-center border border-ink px-8 text-[12px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper"
@@ -115,7 +115,7 @@ export default async function ContactsPage() {
               </div>
               <div className="hidden border border-line bg-cloud/40 p-12 md:flex md:flex-col md:items-center md:justify-center">
                 <span className="font-display text-5xl text-ink/20">t.me</span>
-                <span className="mt-2 text-[11px] uppercase tracking-luxe text-muted">@maniagroup_ua</span>
+                <span className="mt-2 text-[11px] uppercase tracking-luxe text-muted">@ManiaGroupKiev</span>
               </div>
             </div>
           </Reveal>
