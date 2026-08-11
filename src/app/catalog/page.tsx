@@ -66,7 +66,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const title = parts.length === 2 ? `${parts[1]} ${parts[0]}` : heading;
 
   const description = brandName
-    ? `${brandName} — оригінал в Україні. ${categoryName ? categoryName + ", " : ""}актуальна колекція, доставка Новою Поштою, обмін 14 днів.`
+    ? `${brandName}: оригінал в Україні. ${categoryName ? categoryName + ", " : ""}актуальна колекція, доставка Новою Поштою, обмін 14 днів.`
     : categoryName || genderLabel
       ? `${categoryName ?? genderLabel} від європейських брендів. Оригінал, фільтри за розміром, кольором і ціною, доставка по всій Україні.`
       : "Каталог брендового одягу, взуття та аксесуарів. Оригінал від офіційних дистриб'юторів, фільтри за брендом, розміром, кольором і ціною.";
@@ -416,7 +416,7 @@ export default async function CatalogPage({
               <p className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-cloud text-lg">⌕</p>
               <h2 className="mt-4 font-display text-2xl text-ink">Нічого не знайшли</h2>
               <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted">
-                Спробуйте прибрати частину фільтрів або перейти до всього каталогу — інколи один зайвий розмір ховає гарні речі.
+                Спробуйте прибрати частину фільтрів або перейти до всього каталогу. Інколи один зайвий розмір ховає гарні речі.
               </p>
               <Link href="/catalog" className="mt-6 inline-flex h-11 items-center rounded-full border border-ink px-6 text-[11px] uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper">
                 Скинути фільтри

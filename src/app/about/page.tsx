@@ -7,7 +7,7 @@ import { getSiteContent } from "@/lib/siteContent";
 export const metadata = {
   title: "Про нас",
   alternates: { canonical: "/about" },
-  description: "Mania Group — офіційний імпортер EA7, Moschino, Antony Morato, Harmont & Blaine, MC2 Saint Barth та інших брендів в Україні.",
+  description: "Mania Group: офіційний імпортер EA7, Moschino, Antony Morato, Harmont & Blaine, MC2 Saint Barth та інших брендів в Україні.",
 };
 
 const BRANDS = [
@@ -69,7 +69,7 @@ export default async function AboutPage() {
             <div className="grid gap-12 md:grid-cols-2 md:items-center">
               <div>
                 <p className="text-[11px] uppercase tracking-luxe text-paper/50">Гарантія оригіналу</p>
-                <h2 className="mt-4 font-display text-3xl leading-snug md:text-4xl">Автентичність — наша репутація</h2>
+                <h2 className="mt-4 font-display text-3xl leading-snug md:text-4xl">Автентичність це наша репутація</h2>
                 <p className="mt-5 text-sm leading-relaxed text-paper/70">{about.story}</p>
                 <p className="mt-4 text-sm leading-relaxed text-paper/70">{about.guaranteeText}</p>
               </div>

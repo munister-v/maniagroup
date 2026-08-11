@@ -293,6 +293,20 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
       {/* mobile menu */}
       {mobileOpen && (
         <nav className="fixed inset-x-0 top-16 z-50 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-line bg-paper/98 pb-[env(safe-area-inset-bottom)] text-ink shadow-[0_24px_60px_-42px_rgba(26,23,20,0.75)] backdrop-blur-xl md:hidden">
+          {/* Пошук. На телефоні кнопки пошуку не було ніде: у верхньому рядку
+              вона `hidden md:flex`, а в меню її не додали, тож знайти товар за
+              кодом чи назвою з телефона було нічим. Ставимо першим пунктом і
+              у вигляді поля, а не іконки, щоб її було видно одразу. */}
+          <div className="wrap pt-4">
+            <button
+              onClick={() => { setMobileOpen(false); setSearchOpen(true); }}
+              className="flex min-h-12 w-full items-center gap-3 rounded-full border border-line px-4 text-left text-[13px] text-muted transition-colors active:bg-cloud"
+            >
+              <Icon d={ICONS.search} />
+              Пошук за назвою, брендом або кодом
+            </button>
+          </div>
+
           {/* gender tiles */}
           <div className="wrap grid grid-cols-2 gap-3 pt-4">
             {MEGA_MENU.filter((m) => m.label === "Жінкам" || m.label === "Чоловікам").map((item) => (

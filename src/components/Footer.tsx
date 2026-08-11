@@ -57,7 +57,7 @@ export async function Footer() {
                 <span className="ml-3 h-px w-8 bg-line transition-all duration-300 group-hover:w-12 group-hover:bg-ink" />
               </a>
             )}
-            <p className="mt-1 text-[11px] uppercase tracking-luxe text-muted">Щодня 9:00—20:00</p>
+            <p className="mt-1 text-[11px] uppercase tracking-luxe text-muted">Щодня 9:00–20:00</p>
 
             <p className="mt-6 max-w-sm text-sm leading-relaxed text-muted md:text-[15px]">
               {content.footer.about}

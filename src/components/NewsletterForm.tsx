@@ -26,7 +26,7 @@ export function NewsletterForm({ source = "home", tone = "light" }: { source?: s
         return;
       }
       setStatus("done");
-      setMessage(data.status === "exists" ? "Ви вже з нами — дякуємо!" : "Готово! Перевірте пошту.");
+      setMessage(data.status === "exists" ? "Ви вже з нами, дякуємо!" : "Готово! Перевірте пошту.");
       setEmail("");
     } catch {
       setStatus("error");

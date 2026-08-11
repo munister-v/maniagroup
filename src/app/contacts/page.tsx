@@ -41,7 +41,7 @@ export default async function ContactsPage() {
                 >
                   {phone}
                 </a>
-                <p className="mt-3 text-sm text-muted">Щодня · 9:00 — 20:00</p>
+                <p className="mt-3 text-sm text-muted">Щодня 9:00–20:00</p>
                 <p className="mt-1 text-xs text-muted/70">
                   Дзвінки, Viber, WhatsApp
                 </p>
@@ -101,7 +101,7 @@ export default async function ContactsPage() {
                   Новинки першими
                 </h2>
                 <p className="mt-4 text-sm leading-relaxed text-muted">
-                  Підписуйтесь на наш Telegram — анонси надходжень, приватні розпродажі та
+                  Підписуйтесь на наш Telegram: анонси надходжень, приватні розпродажі та
                   знижки для підписників до будь-яких оголошень в Instagram.
                 </p>
                 <a

@@ -21,7 +21,7 @@ export async function generateMetadata({
   const detail = await dbProductById(decodeURIComponent(slug));
   if (!detail) return {};
   // Prefer ERP-managed SEO fields, fallback to auto-generated
-  const t = detail.metaTitle || `${detail.product.name} — ${detail.product.brand}`;
+  const t = detail.metaTitle || `${detail.product.name}, ${detail.product.brand}`;
   const description = detail.metaDescription ||
     `${detail.product.name} від ${detail.product.brand}. Оригінал, доставка Новою Поштою по всій Україні.`;
   return {
@@ -68,7 +68,7 @@ function ProductView({
     id: i,
     src: img.src,
     thumbnail: img.src,
-    alt: `${product.name} — ${product.brand}`,
+    alt: `${product.name}, ${product.brand}`,
   }));
   // Усі коди, які в товару взагалі є — покупець диктує менеджеру той, що
   // бачить, а менеджер шукає ним же в адмінці. Тому показуємо повний набір, а
@@ -184,7 +184,7 @@ function ProductView({
             ) : (
               <div className="mt-6 border border-line bg-cloud/50 px-4 py-3 text-sm text-muted">
                 Цей товар наразі <span className="text-ink">немає в наявності</span>. Зателефонуйте
-                нам — можливо, його ще можна замовити або підкажемо схожий.
+                нам, можливо, його ще можна замовити або підкажемо схожий.
               </div>
             )}
 

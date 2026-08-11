@@ -90,7 +90,7 @@ function Hero({ hero, image }: {
       <section className="relative isolate overflow-hidden" style={{ minHeight: "clamp(540px, 60vw, 720px)" }}>
         <Image
           src={image?.trim() || "/images/hero-terrace-ss26.webp"}
-          alt="Mania Group — нова колекція"
+          alt="Mania Group, нова колекція"
           fill
           priority
           sizes="100vw"
@@ -267,14 +267,14 @@ function PromoBanner({ image }: { image?: string }) {
     <section id="men" className="wrap py-10 md:py-14">
       <Reveal>
         <Link href="/catalog" className="group relative flex min-h-[300px] items-center overflow-hidden md:min-h-[420px]">
-          <Image src={image?.trim() || "/images/promo-golden-hour.webp"} alt="Нова колекція — Mania Group" fill
+          <Image src={image?.trim() || "/images/promo-golden-hour.webp"} alt="Нова колекція Mania Group" fill
             sizes="100vw" className="object-cover object-center transition-transform duration-[1200ms] ease-out group-hover:scale-[1.04]" />
           <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(28,20,14,0.84) 0%, rgba(28,20,14,0.46) 45%, rgba(28,20,14,0.04) 75%)" }} />
           <div className="relative max-w-[44ch] px-7 py-12 text-paper md:px-14">
             <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-paper/60">Нова колекція</p>
             <h2 className="mt-4 text-[1.9rem] font-light uppercase leading-[1.08] tracking-[0.13em] md:text-[2.8rem]">Сезон<br />оригіналів</h2>
             <p className="mt-4 max-w-sm text-[13px] leading-relaxed text-paper/70">
-              Європейські бренди напряму — з гарантією та доставкою Новою Поштою.
+              Європейські бренди напряму, з гарантією та доставкою Новою Поштою.
             </p>
             <span className="mt-8 inline-flex h-12 items-center border border-paper/70 px-8 text-[11px] font-medium uppercase tracking-[0.2em] text-paper transition-colors group-hover:bg-paper group-hover:text-ink">
               Дивитись колекцію
