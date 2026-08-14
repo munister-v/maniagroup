@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Blocks, Toc, blocksText, type Block } from "@/components/admin/docBlocks";
 
 /**
  * Довідка по роботі з товарами — вбудована в адмінку, а не в окремому файлі,
@@ -13,14 +14,6 @@ import { useMemo, useState } from "react";
  * взяті з runQuery() у lib/productSource.ts, переходи статусів — з
  * AdminProducts.tsx.
  */
-
-type Block =
-  | { t: "p"; text: string }
-  | { t: "steps"; items: string[] }
-  | { t: "list"; items: string[] }
-  | { t: "note"; text: string }
-  | { t: "warn"; text: string }
-  | { t: "table"; head: string[]; rows: string[][] };
 
 type Topic = { id: string; title: string; lead?: string; blocks: Block[] };
 
@@ -61,8 +54,9 @@ const TOPICS: Topic[] = [
   {
     id: "add",
     title: "Додати товар вручну",
-    lead: "Товари → Список товарів → «Додати». Підходить для поодиноких позицій; коли їх десятки — дивіться розділ про імпорт.",
+    lead: "Підходить для поодиноких позицій; коли їх десятки — дивіться розділ про імпорт.",
     blocks: [
+      { t: "where", path: ["Товари", "Список товарів", "Додати"] },
       {
         t: "steps",
         items: [
@@ -163,8 +157,9 @@ const TOPICS: Topic[] = [
   {
     id: "stock",
     title: "Розміри та залишки",
-    lead: "Товари → Торгові пропозиції. Тут видно кожен розмір кожного товару окремо.",
+    lead: "Тут видно кожен розмір кожного товару окремо.",
     blocks: [
+      { t: "where", path: ["Товари", "Торгові пропозиції"] },
       {
         t: "list",
         items: [
@@ -209,8 +204,9 @@ const TOPICS: Topic[] = [
   {
     id: "import",
     title: "Імпорт із файлу (XLS / CSV)",
-    lead: "Товари → Імпорт. Головний інструмент, коли позицій більше десятка.",
+    lead: "Головний інструмент, коли позицій більше десятка.",
     blocks: [
+      { t: "where", path: ["Товари", "Імпорт"] },
       {
         t: "steps",
         items: [
@@ -244,8 +240,8 @@ const TOPICS: Topic[] = [
   {
     id: "auto",
     title: "Автооновлення від постачальників",
-    lead: "Товари → Імпорт → вкладка «Автооновлення».",
     blocks: [
+      { t: "where", path: ["Товари", "Імпорт", "Автооновлення"] },
       {
         t: "p",
         text: "Джерело — це посилання на файл постачальника, який система забирає сама за розкладом: кожні 30 хвилин, 3, 6 або 12 годин. Один раз налаштували зіставлення колонок — далі залишки оновлюються без вас.",
@@ -339,79 +335,6 @@ const TOPICS: Topic[] = [
   },
 ];
 
-/* ─── Рендер ─── */
-
-function Blocks({ blocks }: { blocks: Block[] }) {
-  return (
-    <div className="space-y-3.5">
-      {blocks.map((b, i) => {
-        if (b.t === "p") return <p key={i} className="text-[13.5px] leading-relaxed text-[#4a5560]">{b.text}</p>;
-        if (b.t === "note")
-          return (
-            <div key={i} className="rounded-[3px] border-l-[3px] border-[#2f9488] bg-[#f2f8f7] px-4 py-3 text-[13px] leading-relaxed text-[#2b4b47]">
-              {b.text}
-            </div>
-          );
-        if (b.t === "warn")
-          return (
-            <div key={i} className="rounded-[3px] border-l-[3px] border-[#e5484d] bg-[#fdeceb] px-4 py-3 text-[13px] leading-relaxed text-[#7a2b2b]">
-              {b.text}
-            </div>
-          );
-        if (b.t === "steps")
-          return (
-            <ol key={i} className="space-y-2">
-              {b.items.map((s, j) => (
-                <li key={j} className="flex gap-3 text-[13.5px] leading-relaxed text-[#4a5560]">
-                  <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2b2d42] text-[11px] font-semibold text-white">
-                    {j + 1}
-                  </span>
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ol>
-          );
-        if (b.t === "list")
-          return (
-            <ul key={i} className="space-y-1.5">
-              {b.items.map((s, j) => (
-                <li key={j} className="flex gap-2.5 text-[13.5px] leading-relaxed text-[#4a5560]">
-                  <span className="mt-[9px] h-[3px] w-[3px] shrink-0 rounded-full bg-[#8a94a0]" />
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ul>
-          );
-        return (
-          <div key={i} className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr>
-                  {b.head.map((h, j) => (
-                    <th key={j} className="border-b border-[#e6eaec] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a94a0]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {b.rows.map((r, j) => (
-                  <tr key={j}>
-                    {r.map((c, k) => (
-                      <td key={k} className={`border-b border-[#eef2f3] px-3 py-2.5 align-top leading-relaxed ${k === 0 ? "font-medium text-[#2b2d42]" : "text-[#4a5560]"}`}>
-                        {c}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 export function AdminHelp() {
   const [query, setQuery] = useState("");
@@ -422,10 +345,7 @@ export function AdminHelp() {
   const found = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return TOPICS;
-    const hay = (t: Topic) =>
-      [t.title, t.lead ?? "", ...t.blocks.flatMap((b) =>
-        b.t === "table" ? [...b.head, ...b.rows.flat()] : b.t === "steps" || b.t === "list" ? b.items : [b.text],
-      )].join(" ").toLowerCase();
+    const hay = (t: Topic) => [t.title, t.lead ?? "", ...blocksText(t.blocks)].join(" ").toLowerCase();
     return TOPICS.filter((t) => hay(t).includes(q));
   }, [query]);
 
@@ -444,7 +364,21 @@ export function AdminHelp() {
           aria-label="Пошук по довідці"
           className="mt-4 h-10 w-full max-w-md border border-[#e6eaec] bg-white px-3 text-[13px] focus:border-[#2b2d42] focus:outline-none"
         />
+        <p className="mt-3 text-[12.5px] leading-relaxed text-[#8a94a0]">
+          Про магазин загалом — замовлення, оплату, копії, сервер — читайте в розділі
+          «Документація», найпершому в меню.
+        </p>
       </div>
+
+      {!query.trim() && (
+        <Toc
+          items={TOPICS}
+          onPick={(id) => {
+            setOpenId(id);
+            document.getElementById(`help-${id}`)?.scrollIntoView({ block: "start" });
+          }}
+        />
+      )}
 
       {found.length === 0 && (
         <div className="rounded-[6px] border border-[#e6eaec] bg-white p-6 text-[13.5px] text-[#6b7684]">
@@ -456,15 +390,20 @@ export function AdminHelp() {
         {found.map((t) => {
           const open = openId === t.id || !!query.trim();
           return (
-            <section key={t.id} className="overflow-hidden rounded-[6px] border border-[#e6eaec] bg-white">
+            <section key={t.id} id={`help-${t.id}`} className="scroll-mt-4 overflow-hidden rounded-[6px] border border-[#e6eaec] bg-white">
               <button
                 type="button"
                 onClick={() => setOpenId(open && !query.trim() ? "" : t.id)}
                 className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left hover:bg-[#f7f9fa]"
               >
-                <span>
+                <span className="flex items-baseline gap-3">
+                  <span className="text-[11px] tabular-nums text-[#c4ccd2]">
+                    {String(TOPICS.indexOf(t) + 1).padStart(2, "0")}
+                  </span>
+                  <span>
                   <span className="block text-[15px] font-semibold text-[#2b2d42]">{t.title}</span>
                   {t.lead && <span className="mt-1 block text-[12.5px] leading-relaxed text-[#8a94a0]">{t.lead}</span>}
+                  </span>
                 </span>
                 <svg viewBox="0 0 24 24" className={`mt-1 h-4 w-4 shrink-0 text-[#8a94a0] transition-transform ${open ? "rotate-180" : ""}`}
                   fill="none" stroke="currentColor" strokeWidth="2">
