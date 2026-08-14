@@ -14,6 +14,9 @@ import { AdminProperties } from "./AdminProperties";
 import { AdminPropertyMatching } from "./AdminPropertyMatching";
 import { AdminSizeCharts } from "./AdminSizeCharts";
 import { AdminHelp } from "@/components/admin/AdminHelp";
+import { AdminDocs } from "@/components/admin/AdminDocs";
+import { AdminPayments } from "@/components/admin/AdminPayments";
+import { AdminDelivery } from "@/components/admin/AdminDelivery";
 import { AdminBrandLogos } from "./AdminBrandLogos";
 import { AdminAccounting } from "./AdminAccounting";
 import { MonitoringSection } from "./MonitoringSection";
@@ -22,7 +25,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "monitoring" | "backup" | "settings" | "help";
+type Section = "overview" | "docs" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "payments" | "delivery" | "monitoring" | "backup" | "settings" | "help";
 
 type RecentOrder = {
   id: number;
@@ -70,6 +73,14 @@ type RailItem =
   | { kind: "group"; key: string; label: string; d: string; children: { id: Section; label: string; hint?: string }[] };
 
 const NAV_MAIN: RailItem[] = [
+  {
+    // Найперший пункт — навмисне. Інструкція, до якої треба доскролити, це
+    // інструкція, якої немає.
+    kind: "leaf",
+    id: "docs",
+    label: "Документація",
+    d: "M12 6.5C10.5 5.5 8.5 5 6 5H4v12h2c2.5 0 4.5.5 6 1.5m0-12c1.5-1 3.5-1.5 6-1.5h2v12h-2c-2.5 0-4.5.5-6 1.5m0-12v12",
+  },
   {
     kind: "leaf",
     id: "overview",
@@ -149,6 +160,18 @@ const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
     id: "content",
     label: "Контент",
     d: "M4 6h16M4 12h10M4 18h16",
+  },
+  {
+    // Екрани оплати й доставки існували, їхні API працювали, але в меню їх не
+    // було — відкрити налаштування Monobank було нічим. Повертаємо.
+    id: "payments",
+    label: "Оплата",
+    d: "M3 10h18M3 8a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8zm4 7h3",
+  },
+  {
+    id: "delivery",
+    label: "Доставка",
+    d: "M3 7h11v10H3zM14 10h4l3 3v4h-7M6.5 20a1.5 1.5 0 100-3 1.5 1.5 0 000 3zm11 0a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
   },
   {
     id: "monitoring",
@@ -445,6 +468,9 @@ export function AdminDashboard({
           {section === "coupons" && <CouponsSection onToast={showToast} />}
           {section === "subscribers" && <SubscribersSection />}
           {section === "accounting" && <AdminAccounting onToast={showToast} />}
+          {section === "docs" && <AdminDocs />}
+          {section === "payments" && <AdminPayments onToast={showToast} />}
+          {section === "delivery" && <AdminDelivery onToast={showToast} />}
           {section === "monitoring" && <MonitoringSection />}
           {section === "backup" && <BackupSection />}
           {section === "help" && <AdminHelp />}
