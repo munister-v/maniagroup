@@ -81,16 +81,16 @@ export function CopyCode({ value, label }: { value: string; label?: string }) {
       // min-h-11: сам рядок коду заввишки 20px, у нього не влучити пальцем, а
       // копіювання це основна дія цього елемента саме на телефоні. Висота
       // росте за рахунок клікабельної області, набір не рухається.
-      className="group/copy inline-flex min-h-11 items-center gap-1.5 text-left text-ink underline-offset-4 transition-colors hover:text-ink/70 focus-visible:underline md:min-h-0"
+      className="group/copy inline-flex min-h-11 min-w-0 max-w-full items-center gap-1.5 text-left text-ink underline-offset-4 transition-colors hover:text-ink/70 focus-visible:underline md:min-h-0"
     >
-      <span className="tabular-nums">
+      <span className="min-w-0 break-all tabular-nums">
         {label ? `${label}: ` : ""}
         {/* Позначка для ручного виділення: беремо сам код, без підпису розміру. */}
         <span data-code>{value}</span>
       </span>
       <span
         aria-hidden
-        className={`text-[10px] uppercase tracking-luxe transition-opacity ${
+        className={`hidden shrink-0 text-[10px] uppercase tracking-luxe transition-opacity md:inline ${
           copied ? "text-[#4a7c59] opacity-100" : "text-muted opacity-0 group-hover/copy:opacity-100"
         }`}
       >

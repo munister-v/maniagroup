@@ -193,7 +193,7 @@ function ProductView({
                 {codeRows.map((r) => (
                   <div key={r.label} className="flex gap-3">
                     <dt className="w-28 shrink-0 text-muted">{r.label}</dt>
-                    <dd className="flex flex-wrap gap-x-4 gap-y-1 text-ink">
+                    <dd className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-ink">
                       {r.items.map((it) => (
                         <CopyCode key={`${r.label}-${it.size ?? ""}-${it.value}`} value={it.value} label={it.size} />
                       ))}
