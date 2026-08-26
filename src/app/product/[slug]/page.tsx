@@ -155,7 +155,7 @@ function ProductView({
       </p>
 
       <div className="mt-6 grid gap-10 md:grid-cols-2 md:gap-14">
-        <Reveal>
+        <Reveal className="min-w-0">
           {gallery.length > 0 ? (
             <ProductGallery images={gallery} name={product.name} />
           ) : (
@@ -165,7 +165,7 @@ function ProductView({
           )}
         </Reveal>
 
-        <Reveal delay={100}>
+        <Reveal delay={100} className="min-w-0">
           <div className="md:sticky md:top-36">
             <p className="text-[11px] uppercase tracking-luxe text-muted">{product.brand}</p>
             <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">{product.name}</h1>
