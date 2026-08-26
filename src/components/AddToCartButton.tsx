@@ -90,9 +90,9 @@ export function AddToCartButton({
     <>
       {needsSize && (
         <div className="mt-8">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-[11px] uppercase tracking-luxe text-muted">Розмір</p>
-            <p className="text-[11px] text-muted">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="shrink-0 text-[11px] uppercase tracking-luxe text-muted">Розмір</p>
+            <p className="ml-auto min-w-0 max-w-full break-words text-right text-[11px] leading-snug text-muted" aria-live="polite">
               {selected.length > 0 ? `Обрано: ${selected.join(", ")}` : "Можна обрати кілька"}
             </p>
           </div>
