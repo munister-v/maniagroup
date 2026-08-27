@@ -2183,10 +2183,22 @@ function MediaDuplicatesSection({ onToast }: { onToast?: (m: string) => void }) 
     const drop = g.files.filter((f) => f.path !== keeper);
     const usedElsewhere = drop.filter((f) => f.usedBy.length > 0);
 
+    // Copies belonging to different owners are the case worth stopping at:
+    // JOHN RICHMOND and RICHMOND X turned out to have byte-identical logos, and
+    // merging them means replacing one brand's logo later changes both.
+    const owners = new Set(
+      g.files.flatMap((f) => f.usedBy.map((u) => `${u.kind}:${u.name}`)),
+    );
+    const coupling = owners.size > 1;
+
     if (!confirm(
       `Лишити:\n${keeper}\n\nОб'єднати ${drop.length} копій${
         usedElsewhere.length ? ` (з них ${usedElsewhere.length} зараз стоять на товарах — вони перевкажуть на файл, що лишається)` : ""
-      }.\n\nЗвільниться ${Math.round(g.wasted / 1024)} КБ. Старі адреси лишаться переадресацією.`,
+      }.\n\nЗвільниться ${Math.round(g.wasted / 1024)} КБ. Старі адреси лишаться переадресацією.${
+        coupling
+          ? `\n\n⚠ Ці копії належать різним власникам:\n${[...owners].map((o) => `• ${o.split(":").slice(1).join(":")}`).join("\n")}\n\nПісля об'єднання вони покажуть ОДИН файл. Якщо колись заміните фото одному — зміниться в усіх. Об'єднуйте, лише якщо це справді те саме зображення для всіх.`
+          : ""
+      }`,
     )) return;
 
     setBusy(true);
@@ -2236,6 +2248,12 @@ function MediaDuplicatesSection({ onToast }: { onToast?: (m: string) => void }) 
                     <span className="text-[12px] text-[#2b2d42]">
                       {g.count} однакових копій · зайвого {fmtBytes(g.wasted)}
                       <span className="ml-2 text-[10px] text-[#c9d1d6]" title="sha256">{g.sha256.slice(0, 12)}</span>
+                      {new Set(g.files.flatMap((f) => f.usedBy.map((u) => `${u.kind}:${u.name}`))).size > 1 && (
+                        <span className="ml-2 rounded-[2px] bg-[#fff4e5] px-1 text-[10px] text-[#92600a]"
+                          title="Копії належать різним власникам — після об'єднання вони покажуть один файл">
+                          різні власники
+                        </span>
+                      )}
                     </span>
                     <button
                       disabled={busy}

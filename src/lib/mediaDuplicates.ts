@@ -152,6 +152,27 @@ export async function mergeDuplicates(keep: string, drop: string[]): Promise<Mer
     await client.query("BEGIN");
     for (const t of targets) {
       refs += await repointReferences(client, t, keep);
+
+      // Two identical files can sit on the SAME product (5.webp and 6.webp of
+      // one shirt turned out to be the same shot). Repointing then leaves that
+      // card with the kept path twice, and the gallery shows one photo twice.
+      // Collapse repeats, keeping the first position — the order on a card is
+      // a decision someone made.
+      await client.query(
+        `UPDATE products p
+            SET images = (
+                  SELECT COALESCE(jsonb_agg(e ORDER BY ord), '[]'::jsonb)
+                    FROM (
+                      SELECT DISTINCT ON (t.e->>'src') t.e, t.ord
+                        FROM jsonb_array_elements(p.images) WITH ORDINALITY AS t(e, ord)
+                       ORDER BY t.e->>'src', t.ord
+                    ) s(e, ord)
+                )
+          WHERE p.images::text LIKE '%' || $1 || '%'
+            AND (SELECT count(*) FROM jsonb_array_elements(p.images) AS x
+                  WHERE x->>'src' = $1) > 1`,
+        [keep],
+      );
       // The twin's path keeps working: anything outside this database that
       // pointed at it — a marketplace feed, a search result — gets a redirect
       // to the copy that survived.
