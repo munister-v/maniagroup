@@ -1910,9 +1910,9 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
 
 /* ─── Media library ─── */
 
-type MediaUsage = { id: string; name: string; sku: string };
+type MediaUsage = { id: string; name: string; sku: string; kind?: "product" | "brand" | "content" };
 type MediaFile = {
-  url: string; name: string; size: number; mtime: number; usedBy: MediaUsage[];
+  url: string; thumb: string; name: string; size: number; mtime: number; usedBy: MediaUsage[];
   source: "uploads" | "catalog"; folder: string; width: number; height: number; alt: string; title: string;
 };
 type MediaCounts = { all: number; uploads: number; catalog: number; used: number; free: number };
@@ -2357,8 +2357,8 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
 
       {usage === "free" && counts.free > 0 && (
         <p className="mb-3 text-[12px] text-[#8a94a0]">
-          Ці файли не стоять на жодному товарі — зазвичай це залишки після переімпорту каталогу.
-          Врахуйте: облік ведеться за фото товарів, банери та контент сторінок сюди поки не входять.
+          Ці файли не згадані ні на товарі, ні в лого бренду, ні в контенті сайту — зазвичай це
+          залишки після переімпорту каталогу.
         </p>
       )}
 
@@ -2394,13 +2394,22 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
             {files.map((f, i) => (
               <div key={f.url}
                 className={`group relative overflow-hidden rounded-[3px] border bg-white ${selected.has(f.url) ? "border-[#2b2d42] ring-1 ring-[#2b2d42]" : "border-[#eef2f3]"}`}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* Thumb first, full image as the fallback: the thumb may not
+                    exist yet (a fresh import, a backfill still running), and a
+                    missing one should cost bandwidth, not a broken tile.
+                    eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={f.url}
+                  src={f.thumb}
                   alt={f.alt || f.name}
                   title={`${f.name}\n${f.width}×${f.height}`}
                   className="aspect-square w-full cursor-pointer object-cover"
                   loading="lazy"
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (img.dataset.fallback) return; // full image failed too — leave the broken icon
+                    img.dataset.fallback = "1";
+                    img.src = f.url;
+                  }}
                   onClick={(e) => toggle(f.url, e.shiftKey, i)}
                 />
 
@@ -2411,19 +2420,24 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
                   className="absolute right-1 top-1 h-4 w-4 cursor-pointer accent-[#2b2d42]"
                 />
 
-                {f.usedBy.length === 0 ? (
-                  <span className="absolute left-1 top-1 rounded-[2px] bg-[#8a94a0]/90 px-1 text-[9px] uppercase text-white">вільне</span>
-                ) : (
-                  <a
-                    href={`/product/${f.usedBy[0].id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={f.usedBy.map((u) => `${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n")}
-                    className="absolute left-1 top-1 max-w-[80%] truncate rounded-[2px] bg-[#2f9488]/95 px-1 text-[9px] text-white hover:bg-[#2f9488]"
-                  >
-                    {f.usedBy.length === 1 ? f.usedBy[0].name : `${f.usedBy.length} товари`}
-                  </a>
-                )}
+                {(() => {
+                  if (f.usedBy.length === 0) {
+                    return <span className="absolute left-1 top-1 rounded-[2px] bg-[#8a94a0]/90 px-1 text-[9px] uppercase text-white">вільне</span>;
+                  }
+                  const first = f.usedBy[0];
+                  const label = f.usedBy.length === 1 ? first.name : `${f.usedBy.length} місць`;
+                  const tip = f.usedBy
+                    .map((u) => `${u.kind === "brand" ? "Бренд: " : u.kind === "content" ? "" : ""}${u.name}${u.sku ? ` (${u.sku})` : ""}`)
+                    .join("\n");
+                  // Only a product has a page worth opening; a brand logo or a
+                  // content block just has to say "занято, ось ким" so nobody
+                  // deletes it thinking it belongs to nobody.
+                  const tone = first.kind === "brand" ? "bg-[#7a5cc4]/95" : first.kind === "content" ? "bg-[#c48a2f]/95" : "bg-[#2f9488]/95";
+                  const cls = `absolute left-1 top-1 max-w-[80%] truncate rounded-[2px] px-1 text-[9px] text-white ${tone}`;
+                  return first.kind === "product" && first.id
+                    ? <a href={`/product/${first.id}`} target="_blank" rel="noreferrer" title={tip} className={`${cls} hover:opacity-80`}>{label}</a>
+                    : <span title={tip} className={cls}>{label}</span>;
+                })()}
 
                 <div className="flex items-center justify-between gap-1 px-2 py-1.5">
                   <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>

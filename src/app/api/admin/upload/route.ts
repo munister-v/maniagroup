@@ -7,6 +7,7 @@ import sharp from "sharp";
 import { optimizeImage } from "@/lib/imageOptimize";
 import { UPLOADS_DIR } from "@/lib/mediaStorage";
 import { findByHash, recordUpload } from "@/lib/mediaIndex";
+import { ensureThumb } from "@/lib/mediaThumbs";
 
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
 const MAX_BYTES = 12 * 1024 * 1024; // pre-optimization ceiling; output is capped by imageOptimize
@@ -65,6 +66,10 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error("[upload] media index write failed", e);
   }
+
+  // Best-effort: the grid falls back to the full image when a thumb is
+  // missing, so a failure here costs bandwidth, not correctness.
+  ensureThumb(url).catch((e) => console.error("[upload] thumb failed", e));
 
   return NextResponse.json({ ok: true, url });
 }

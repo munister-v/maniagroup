@@ -3,6 +3,7 @@ import { isAdmin } from "@/lib/adminAuth";
 import { unlink } from "fs/promises";
 import path from "path";
 import { forgetMedia, fullPath, IMAGE_RE, syncMediaIndex } from "@/lib/mediaIndex";
+import { dropThumbs, thumbUrl } from "@/lib/mediaThumbs";
 import { mediaCounts, MediaUsage, parseMediaFilter, selectMedia, usageFor } from "@/lib/mediaQuery";
 
 export type { MediaUsage } from "@/lib/mediaQuery";
@@ -33,6 +34,7 @@ export async function GET(req: Request) {
 
   const files = rows.map((r) => ({
     url: r.path,
+    thumb: thumbUrl(r.path),
     name: r.original_name || (r.source === "catalog" ? r.path.replace("/catalog/", "") : path.basename(r.path)),
     source: r.source,
     folder: r.folder,
@@ -112,5 +114,6 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Файл не знайдено" }, { status: 404 });
   }
   await forgetMedia(rel).catch(() => {});
+  await dropThumbs(rel);
   return NextResponse.json({ ok: true });
 }

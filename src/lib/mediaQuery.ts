@@ -32,12 +32,36 @@ export function parseMediaFilter(sp: URLSearchParams): MediaFilter {
   };
 }
 
-/** Every image path the catalog currently points at. Drives the used/free split. */
+/**
+ * Every place in the database that points at a file, not just product photos.
+ *
+ * "Вільне" was a lie worth 63 files: brand logos are stored as
+ * /uploads/brands/x.png?v=2, and an exact path comparison never matched the
+ * cache-buster, so every logo on the site counted as belonging to nobody. A
+ * bulk "delete the free ones" would have taken the whole brand strip with it.
+ *
+ * Hence: strip the query string, and union in every column that holds a path.
+ * One row per file — kinds are aggregated, because a file joined twice would
+ * silently duplicate rows in the grid.
+ */
 export const USED_SRC_CTE = `
   used AS (
-    SELECT DISTINCT img->>'src' AS src
-      FROM products p, jsonb_array_elements(p.images) AS img
-     WHERE img->>'src' LIKE '/uploads/%' OR img->>'src' LIKE '/catalog/%'
+    SELECT split_part(src, '?', 1) AS src, string_agg(DISTINCT kind, ',') AS kinds
+      FROM (
+        SELECT img->>'src' AS src, 'product' AS kind
+          FROM products p, jsonb_array_elements(p.images) AS img
+        UNION ALL
+        SELECT image_src, 'product' FROM products WHERE image_src <> ''
+        UNION ALL
+        SELECT logo_url, 'brand' FROM brand_logos WHERE logo_url <> ''
+        UNION ALL
+        -- Site content is one jsonb blob of unknown shape; pulling paths out of
+        -- its text is the only way that keeps working when the shape changes.
+        SELECT (regexp_matches(val::text, '(/(?:catalog|uploads)/[^"\\s\\\\]+)', 'g'))[1], 'content'
+          FROM content_store
+      ) s
+     WHERE src LIKE '/uploads/%' OR src LIKE '/catalog/%'
+     GROUP BY split_part(src, '?', 1)
   )`;
 
 export type BuiltQuery = { ctes: string[]; where: string; params: unknown[]; order: string };
@@ -82,7 +106,7 @@ export function buildMediaQuery(f: MediaFilter): BuiltQuery {
   return { ctes, where: where.length ? `WHERE ${where.join(" AND ")}` : "", params, order };
 }
 
-export type MediaUsage = { id: string; name: string; sku: string };
+export type MediaUsage = { id: string; name: string; sku: string; kind?: "product" | "brand" | "content" };
 
 /**
  * Which products point at which image, for a given set of paths.
@@ -93,17 +117,43 @@ export type MediaUsage = { id: string; name: string; sku: string };
 export async function usageFor(paths: string[]): Promise<Map<string, MediaUsage[]>> {
   const map = new Map<string, MediaUsage[]>();
   if (paths.length === 0) return map;
-  const rows = await q<{ id: string; name: string; sku: string; src: string }>(
-    `SELECT p.id::text, p.name, p.sku, img->>'src' AS src
+  // Products carry a link worth following (id → card); a brand or a content
+  // block just needs to say "занято, ось ким" so nobody deletes it by mistake.
+  const rows = await q<{ id: string; name: string; sku: string; src: string; kind: string }>(
+    `SELECT p.id::text, p.name, p.sku, split_part(img->>'src', '?', 1) AS src, 'product' AS kind
        FROM products p, jsonb_array_elements(p.images) AS img
-      WHERE img->>'src' = ANY($1::text[])`,
+      WHERE split_part(img->>'src', '?', 1) = ANY($1::text[])
+     UNION ALL
+     SELECT '', p.name, p.sku, split_part(p.image_src, '?', 1), 'product'
+       FROM products p
+      WHERE p.image_src <> '' AND split_part(p.image_src, '?', 1) = ANY($1::text[])
+     UNION ALL
+     SELECT '', b.brand, '', split_part(b.logo_url, '?', 1), 'brand'
+       FROM brand_logos b
+      WHERE b.logo_url <> '' AND split_part(b.logo_url, '?', 1) = ANY($1::text[])`,
     [paths],
   );
   for (const r of rows) {
     const list = map.get(r.src) ?? [];
-    if (!list.some((u) => u.id === r.id)) list.push({ id: r.id, name: r.name, sku: r.sku });
+    const entry: MediaUsage = { id: r.id, name: r.name, sku: r.sku, kind: r.kind as MediaUsage["kind"] };
+    // Same product reached through both images[] and image_src is one user.
+    if (!list.some((u) => u.name === entry.name && u.kind === entry.kind)) list.push(entry);
     map.set(r.src, list);
   }
+
+  // Content blocks live in a single jsonb document, so they are matched in the
+  // same regex pass the used/free filter uses rather than by a join.
+  const contentRows = await q<{ src: string }>(
+    `SELECT DISTINCT split_part((regexp_matches(val::text, '(/(?:catalog|uploads)/[^"\\s\\\\]+)', 'g'))[1], '?', 1) AS src
+       FROM content_store`,
+  );
+  for (const r of contentRows) {
+    if (!paths.includes(r.src)) continue;
+    const list = map.get(r.src) ?? [];
+    if (!list.some((u) => u.kind === "content")) list.push({ id: "", name: "Контент сайту", sku: "", kind: "content" });
+    map.set(r.src, list);
+  }
+
   return map;
 }
 
