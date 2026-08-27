@@ -13,6 +13,7 @@ export type MediaFilter = {
   source: "all" | "uploads" | "catalog";
   usage: "all" | "used" | "free";
   folder: string | null;
+  deep: boolean;          // folder filter covers subfolders too
   term: string;
   since: string | null;   // ISO date — only files added/changed after it ("нові")
   urls: string[] | null;  // explicit selection, overrides everything else
@@ -25,6 +26,7 @@ export function parseMediaFilter(sp: URLSearchParams): MediaFilter {
     source: (["uploads", "catalog"].includes(sp.get("source") ?? "") ? sp.get("source") : "all") as MediaFilter["source"],
     usage: (["used", "free"].includes(sp.get("usage") ?? "") ? sp.get("usage") : "all") as MediaFilter["usage"],
     folder: sp.get("folder"),
+    deep: sp.get("deep") === "1",
     term: (sp.get("q") ?? "").trim(),
     since: (sp.get("since") ?? "").trim() || null,
     urls: urlsParam ? urlsParam.split(",").map((u) => u.trim()).filter(Boolean) : null,
@@ -78,7 +80,19 @@ export function buildMediaQuery(f: MediaFilter): BuiltQuery {
     where.push(`m.path = ANY(${push(f.urls)}::text[])`);
   } else {
     if (f.source !== "all") where.push(`m.source = ${push(f.source)}`);
-    if (f.folder !== null) where.push(`m.folder = ${push(f.folder)}`);
+    if (f.folder !== null) {
+      // A tree node means "this folder", but the useful question while browsing
+      // a tree is usually "this folder and everything under it" — otherwise
+      // clicking a parent that only holds subfolders shows an empty grid.
+      if (f.deep && f.folder !== "") {
+        const v = push(f.folder);
+        where.push(`(m.folder = ${v} OR m.folder LIKE ${v} || '/%')`);
+      } else if (f.deep && f.folder === "") {
+        // deep on a root is no filter at all
+      } else {
+        where.push(`m.folder = ${push(f.folder)}`);
+      }
+    }
     if (f.usage === "used") where.push("u.src IS NOT NULL");
     if (f.usage === "free") where.push("u.src IS NULL");
     if (f.since) where.push(`COALESCE(m.mtime, m.created_at) >= ${push(f.since)}::timestamptz`);

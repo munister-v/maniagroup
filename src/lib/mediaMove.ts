@@ -12,7 +12,7 @@
  * outside this database (a customer's open tab, a search result, a marketplace
  * feed) get a redirect instead of a 404.
  */
-import { rename, mkdir, stat } from "fs/promises";
+import { rename, mkdir, rm, rmdir, stat } from "fs/promises";
 import path from "path";
 import { pool } from "./pg";
 import { MEDIA_ROOT } from "./mediaStorage";
@@ -51,6 +51,27 @@ async function freeName(candidate: string): Promise<string> {
     if (nextAbs && !(await stat(nextAbs).catch(() => null))) return next;
   }
   throw new Error("не вдалося підібрати вільне ім'я");
+}
+
+/**
+ * Remove the directory a file just left, and its now-childless parents.
+ *
+ * rmdir refuses a non-empty directory, which is exactly the guard wanted here:
+ * try, and stop at the first one that still holds something. Without this a
+ * renamed folder leaves its old skeleton on disk — invisible in the tree (which
+ * is built from the index) but very visible over SSH and in backups.
+ */
+async function pruneEmptyDirs(fileAbs: string, sourceRoot: string): Promise<void> {
+  let dir = path.dirname(fileAbs);
+  const stop = path.normalize(sourceRoot);
+  while (dir.startsWith(stop + path.sep)) {
+    try {
+      await rmdir(dir);
+    } catch {
+      return; // not empty, or gone already
+    }
+    dir = path.dirname(dir);
+  }
 }
 
 export type MoveResult = { from: string; to: string; refs: number };
@@ -152,6 +173,12 @@ export async function moveMedia(paths: string[], folder: string): Promise<MoveRe
         await rename(tFrom, tTo).catch(() => {});
       }
 
+      const sourceName = from.split("/")[1];
+      await pruneEmptyDirs(srcAbs, path.join(/*turbopackIgnore: true*/ MEDIA_ROOT, sourceName)).catch(() => {});
+      if (tFrom) {
+        await pruneEmptyDirs(tFrom, path.join(/*turbopackIgnore: true*/ MEDIA_ROOT, "thumb")).catch(() => {});
+      }
+
       await client.query("COMMIT");
       results.push({ from, to, refs });
     } catch (e) {
@@ -181,4 +208,50 @@ export async function createFolder(source: "uploads" | "catalog", folder: string
   const root = path.normalize(path.join(/*turbopackIgnore: true*/ MEDIA_ROOT, source));
   if (!abs.startsWith(root + path.sep)) throw new Error("Недопустимий шлях");
   await mkdir(abs, { recursive: true });
+}
+
+/**
+ * Rename a folder = move everything in it (and under it) to the new prefix.
+ *
+ * There is no cheaper way that stays correct: the folder is not a record
+ * anywhere, it is the middle of thousands of paths, each of which is copied
+ * into product cards. So renaming is the same per-file move, and it reports how
+ * many files and references it touched.
+ */
+export async function renameFolder(source: "uploads" | "catalog", from: string, to: string): Promise<MoveResult[]> {
+  if (!validFolder(from) || from === "") throw new Error("Недопустима тека");
+  if (!validFolder(to) || to === "") throw new Error("Недопустима назва теки");
+  if (from === to) return [];
+
+  const res = await pool.query(
+    `SELECT path, folder FROM media
+      WHERE source = $1 AND (folder = $2 OR folder LIKE $2 || '/%')
+      ORDER BY path`,
+    [source, from],
+  );
+  if (res.rows.length === 0) throw new Error("У теці немає файлів");
+  if (res.rows.length > 2000) throw new Error(`У теці ${res.rows.length} файлів — забагато для одного перейменування`);
+
+  const out: MoveResult[] = [];
+  for (const r of res.rows as { path: string; folder: string }[]) {
+    // Keep the shape below the renamed folder: a/b/c under a → x gives x/b/c.
+    const tail = r.folder.slice(from.length);
+    out.push(...(await moveMedia([r.path], `${to}${tail}`)));
+  }
+  return out;
+}
+
+/** Remove a folder that has nothing left in it. Refuses otherwise. */
+export async function removeEmptyFolder(source: "uploads" | "catalog", folder: string): Promise<void> {
+  if (!validFolder(folder) || folder === "") throw new Error("Недопустима тека");
+  const res = await pool.query(
+    `SELECT count(*)::int AS n FROM media
+      WHERE source = $1 AND (folder = $2 OR folder LIKE $2 || '/%')`,
+    [source, folder],
+  );
+  if ((res.rows[0]?.n ?? 0) > 0) throw new Error(`У теці ще ${res.rows[0].n} файлів`);
+  const abs = path.normalize(path.join(/*turbopackIgnore: true*/ MEDIA_ROOT, source, folder));
+  const root = path.normalize(path.join(/*turbopackIgnore: true*/ MEDIA_ROOT, source));
+  if (!abs.startsWith(root + path.sep)) throw new Error("Недопустимий шлях");
+  await rm(abs, { recursive: true, force: true });
 }

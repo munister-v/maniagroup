@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { SiteContent } from "@/lib/siteContent";
 import { HOME_SECTIONS } from "@/lib/homeSections";
@@ -1918,6 +1918,214 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
   );
 }
 
+/* ─── Folder tree ─── */
+
+type FolderRow = { source: string; folder: string; files: number; bytes: number };
+
+type TreeNode = {
+  key: string;            // "catalog" | "catalog/сезон-2026" — the id used for expand state
+  source: "catalog" | "uploads";
+  folder: string;         // path below the source root; "" is the root itself
+  name: string;           // last segment, what the row shows
+  own: number;            // files directly in this folder
+  files: number;          // files here and below
+  bytes: number;          // same, in bytes
+  children: TreeNode[];
+};
+
+/**
+ * Turn the flat (source, folder) list into a tree.
+ *
+ * A folder is not a record anywhere — it is the middle of thousands of paths.
+ * So the shape has to be derived, including the intermediate levels that hold
+ * nothing themselves: /catalog/2026/весна exists as a row while /catalog/2026
+ * may not, and a tree that skips it cannot be walked.
+ */
+function buildTree(rows: FolderRow[]): TreeNode[] {
+  const roots: Record<"catalog" | "uploads", TreeNode> = {
+    catalog: { key: "catalog", source: "catalog", folder: "", name: "Каталог", own: 0, files: 0, bytes: 0, children: [] },
+    uploads: { key: "uploads", source: "uploads", folder: "", name: "Завантажені", own: 0, files: 0, bytes: 0, children: [] },
+  };
+
+  for (const r of rows) {
+    const source = r.source === "catalog" ? "catalog" : "uploads";
+    let node = roots[source];
+    if (r.folder === "") {
+      node.own += r.files;
+    } else {
+      const segs = r.folder.split("/");
+      let acc = "";
+      for (let i = 0; i < segs.length; i++) {
+        acc = acc ? `${acc}/${segs[i]}` : segs[i];
+        let child = node.children.find((c) => c.folder === acc);
+        if (!child) {
+          child = { key: `${source}/${acc}`, source, folder: acc, name: segs[i], own: 0, files: 0, bytes: 0, children: [] };
+          node.children.push(child);
+        }
+        node = child;
+        if (i === segs.length - 1) node.own += r.files;
+      }
+    }
+    // Roll the totals up every ancestor, which is what makes a collapsed
+    // parent still say how much is inside it.
+    let cursor: TreeNode | undefined = roots[source];
+    const segs = r.folder === "" ? [] : r.folder.split("/");
+    cursor.files += r.files; cursor.bytes += r.bytes;
+    let acc = "";
+    for (const seg of segs) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      cursor = cursor?.children.find((c) => c.folder === acc);
+      if (!cursor) break;
+      cursor.files += r.files; cursor.bytes += r.bytes;
+    }
+  }
+
+  const sort = (n: TreeNode) => {
+    n.children.sort((a, b) => b.files - a.files || a.name.localeCompare(b.name, "uk"));
+    n.children.forEach(sort);
+  };
+  const out = [roots.catalog, roots.uploads].filter((r) => r.files > 0 || r.children.length > 0);
+  out.forEach(sort);
+  return out;
+}
+
+const fmtBytes = (b: number) =>
+  b >= 1024 * 1024 * 1024 ? `${(b / 1024 / 1024 / 1024).toFixed(1)} ГБ`
+  : b >= 1024 * 1024 ? `${Math.round(b / 1024 / 1024)} МБ`
+  : `${Math.round(b / 1024)} КБ`;
+
+/**
+ * The tree pane.
+ *
+ * /catalog is one directory per product — around 2800 of them — so this can
+ * never render everything at once. Two things keep it usable: nothing is
+ * expanded until asked, and a filter box matches folder names anywhere in the
+ * tree and shows only the matching branches. The old flat chip rail showed the
+ * first 24 and hid the rest, which for the catalog meant hiding ~99%.
+ */
+function MediaTree({
+  rows, selected, onSelect, onAction, busy,
+}: {
+  rows: FolderRow[];
+  selected: { source: "catalog" | "uploads" | null; folder: string | null };
+  onSelect: (source: "catalog" | "uploads" | null, folder: string | null) => void;
+  onAction: (a: { kind: "create" | "rename" | "remove"; source: "catalog" | "uploads"; folder: string }) => void;
+  busy: boolean;
+}) {
+  const [open, setOpen] = useState<Set<string>>(new Set(["uploads"]));
+  const [filter, setFilter] = useState("");
+
+  const tree = useMemo(() => buildTree(rows), [rows]);
+  const needle = filter.trim().toLowerCase();
+
+  /** A branch survives the filter if it matches, or anything under it does. */
+  const matches = useCallback(function match(n: TreeNode): boolean {
+    if (!needle) return true;
+    if (n.name.toLowerCase().includes(needle) || n.folder.toLowerCase().includes(needle)) return true;
+    return n.children.some(match);
+  }, [needle]);
+
+  function toggle(key: string) {
+    setOpen((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  }
+
+  const MAX_SIBLINGS = 60;
+
+  function Row({ node, depth }: { node: TreeNode; depth: number }) {
+    const isOpen = open.has(node.key) || (!!needle && node.children.some(matches));
+    const isSelected = selected.source === node.source && selected.folder === node.folder;
+    const shown = node.children.filter(matches);
+    const clipped = shown.length > MAX_SIBLINGS ? shown.slice(0, MAX_SIBLINGS) : shown;
+
+    return (
+      <li>
+        <div
+          className={`group flex items-center gap-1 rounded-[2px] pr-1 ${isSelected ? "bg-[#2b2d42] text-white" : "hover:bg-[#f4f6f7]"}`}
+          style={{ paddingLeft: 4 + depth * 12 }}
+        >
+          {node.children.length > 0 ? (
+            <button
+              onClick={() => toggle(node.key)}
+              aria-label={isOpen ? "Згорнути" : "Розгорнути"}
+              className={`flex h-6 w-4 shrink-0 items-center justify-center text-[10px] ${isSelected ? "text-white" : "text-[#8a94a0]"}`}
+            >
+              {isOpen ? "▾" : "▸"}
+            </button>
+          ) : (
+            <span className="h-6 w-4 shrink-0" />
+          )}
+
+          <button
+            onClick={() => onSelect(node.source, node.folder)}
+            className="flex min-w-0 flex-1 items-baseline gap-2 py-1 text-left"
+            title={`/${node.source}/${node.folder}`}
+          >
+            <span className={`truncate text-[12px] ${isSelected ? "text-white" : "text-[#2b2d42]"}`}>{node.name}</span>
+            <span className={`shrink-0 text-[10px] ${isSelected ? "text-white/70" : "text-[#8a94a0]"}`}>
+              {node.files}{node.own !== node.files ? ` (${node.own})` : ""} · {fmtBytes(node.bytes)}
+            </span>
+          </button>
+
+          {/* Folder actions stay hidden until hover: renaming a folder rewrites
+              every reference to every file in it, and that is not a button to
+              leave sitting under the cursor. */}
+          <span className={`flex shrink-0 gap-0.5 ${isSelected ? "" : "opacity-0 group-hover:opacity-100"}`}>
+            <button disabled={busy} title="Створити підтеку"
+              onClick={() => onAction({ kind: "create", source: node.source, folder: node.folder })}
+              className={`h-6 w-5 text-[13px] ${isSelected ? "text-white" : "text-[#8a94a0] hover:text-[#2f9488]"}`}>+</button>
+            {node.folder !== "" && (
+              <>
+                <button disabled={busy} title="Перейменувати"
+                  onClick={() => onAction({ kind: "rename", source: node.source, folder: node.folder })}
+                  className={`h-6 w-5 text-[11px] ${isSelected ? "text-white" : "text-[#8a94a0] hover:text-[#2b2d42]"}`}>✎</button>
+                <button disabled={busy} title="Видалити (лише порожню)"
+                  onClick={() => onAction({ kind: "remove", source: node.source, folder: node.folder })}
+                  className={`h-6 w-5 text-[13px] ${isSelected ? "text-white" : "text-[#8a94a0] hover:text-[#c62828]"}`}>×</button>
+              </>
+            )}
+          </span>
+        </div>
+
+        {isOpen && clipped.length > 0 && (
+          <ul>
+            {clipped.map((c) => <Row key={c.key} node={c} depth={depth + 1} />)}
+            {shown.length > clipped.length && (
+              <li className="py-1 text-[11px] text-[#8a94a0]" style={{ paddingLeft: 20 + depth * 12 }}>
+                …ще {shown.length - clipped.length} тек — звузьте фільтром
+              </li>
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  }
+
+  return (
+    <aside className="w-full shrink-0 border border-[#eef2f3] bg-white p-2 md:w-72">
+      <input
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Фільтр тек"
+        className="mb-2 h-8 w-full border border-[#e6eaec] px-2 text-[12px] focus:border-[#2b2d42] focus:outline-none"
+      />
+      <button
+        onClick={() => onSelect(null, null)}
+        className={`mb-1 w-full rounded-[2px] px-2 py-1 text-left text-[12px] ${
+          selected.folder === null ? "bg-[#2b2d42] text-white" : "text-[#2b2d42] hover:bg-[#f4f6f7]"
+        }`}
+      >
+        Уся бібліотека
+      </button>
+      <ul className="max-h-[520px] overflow-y-auto">
+        {tree.map((n) => <Row key={n.key} node={n} depth={0} />)}
+      </ul>
+      <p className="mt-2 border-t border-[#eef2f3] pt-2 text-[10px] leading-snug text-[#8a94a0]">
+        Число — файлів у теці з підтеками, у дужках — власних. Вибір теки показує і вкладені.
+      </p>
+    </aside>
+  );
+}
+
 /* ─── Bulk photo upload ─── */
 
 type UploadItem = {
@@ -2209,8 +2417,9 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<ImportReport | null>(null);
-  const [folders, setFolders] = useState<{ source: string; folder: string; files: number }[]>([]);
+  const [folders, setFolders] = useState<FolderRow[]>([]);
   const [folderFilter, setFolderFilter] = useState<string | null>(null);
+  const [folderSource, setFolderSource] = useState<"catalog" | "uploads" | null>(null);
   const [detail, setDetail] = useState<MediaFile | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLInputElement>(null);
@@ -2224,9 +2433,15 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     const p = new URLSearchParams({ source, usage, sort, q });
     const iso = sinceToIso(since);
     if (iso) p.set("since", iso);
-    if (folderFilter !== null) p.set("folder", folderFilter);
+    if (folderFilter !== null) {
+      p.set("folder", folderFilter);
+      // A tree node means the branch, not just the one directory: clicking a
+      // parent that only holds subfolders would otherwise show nothing.
+      p.set("deep", "1");
+      if (folderSource) p.set("source", folderSource);
+    }
     return p;
-  }, [source, usage, sort, since, folderFilter]);
+  }, [source, usage, sort, since, folderFilter, folderSource]);
 
   // Filtering happens on the server: the library is ~13.7k files since the
   // product photos moved off WordPress, far too many to ship to the browser.
@@ -2492,18 +2707,64 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     }
   }
 
-  async function newFolder() {
-    const name = prompt("Назва нової теки (літери, цифри, крапка, дефіс, підкреслення):", "");
-    if (!name) return;
+  async function folderPost(body: Record<string, unknown>): Promise<{ ok: boolean; d: Record<string, unknown> }> {
     const res = await fetch("/api/admin/media/folders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create", source: source === "catalog" ? "catalog" : "uploads", folder: name.trim() }),
+      body: JSON.stringify(body),
     });
-    const d = await res.json();
-    if (!res.ok) { onToast?.(d.error ?? "Не вдалося створити"); return; }
-    onToast?.("Теку створено");
-    loadFolders();
+    return { ok: res.ok, d: await res.json().catch(() => ({})) };
+  }
+
+  /**
+   * Folder operations from the tree.
+   *
+   * Renaming is not a label change: the folder is the middle of every path in
+   * it, and every one of those is copied into product cards. So it is the same
+   * per-file move, and the confirmation says how many files it will touch
+   * before it starts.
+   */
+  async function folderAction(a: { kind: "create" | "rename" | "remove"; source: "catalog" | "uploads"; folder: string }) {
+    setBusy(true);
+    try {
+      if (a.kind === "create") {
+        const name = prompt(
+          a.folder ? `Нова підтека всередині «${a.folder}»:` : `Нова тека в /${a.source}:`,
+          "",
+        );
+        if (!name?.trim()) return;
+        const full = a.folder ? `${a.folder}/${name.trim()}` : name.trim();
+        const { ok, d } = await folderPost({ action: "create", source: a.source, folder: full });
+        onToast?.(ok ? "Теку створено" : String(d.error ?? "Не вдалося створити"));
+      }
+
+      if (a.kind === "rename") {
+        const node = folders.find((f) => f.source === a.source && f.folder === a.folder);
+        const inside = folders
+          .filter((f) => f.source === a.source && (f.folder === a.folder || f.folder.startsWith(`${a.folder}/`)))
+          .reduce((n, f) => n + f.files, 0);
+        const name = prompt(
+          `Нова назва теки «${a.folder}»${inside ? ` (${inside} файлів переїде, посилання на них оновляться)` : ""}:`,
+          node?.folder ?? a.folder,
+        );
+        if (!name?.trim() || name.trim() === a.folder) return;
+        const { ok, d } = await folderPost({ action: "rename", source: a.source, from: a.folder, folder: name.trim() });
+        onToast?.(ok ? `Перейменовано: ${d.moved} файлів, посилань ${d.refs}` : String(d.error ?? "Не вдалося перейменувати"));
+        if (ok && folderFilter === a.folder) setFolderFilter(String(name.trim()));
+      }
+
+      if (a.kind === "remove") {
+        if (!confirm(`Видалити теку «${a.folder}»? Видалиться лише порожня.`)) return;
+        const { ok, d } = await folderPost({ action: "remove", source: a.source, folder: a.folder });
+        onToast?.(ok ? "Теку видалено" : String(d.error ?? "Не вдалося видалити"));
+        if (ok && folderFilter === a.folder) { setFolderFilter(null); setFolderSource(null); }
+      }
+
+      loadFolders();
+      load(page, search);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveMeta(file: MediaFile, alt: string, title: string) {
@@ -2692,32 +2953,6 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-1 border-b border-[#eef2f3] pb-3">
-        <button onClick={() => { setFolderFilter(null); setPage(1); }}
-          className={`h-8 px-3 text-[12px] ${folderFilter === null ? "bg-[#2b2d42] text-white" : "text-[#2b2d42] hover:bg-[#f7f9fa]"}`}>
-          Усі теки
-        </button>
-        {folders
-          .filter((f) => source === "all" || f.source === source)
-          .slice(0, 24)
-          .map((f) => (
-            <button key={`${f.source}/${f.folder}`} onClick={() => { setFolderFilter(f.folder); setPage(1); }}
-              title={`/${f.source}/${f.folder}`}
-              className={`h-8 px-3 text-[12px] ${folderFilter === f.folder ? "bg-[#2b2d42] text-white" : "text-[#2b2d42] hover:bg-[#f7f9fa]"}`}>
-              {f.folder || "корінь"} <span className="text-[#8a94a0]">· {f.files}</span>
-            </button>
-          ))}
-        {/* The catalog is one directory per product — 2800 of them. Listing
-            every one as a chip is not a tree, it is a wall, so the rail shows
-            the biggest and search covers the rest. */}
-        {folders.filter((f) => source === "all" || f.source === source).length > 24 && (
-          <span className="px-2 text-[12px] text-[#8a94a0]">
-            …ще {folders.filter((f) => source === "all" || f.source === source).length - 24} — шукайте через пошук
-          </span>
-        )}
-        <button onClick={newFolder} className="ml-auto h-8 px-3 text-[12px] text-[#2f9488] hover:bg-[#f7f9fa]">+ Нова тека</button>
-      </div>
-
       {usage === "free" && counts.free > 0 && (
         <p className="mb-3 text-[12px] text-[#8a94a0]">
           Ці файли не згадані ні на товарі, ні в лого бренду, ні в контенті сайту — зазвичай це
@@ -2725,8 +2960,18 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         </p>
       )}
 
+      <div className="flex flex-col gap-4 md:flex-row">
+        <MediaTree
+          rows={folders}
+          selected={{ source: folderSource, folder: folderFilter }}
+          busy={busy}
+          onSelect={(src, f) => { setFolderSource(src); setFolderFilter(f); setPage(1); }}
+          onAction={folderAction}
+        />
+
+        <div className="min-w-0 flex-1">
       {loading ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square animate-pulse bg-[#f7f9fa]" />)}
         </div>
       ) : files.length === 0 ? (
@@ -2753,7 +2998,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
             <span className="text-[12px] text-[#8a94a0]">Shift+клік — діапазон</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {files.map((f, i) => (
               <div key={f.url}
                 className={`group relative overflow-hidden rounded-[3px] border bg-white ${selected.has(f.url) ? "border-[#2b2d42] ring-1 ring-[#2b2d42]" : "border-[#eef2f3]"}`}>
@@ -2847,6 +3092,8 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
           )}
         </>
       )}
+        </div>
+      </div>
     </div>
   );
 }

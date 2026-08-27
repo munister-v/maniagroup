@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
 import { logActivity } from "@/lib/activity";
-import { createFolder, listFolders, moveMedia, validFolder } from "@/lib/mediaMove";
+import { createFolder, listFolders, moveMedia, removeEmptyFolder, renameFolder, validFolder } from "@/lib/mediaMove";
 
 /** GET — the folder tree with counts. */
 export async function GET() {
@@ -10,7 +10,7 @@ export async function GET() {
 }
 
 /**
- * POST — create a folder, or move files into one.
+ * POST — folder operations: create, move files in, rename, delete an empty one.
  *
  * Moving is the operation that can break the storefront, so it is deliberately
  * not a drag-and-drop side effect anywhere: it is an explicit action with an
@@ -20,7 +20,7 @@ export async function GET() {
 export async function POST(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
   const body = await req.json().catch(() => ({})) as {
-    action?: string; source?: "uploads" | "catalog"; folder?: string; paths?: string[];
+    action?: string; source?: "uploads" | "catalog"; folder?: string; from?: string; paths?: string[];
   };
 
   const folder = (body.folder ?? "").trim().replace(/^\/+|\/+$/g, "");
@@ -51,6 +51,30 @@ export async function POST(req: Request) {
     } catch (e) {
       return NextResponse.json({ error: e instanceof Error ? e.message : "Не вдалося перенести" }, { status: 400 });
     }
+  }
+
+  if (body.action === "rename") {
+    const source = body.source === "catalog" ? "catalog" : "uploads";
+    const fromRaw = (body.from ?? "").trim().replace(/^\/+|\/+$/g, "");
+    try {
+      const moved = await renameFolder(source, fromRaw, folder);
+      const refs = moved.reduce((n, m) => n + m.refs, 0);
+      logActivity("save", `Медіатека: теку «${fromRaw}» перейменовано на «${folder}» (${moved.length} файлів, посилань ${refs})`, moved.length);
+      return NextResponse.json({ ok: true, moved: moved.length, refs });
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Не вдалося перейменувати" }, { status: 400 });
+    }
+  }
+
+  if (body.action === "remove") {
+    const source = body.source === "catalog" ? "catalog" : "uploads";
+    try {
+      await removeEmptyFolder(source, folder);
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Не вдалося видалити" }, { status: 400 });
+    }
+    logActivity("delete", `Медіатека: видалено порожню теку /${source}/${folder}`);
+    return NextResponse.json({ ok: true });
   }
 
   return NextResponse.json({ error: "Невідома дія" }, { status: 400 });
