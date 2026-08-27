@@ -690,7 +690,7 @@ export function AdminProducts({ onToast, initialOpen, onClose }: {
               </DetailCard>
 
               <DetailCard title="Зображення">
-                <ImageManager images={draft.images} onChange={(images) => setDraft({ ...draft, images })} onToast={onToast} />
+                <ImageManager images={draft.images} onChange={(images) => setDraft({ ...draft, images })} onToast={onToast} sku={draft.sku} />
               </DetailCard>
 
               <DetailCard title="Атрибути" defaultOpen={false}>
@@ -809,15 +809,25 @@ function SizeQtyEditor({ sizes, onChange }: { sizes: SizeRow[]; onChange: (s: Si
   );
 }
 
-function ImageManager({ images, onChange, onToast }: { images: string[]; onChange: (i: string[]) => void; onToast?: (m: string) => void }) {
+function ImageManager({ images, onChange, onToast, sku }: { images: string[]; onChange: (i: string[]) => void; onToast?: (m: string) => void; sku?: string }) {
   const [pending, setPending] = useState(0); // count of uploads in flight, for the "Завантаження… (n)" label
   const [urlInput, setUrlInput] = useState("");
   const [dragOver, setDragOver] = useState(false);
   // Media-library picker: everything already uploaded lives in /uploads, but
   // until now the only ways to reuse a photo were re-uploading it or pasting
   // its URL by hand.
+  //
+  // It used to fetch one unfiltered page and keep it for the session, which was
+  // fine at 48 files and useless at 13.7k: the photo you wanted was almost
+  // never in the newest 48, so the fastest route back to it was uploading it
+  // again — which is where a good share of the duplicate groups came from.
   const [libOpen, setLibOpen] = useState(false);
-  const [lib, setLib] = useState<{ url: string; name: string }[] | null>(null);
+  const [lib, setLib] = useState<{ url: string; thumb: string; name: string; usedBy: { name: string }[] }[] | null>(null);
+  const [libQuery, setLibQuery] = useState("");
+  const [libFree, setLibFree] = useState(false);
+  const [libTotal, setLibTotal] = useState(0);
+  const [libPage, setLibPage] = useState(1);
+  const [libLoading, setLibLoading] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null); // index being reordered
   const [overIdx, setOverIdx] = useState<number | null>(null); // index currently hovered while reordering
   const fileRef = useRef<HTMLInputElement>(null);
@@ -871,18 +881,43 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
     onChange([...images, u]); setUrlInput("");
   }
 
-  async function openLibrary() {
-    setLibOpen(true);
-    if (lib) return;                       // already fetched this session
+  const LIB_PER_PAGE = 60;
+
+  const loadLibrary = useCallback(async (q: string, page: number, freeOnly: boolean) => {
+    setLibLoading(true);
     try {
-      const res = await fetch("/api/admin/media");
+      const params = new URLSearchParams({
+        q, page: String(page), perPage: String(LIB_PER_PAGE), sort: "new",
+        usage: freeOnly ? "free" : "all",
+      });
+      const res = await fetch(`/api/admin/media?${params}`);
       const data = await res.json();
       setLib(data.files ?? []);
+      setLibTotal(data.total ?? 0);
+      setLibPage(data.page ?? page);
     } catch {
       setLib([]);
       onToast?.("Не вдалося завантажити медіатеку");
+    } finally {
+      setLibLoading(false);
     }
+  }, [onToast]);
+
+  // Opening from a product card: the photos you want are almost always that
+  // product's own, so seed the search with its SKU instead of the newest 60 of
+  // everything. Search covers name and SKU on the server side already.
+  function openLibrary() {
+    setLibOpen(true);
+    const seed = sku ?? "";
+    setLibQuery(seed);
+    loadLibrary(seed, 1, false);
   }
+
+  useEffect(() => {
+    if (!libOpen) return;
+    const t = setTimeout(() => loadLibrary(libQuery, 1, libFree), 250);
+    return () => clearTimeout(t);
+  }, [libOpen, libQuery, libFree, loadLibrary]);
 
   function toggleFromLibrary(url: string) {
     const cur = imagesRef.current;
@@ -991,31 +1026,90 @@ function ImageManager({ images, onChange, onToast }: { images: string[]; onChang
           <div className="flex max-h-[80vh] w-full max-w-3xl flex-col bg-white" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b border-[#eef2f3] px-4 py-3">
               <span className="text-[13px] font-medium text-[#2b2d42]">
-                Медіатека{lib ? ` · ${lib.length}` : ""}
+                Медіатека{libTotal ? ` · знайдено ${libTotal}` : ""}
               </span>
               <button type="button" onClick={() => setLibOpen(false)} className="text-[13px] text-[#8a94a0] hover:text-[#2b2d42]">Готово</button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              {lib === null && <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>}
-              {lib?.length === 0 && <p className="text-[12px] text-[#8a94a0]">Порожньо — завантажте перше фото вище.</p>}
-              <div className="flex flex-wrap gap-2">
-                {lib?.map((f) => {
-                  const picked = images.includes(f.url);
-                  return (
-                    <button
-                      key={f.url}
-                      type="button"
-                      title={f.name}
-                      onClick={() => toggleFromLibrary(f.url)}
-                      className={`relative h-28 w-[84px] overflow-hidden border ${picked ? "border-[#2f9488] ring-2 ring-[#2f9488]" : "border-[#eef2f3] hover:border-[#b6c0ca]"}`}
-                    >
-                      <img src={f.url} alt="" className="h-full w-full object-cover" />
-                      {picked && <span className="absolute right-0 top-0 bg-[#2f9488] px-1 text-[9px] text-white">✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
+
+            <div className="flex flex-wrap items-center gap-2 border-b border-[#eef2f3] px-4 py-2">
+              <input
+                autoFocus
+                value={libQuery}
+                onChange={(e) => setLibQuery(e.target.value)}
+                placeholder="Пошук за файлом, товаром або артикулом"
+                className="h-9 min-w-[220px] flex-1 border border-[#e6eaec] px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none"
+              />
+              <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#2b2d42]">
+                <input type="checkbox" checked={libFree} onChange={(e) => setLibFree(e.target.checked)} />
+                Тільки вільні
+              </label>
+              {libQuery && (
+                <button type="button" onClick={() => setLibQuery("")} className="h-9 px-2 text-[12px] text-[#8a94a0] hover:text-[#2b2d42]">
+                  Скинути пошук
+                </button>
+              )}
             </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {lib === null || libLoading ? (
+                <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>
+              ) : lib.length === 0 ? (
+                <p className="text-[12px] text-[#8a94a0]">
+                  {libQuery ? `За запитом «${libQuery}» нічого не знайдено.` : "Порожньо — завантажте перше фото вище."}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {lib.map((f) => {
+                    const picked = images.includes(f.url);
+                    const used = f.usedBy?.length ? f.usedBy.map((u) => u.name).join(", ") : "";
+                    return (
+                      <button
+                        key={f.url}
+                        type="button"
+                        title={used ? `${f.name}\n\nВже стоїть на: ${used}` : f.name}
+                        onClick={() => toggleFromLibrary(f.url)}
+                        className={`relative h-28 w-[84px] overflow-hidden border ${picked ? "border-[#2f9488] ring-2 ring-[#2f9488]" : "border-[#eef2f3] hover:border-[#b6c0ca]"}`}
+                      >
+                        {/* Thumb, falling back to the original: a picker that
+                            pulls 60 full-size photos is the slowest screen in
+                            the admin. */}
+                        <img
+                          src={f.thumb || f.url}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            if (img.dataset.fallback) return;
+                            img.dataset.fallback = "1";
+                            img.src = f.url;
+                          }}
+                        />
+                        {picked && <span className="absolute right-0 top-0 bg-[#2f9488] px-1 text-[9px] text-white">✓</span>}
+                        {/* Reusing a photo that already belongs to another
+                            product is usually a mistake, so say so before the
+                            click rather than after. */}
+                        {!picked && used && <span className="absolute bottom-0 left-0 right-0 truncate bg-black/55 px-1 text-[8px] text-white">{used}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {libTotal > LIB_PER_PAGE && (
+              <div className="flex items-center justify-center gap-3 border-t border-[#eef2f3] px-4 py-2">
+                <button type="button" disabled={libPage <= 1 || libLoading}
+                  onClick={() => loadLibrary(libQuery, libPage - 1, libFree)}
+                  className="h-8 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] disabled:opacity-40">Назад</button>
+                <span className="text-[12px] text-[#8a94a0]">
+                  {libPage} / {Math.max(1, Math.ceil(libTotal / LIB_PER_PAGE))}
+                </span>
+                <button type="button" disabled={libPage >= Math.ceil(libTotal / LIB_PER_PAGE) || libLoading}
+                  onClick={() => loadLibrary(libQuery, libPage + 1, libFree)}
+                  className="h-8 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] disabled:opacity-40">Далі</button>
+              </div>
+            )}
           </div>
         </div>
       )}
