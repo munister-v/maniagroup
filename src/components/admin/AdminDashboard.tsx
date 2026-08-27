@@ -25,7 +25,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "docs" | "content" | "media" | "mediaUpload" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "payments" | "delivery" | "monitoring" | "backup" | "settings" | "help";
+type Section = "overview" | "docs" | "content" | "media" | "mediaUpload" | "mediaDuplicates" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "payments" | "delivery" | "monitoring" | "backup" | "settings" | "help";
 
 type RecentOrder = {
   id: number;
@@ -114,6 +114,7 @@ const NAV_MAIN: RailItem[] = [
     children: [
       { id: "media", label: "Медіатека", hint: "усі фото, теки, пошук, вивантаження в Excel" },
       { id: "mediaUpload", label: "Масове завантаження", hint: "перетягніть теку з фото — приймає сотні за раз" },
+      { id: "mediaDuplicates", label: "Дублікати", hint: "однакові побайтово фото — об'єднати в один" },
     ],
   },
   {
@@ -458,6 +459,7 @@ export function AdminDashboard({
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
           {section === "mediaUpload" && <MediaUploadSection onToast={showToast} onDone={() => setSection("media")} />}
+          {section === "mediaDuplicates" && <MediaDuplicatesSection onToast={showToast} />}
           {section === "catalog" && (
             <ErpImportTabs
               onImported={(msg) => { showToast(msg); setDataVersion((v) => v + 1); }}
@@ -2123,6 +2125,190 @@ function MediaTree({
         Число — файлів у теці з підтеками, у дужках — власних. Вибір теки показує і вкладені.
       </p>
     </aside>
+  );
+}
+
+/* ─── Duplicates ─── */
+
+type DupFile = {
+  path: string; thumb: string; bytes: number; width: number; height: number;
+  folder: string; source: string; originalName: string; mtime: string | null;
+  usedBy: { id: string; name: string; sku: string; kind: string }[];
+};
+type DupGroup = { sha256: string; count: number; wasted: number; files: DupFile[] };
+
+/**
+ * Byte-identical copies, and a way out of them.
+ *
+ * They look like different photos in a grid because they are the same photo, so
+ * nothing short of a hash finds them — and they arrived honestly: before the
+ * product picker could search the whole library, re-uploading was the fastest
+ * way to reuse a photo you could not find.
+ *
+ * Merging is not deleting. References move to the kept copy first, the old
+ * paths stay as redirects, and only then do the twins go: the storefront does
+ * not change, the wasted bytes do.
+ */
+function MediaDuplicatesSection({ onToast }: { onToast?: (m: string) => void }) {
+  const [groups, setGroups] = useState<DupGroup[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [wasted, setWasted] = useState(0);
+  const [page, setPage] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [keep, setKeep] = useState<Record<string, string>>({});
+
+  const PER_PAGE = 12;
+
+  const load = useCallback(async (p: number) => {
+    try {
+      const res = await fetch(`/api/admin/media/duplicates?page=${p}&perPage=${PER_PAGE}`);
+      const d = await res.json();
+      setGroups(d.groups ?? []);
+      setTotal(d.total ?? 0);
+      setWasted(d.wasted ?? 0);
+      setPage(d.page ?? p);
+    } catch {
+      setGroups([]);
+      onToast?.("Не вдалося завантажити дублікати");
+    }
+  }, [onToast]);
+
+  useEffect(() => {
+    const t = setTimeout(() => load(1), 0);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  async function merge(g: DupGroup) {
+    const keeper = keep[g.sha256] ?? g.files[0].path;
+    const drop = g.files.filter((f) => f.path !== keeper);
+    const usedElsewhere = drop.filter((f) => f.usedBy.length > 0);
+
+    if (!confirm(
+      `Лишити:\n${keeper}\n\nОб'єднати ${drop.length} копій${
+        usedElsewhere.length ? ` (з них ${usedElsewhere.length} зараз стоять на товарах — вони перевкажуть на файл, що лишається)` : ""
+      }.\n\nЗвільниться ${Math.round(g.wasted / 1024)} КБ. Старі адреси лишаться переадресацією.`,
+    )) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/media/duplicates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keep: keeper, drop: drop.map((f) => f.path) }),
+      });
+      const d = await res.json();
+      if (!res.ok) { onToast?.(d.error ?? "Не вдалося об'єднати"); return; }
+      onToast?.(`Об'єднано ${d.dropped}, посилань оновлено ${d.refs}`);
+      load(page);
+    } catch {
+      onToast?.("Помилка об'єднання");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+  return (
+    <div className="max-w-5xl">
+      <div className="mb-5">
+        <h2 className="text-lg font-medium text-[#2b2d42]">Дублікати</h2>
+        <p className="text-[12px] text-[#8a94a0]">
+          Файли, однакові побайтово. {total} груп, зайвого {fmtBytes(wasted)}.
+          Об&apos;єднання не видаляє фото: посилання перевказують на один файл, старі адреси лишаються переадресацією.
+        </p>
+      </div>
+
+      {groups === null ? (
+        <p className="text-[12px] text-[#8a94a0]">Завантаження…</p>
+      ) : groups.length === 0 ? (
+        <div className="border border-dashed border-[#d5dbe0] bg-white px-4 py-16 text-center text-sm text-[#8a94a0]">
+          Однакових файлів немає.
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            {groups.map((g) => {
+              const keeper = keep[g.sha256] ?? g.files[0].path;
+              return (
+                <div key={g.sha256} className="border border-[#eef2f3] bg-white p-4">
+                  <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-[12px] text-[#2b2d42]">
+                      {g.count} однакових копій · зайвого {fmtBytes(g.wasted)}
+                      <span className="ml-2 text-[10px] text-[#c9d1d6]" title="sha256">{g.sha256.slice(0, 12)}</span>
+                    </span>
+                    <button
+                      disabled={busy}
+                      onClick={() => merge(g)}
+                      className="h-9 border border-[#2f9488] px-4 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50"
+                    >
+                      Об&apos;єднати в обраний
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {g.files.map((f) => {
+                      const isKeeper = f.path === keeper;
+                      return (
+                        <label
+                          key={f.path}
+                          className={`block cursor-pointer border p-2 ${isKeeper ? "border-[#2f9488] ring-1 ring-[#2f9488]" : "border-[#eef2f3] hover:border-[#b6c0ca]"}`}
+                        >
+                          <div className="mb-2 flex items-center gap-2">
+                            <input
+                              type="radio"
+                              name={`keep-${g.sha256}`}
+                              checked={isKeeper}
+                              onChange={() => setKeep((k) => ({ ...k, [g.sha256]: f.path }))}
+                            />
+                            <span className={`text-[11px] ${isKeeper ? "text-[#2f9488]" : "text-[#8a94a0]"}`}>
+                              {isKeeper ? "лишити цей" : "об'єднати"}
+                            </span>
+                          </div>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={f.thumb} alt="" loading="lazy" className="mb-2 aspect-square w-full bg-[#f7f9fa] object-cover"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              if (img.dataset.fallback) return;
+                              img.dataset.fallback = "1";
+                              img.src = f.path;
+                            }} />
+                          <p className="truncate text-[11px] text-[#2b2d42]" title={f.path}>
+                            {f.originalName || f.path.split("/").pop()}
+                          </p>
+                          <p className="truncate text-[10px] text-[#8a94a0]" title={`/${f.source}/${f.folder}`}>
+                            /{f.source}/{f.folder || ""}
+                          </p>
+                          {/* Which copy products already point at is the one to
+                              keep: keeping it changes the fewest references. */}
+                          {f.usedBy.length === 0 ? (
+                            <p className="text-[10px] text-[#8a94a0]">вільний</p>
+                          ) : (
+                            <p className="truncate text-[10px] text-[#2f9488]" title={f.usedBy.map((u) => u.name).join(", ")}>
+                              {f.usedBy.length === 1 ? f.usedBy[0].name : `${f.usedBy.length} місць`}
+                            </p>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {pages > 1 && (
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <button disabled={page <= 1 || busy} onClick={() => load(page - 1)}
+                className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] disabled:opacity-40">Назад</button>
+              <span className="text-[12px] text-[#8a94a0]">{page} / {pages} · {total} груп</span>
+              <button disabled={page >= pages || busy} onClick={() => load(page + 1)}
+                className="h-9 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] disabled:opacity-40">Далі</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

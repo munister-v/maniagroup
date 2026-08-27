@@ -14,6 +14,7 @@
  */
 import { rename, mkdir, rm, rmdir, stat } from "fs/promises";
 import path from "path";
+import type { PoolClient } from "pg";
 import { pool } from "./pg";
 import { MEDIA_ROOT } from "./mediaStorage";
 import { fullPath } from "./mediaIndex";
@@ -61,7 +62,7 @@ async function freeName(candidate: string): Promise<string> {
  * renamed folder leaves its old skeleton on disk — invisible in the tree (which
  * is built from the index) but very visible over SSH and in backups.
  */
-async function pruneEmptyDirs(fileAbs: string, sourceRoot: string): Promise<void> {
+export async function pruneEmptyDirs(fileAbs: string, sourceRoot: string): Promise<void> {
   let dir = path.dirname(fileAbs);
   const stop = path.normalize(sourceRoot);
   while (dir.startsWith(stop + path.sep)) {
@@ -72,6 +73,54 @@ async function pruneEmptyDirs(fileAbs: string, sourceRoot: string): Promise<void
     }
     dir = path.dirname(dir);
   }
+}
+
+
+/**
+ * Point every reference to `from` at `to`, inside a caller's transaction.
+ *
+ * The same three places hold paths whether a file is being moved or merged into
+ * a twin, and they are easy to half-update: products carry the path twice per
+ * image (src and thumbnail), brand logos carry a ?v= suffix that must survive,
+ * and site content is one opaque jsonb blob. Returns rows touched.
+ *
+ * The trailing ["?] in the pattern is what keeps /catalog/1/1.webp from
+ * matching inside a longer path that merely starts with it.
+ */
+export async function repointReferences(client: PoolClient, from: string, to: string): Promise<number> {
+  const re = `(${escapeRe(from)})(["?])`;
+  let refs = 0;
+
+  // The whole images document, not just the src key: an entry updated in src
+  // but not thumbnail leaves a card pointing at two files, one of which is gone.
+  const prod = await client.query(
+    `UPDATE products p
+        SET images = regexp_replace(p.images::text, $3, $4, 'g')::jsonb,
+            image_src = CASE WHEN split_part(image_src, '?', 1) = $1 THEN $2 ELSE image_src END
+      WHERE p.images::text LIKE '%' || $1 || '%' OR split_part(p.image_src, '?', 1) = $1`,
+    [from, to, re, `${to}\\2`],
+  );
+  refs += prod.rowCount ?? 0;
+
+  const brands = await client.query(
+    `UPDATE brand_logos
+        SET logo_url = $2 || CASE WHEN position('?' in logo_url) > 0
+                                  THEN substring(logo_url from position('?' in logo_url))
+                                  ELSE '' END
+      WHERE split_part(logo_url, '?', 1) = $1`,
+    [from, to],
+  );
+  refs += brands.rowCount ?? 0;
+
+  const content = await client.query(
+    `UPDATE content_store
+        SET val = regexp_replace(val::text, $1, $2, 'g')::jsonb
+      WHERE val::text ~ $1`,
+    [re, `${to}\\2`],
+  );
+  refs += content.rowCount ?? 0;
+
+  return refs;
 }
 
 export type MoveResult = { from: string; to: string; refs: number };
@@ -106,43 +155,7 @@ export async function moveMedia(paths: string[], folder: string): Promise<MoveRe
 
       // Rewrite references first: if any of this fails, the file has not moved
       // yet and the transaction rolls back to a fully consistent state.
-      const re = `(${escapeRe(from)})(["?])`;
-      // Rewrite the whole images document, not just the src key: entries here
-      // carry a thumbnail alongside src (and could grow more keys), and a
-      // rewrite that updates one and not the other leaves a card pointing at
-      // two different files, only one of which exists. The trailing ["?] is
-      // what keeps /catalog/1/1.webp from matching inside a longer path that
-      // merely starts with it.
-      const prod = await client.query(
-        `UPDATE products p
-            SET images = regexp_replace(p.images::text, $3, $4, 'g')::jsonb,
-                image_src = CASE WHEN split_part(image_src, '?', 1) = $1 THEN $2 ELSE image_src END
-          WHERE p.images::text LIKE '%' || $1 || '%' OR split_part(p.image_src, '?', 1) = $1`,
-        [from, to, re, `${to}\\2`],
-      );
-      refs += prod.rowCount ?? 0;
-
-      const brands = await client.query(
-        `UPDATE brand_logos
-            SET logo_url = $2 || CASE WHEN position('?' in logo_url) > 0
-                                      THEN substring(logo_url from position('?' in logo_url))
-                                      ELSE '' END
-          WHERE split_part(logo_url, '?', 1) = $1`,
-        [from, to],
-      );
-      refs += brands.rowCount ?? 0;
-
-      // Site content is one opaque jsonb document; a targeted regex over its
-      // text is the only rewrite that survives the document changing shape.
-      // The trailing ["?] keeps /catalog/1/1.webp from matching inside a
-      // longer path that merely starts with it.
-      const content = await client.query(
-        `UPDATE content_store
-            SET val = regexp_replace(val::text, $1, $2, 'g')::jsonb
-          WHERE val::text ~ $1`,
-        [re, `${to}\\2`],
-      );
-      refs += content.rowCount ?? 0;
+      refs += await repointReferences(client, from, to);
 
       await client.query("UPDATE media SET path = $2, folder = $3 WHERE path = $1", [from, to, folder]);
 
