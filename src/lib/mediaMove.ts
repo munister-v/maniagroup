@@ -124,6 +124,11 @@ export async function moveMedia(paths: string[], folder: string): Promise<MoveRe
       refs += content.rowCount ?? 0;
 
       await client.query("UPDATE media SET path = $2, folder = $3 WHERE path = $1", [from, to, folder]);
+
+      // A file can return to a path it once left. The alias for that path would
+      // then point at the file now living there — a redirect to itself, which
+      // 404s the moment the file is deleted and loops until then.
+      await client.query("DELETE FROM media_aliases WHERE old_path = $1", [to]);
       await client.query(
         `INSERT INTO media_aliases (old_path, media_id) VALUES ($1, $2)
          ON CONFLICT (old_path) DO UPDATE SET media_id = EXCLUDED.media_id`,
