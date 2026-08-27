@@ -3,6 +3,8 @@ import { q } from "@/lib/pg";
 import { logActivity } from "@/lib/activity";
 import { mediaUrlToPath } from "@/lib/mediaStorage";
 import { parseMediaFilter, selectMedia, usageFor } from "@/lib/mediaQuery";
+import { SITE_URL } from "@/lib/siteUrl";
+import { thumbUrl } from "@/lib/mediaThumbs";
 import * as XLSX from "xlsx";
 
 /**
@@ -33,7 +35,14 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const format = (sp.get("format") ?? "xlsx").toLowerCase();
   const filter = parseMediaFilter(sp);
-  const origin = sp.get("absolute") === "1" ? new URL(req.url).origin : "";
+  // Full links by default: a spreadsheet of "/catalog/59441/4.webp" is a
+  // spreadsheet nobody can click, and the person opening it is usually not the
+  // person who knows which host that path belongs to.
+  //
+  // The host is the canonical one, never the request's: this route is reached
+  // through nginx, so the request origin is 127.0.0.1:3010 — the same trap the
+  // media redirect fell into. ?absolute=0 gives site-relative paths back.
+  const origin = sp.get("absolute") === "0" ? "" : SITE_URL;
 
   const rows = await selectMedia(filter, { limit: null });
   const usage = await usageFor(rows.map((r) => r.path));
@@ -55,7 +64,9 @@ export async function GET(req: Request) {
     const used = usage.get(r.path) ?? [];
     const sha = shaByPath.get(r.path) ?? "";
     return {
-      "Шлях": origin ? `${origin}${r.path}` : r.path,
+      "Посилання": origin ? `${origin}${r.path}` : r.path,
+      "Мініатюра": origin ? `${origin}${thumbUrl(r.path)}` : thumbUrl(r.path),
+      "Шлях на сайті": r.path,
       "Файл": r.original_name || r.path.split("/").pop() || "",
       "Джерело": r.source === "catalog" ? "Каталог" : "Завантажено вручну",
       "Тека": r.folder,
@@ -105,12 +116,28 @@ export async function GET(req: Request) {
     });
   }
 
-  ws["!cols"] = [
-    { wch: 46 }, { wch: 30 }, { wch: 20 }, { wch: 12 }, { wch: 11 }, { wch: 9 }, { wch: 9 },
-    { wch: 24 }, { wch: 24 }, { wch: 9 }, { wch: 40 }, { wch: 18 }, { wch: 12 }, { wch: 11 },
-    { wch: 20 }, { wch: 46 },
-  ];
-  ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length, c: 15 } }) };
+  const COLS = Object.keys(data[0] ?? {});
+  const WIDTH: Record<string, number> = {
+    "Посилання": 54, "Мініатюра": 54, "Шлях на сайті": 34, "Файл": 30, "Джерело": 20, "Тека": 14,
+    "Розмір, КБ": 11, "Ширина": 9, "Висота": 9, "Alt": 26, "Заголовок": 24, "Товарів": 9,
+    "Товари": 40, "SKU": 18, "Стан": 12, "Дублікат": 11, "Додано": 18, "Файл на сервері": 46,
+  };
+  ws["!cols"] = COLS.map((c) => ({ wch: WIDTH[c] ?? 16 }));
+  ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: data.length, c: Math.max(0, COLS.length - 1) } }) };
+
+  // Make the two URL columns real hyperlinks. A link you have to copy out of a
+  // cell and paste into a browser is a link the reader will not follow.
+  if (origin) {
+    for (const name of ["Посилання", "Мініатюра"]) {
+      const col = COLS.indexOf(name);
+      if (col < 0) continue;
+      for (let row = 1; row <= data.length; row++) {
+        const ref = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = ws[ref];
+        if (cell?.v) cell.l = { Target: String(cell.v), Tooltip: "Відкрити зображення" };
+      }
+    }
+  }
   ws["!freeze"] = { xSplit: "0", ySplit: "1" };
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Медіатека");

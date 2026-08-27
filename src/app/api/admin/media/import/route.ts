@@ -23,7 +23,11 @@ import * as XLSX from "xlsx";
 type Row = Record<string, unknown>;
 
 const COL = {
-  path: ["Шлях", "Path", "URL", "Файл на сервері"],
+  // Ordered by how unambiguous the column is. "Шлях" is kept for spreadsheets
+  // exported before the link columns split in two. "Мініатюра" is deliberately
+  // absent: a thumb path happens to resolve to its original today, and relying
+  // on that would make a rename of the thumb layout silently reassign photos.
+  path: ["Шлях на сайті", "Посилання", "Шлях", "Path", "URL", "Файл на сервері"],
   sku: ["SKU", "Артикул", "sku"],
   alt: ["Alt", "ALT", "alt"],
   title: ["Заголовок", "Title", "title"],
