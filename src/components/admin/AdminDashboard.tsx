@@ -2377,7 +2377,9 @@ type MediaUsage = { id: string; name: string; sku: string; kind?: "product" | "b
 type MediaFile = {
   url: string; thumb: string; name: string; size: number; mtime: number; usedBy: MediaUsage[];
   source: "uploads" | "catalog"; folder: string; width: number; height: number; alt: string; title: string;
+  dupCount: number;
 };
+type MediaSummary = { files: number; bytes: number; free: number; dups: number; folders: number };
 type MediaCounts = { all: number; uploads: number; catalog: number; used: number; free: number };
 type ImportReport = {
   applied: boolean; mode: string; rows: number;
@@ -2420,6 +2422,8 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [folderFilter, setFolderFilter] = useState<string | null>(null);
   const [folderSource, setFolderSource] = useState<"catalog" | "uploads" | null>(null);
+  const [summary, setSummary] = useState<MediaSummary | null>(null);
+  const [view, setView] = useState<"tiles" | "list">("tiles");
   const [detail, setDetail] = useState<MediaFile | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLInputElement>(null);
@@ -2456,6 +2460,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
       setFiles(data.files ?? []);
       setTotal(data.total ?? 0);
       setCounts(data.counts ?? { all: 0, uploads: 0, catalog: 0, used: 0, free: 0 });
+      setSummary(data.summary ?? null);
       setPage(data.page ?? p);
     } catch {
       onToast?.("Не вдалося завантажити медіатеку");
@@ -2970,6 +2975,57 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         />
 
         <div className="min-w-0 flex-1">
+          {/* Where am I, and what is in it. A grid with no header answers
+              neither: the folder rail shows the selection, but not the path you
+              took to it, and the chips above count the whole library. */}
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[#eef2f3] pb-2">
+            <nav className="flex min-w-0 flex-wrap items-baseline gap-1 text-[12px]">
+              <button onClick={() => { setFolderFilter(null); setFolderSource(null); setPage(1); }}
+                className={folderFilter === null ? "text-[#2b2d42]" : "text-[#8a94a0] hover:text-[#2b2d42]"}>
+                Уся бібліотека
+              </button>
+              {folderSource && (
+                <>
+                  <span className="text-[#c9d1d6]">/</span>
+                  <button onClick={() => { setFolderFilter(""); setPage(1); }}
+                    className={folderFilter === "" ? "text-[#2b2d42]" : "text-[#8a94a0] hover:text-[#2b2d42]"}>
+                    {folderSource === "catalog" ? "Каталог" : "Завантажені"}
+                  </button>
+                </>
+              )}
+              {folderFilter ? folderFilter.split("/").map((seg, i, arr) => (
+                <span key={i} className="flex items-baseline gap-1">
+                  <span className="text-[#c9d1d6]">/</span>
+                  <button
+                    onClick={() => { setFolderFilter(arr.slice(0, i + 1).join("/")); setPage(1); }}
+                    className={i === arr.length - 1 ? "font-medium text-[#2b2d42]" : "text-[#8a94a0] hover:text-[#2b2d42]"}
+                  >
+                    {seg}
+                  </button>
+                </span>
+              )) : null}
+            </nav>
+
+            <div className="ml-auto flex items-center gap-2">
+              {summary && (
+                <span className="text-[11px] text-[#8a94a0]">
+                  {summary.files} файлів · {fmtBytes(summary.bytes)}
+                  {summary.folders > 1 ? ` · ${summary.folders} тек` : ""}
+                  {summary.free > 0 ? ` · вільних ${summary.free}` : ""}
+                  {summary.dups > 0 ? ` · у дублях ${summary.dups}` : ""}
+                </span>
+              )}
+              <div className="flex">
+                {([["tiles", "Плитки"], ["list", "Таблиця"]] as const).map(([k, label]) => (
+                  <button key={k} onClick={() => setView(k)}
+                    className={`h-7 border px-2 text-[11px] ${view === k ? "border-[#2b2d42] bg-[#2b2d42] text-white" : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#b6c0ca]"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
       {loading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {Array.from({ length: 12 }).map((_, i) => <div key={i} className="aspect-square animate-pulse bg-[#f7f9fa]" />)}
@@ -2998,6 +3054,100 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
             <span className="text-[12px] text-[#8a94a0]">Shift+клік — діапазон</span>
           </div>
 
+          {view === "list" ? (
+            <div className="overflow-x-auto border border-[#eef2f3] bg-white">
+              <table className="w-full min-w-[760px] text-[12px]">
+                <thead>
+                  <tr className="border-b border-[#eef2f3] text-left text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                    <th className="w-8 px-2 py-2" />
+                    <th className="w-12 px-2 py-2" />
+                    {/* Only the columns the server can order by are clickable —
+                        a header that sorts one page of 48 out of 13.7k lies
+                        about what it did. */}
+                    <th className="px-2 py-2">
+                      <button onClick={() => setSort("name")} className={sort === "name" ? "text-[#2b2d42]" : "hover:text-[#2b2d42]"}>Файл</button>
+                    </th>
+                    <th className="px-2 py-2">Тека</th>
+                    <th className="px-2 py-2 text-right">
+                      <button onClick={() => setSort("big")} className={sort === "big" ? "text-[#2b2d42]" : "hover:text-[#2b2d42]"}>Розмір</button>
+                    </th>
+                    <th className="px-2 py-2 text-right">Пікселі</th>
+                    <th className="px-2 py-2">Де використовується</th>
+                    <th className="px-2 py-2">Alt</th>
+                    <th className="px-2 py-2">
+                      <button onClick={() => setSort("new")} className={sort === "new" ? "text-[#2b2d42]" : "hover:text-[#2b2d42]"}>Додано</button>
+                    </th>
+                    <th className="w-24 px-2 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((f, i) => (
+                    <tr key={f.url} className={`border-b border-[#f4f6f7] last:border-0 ${selected.has(f.url) ? "bg-[#f4f6f7]" : ""}`}>
+                      <td className="px-2 py-1.5">
+                        <input type="checkbox" checked={selected.has(f.url)}
+                          onChange={(e) => toggle(f.url, (e.nativeEvent as MouseEvent).shiftKey, i)} />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={f.thumb} alt="" loading="lazy" className="h-8 w-8 cursor-pointer object-cover"
+                          onClick={() => setDetail(f)}
+                          onError={(e) => {
+                            const img = e.currentTarget;
+                            if (img.dataset.fallback) return;
+                            img.dataset.fallback = "1";
+                            img.src = f.url;
+                          }} />
+                      </td>
+                      <td className="max-w-[240px] px-2 py-1.5">
+                        <button onClick={() => setDetail(f)} className="block max-w-full truncate text-left text-[#2b2d42] hover:underline" title={f.name}>
+                          {f.name}
+                        </button>
+                      </td>
+                      <td className="px-2 py-1.5 text-[#8a94a0]">
+                        <button onClick={() => { setFolderSource(f.source); setFolderFilter(f.folder); setPage(1); }}
+                          className="hover:text-[#2b2d42] hover:underline" title={`/${f.source}/${f.folder}`}>
+                          {f.folder || (f.source === "catalog" ? "каталог" : "корінь")}
+                        </button>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right text-[#8a94a0]">{fmtSize(f.size)}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right text-[#8a94a0]">{f.width ? `${f.width}×${f.height}` : "—"}</td>
+                      <td className="max-w-[220px] px-2 py-1.5">
+                        {f.usedBy.length === 0 ? (
+                          <span className="text-[#8a94a0]">вільне</span>
+                        ) : (
+                          <span className="block truncate" title={f.usedBy.map((u) => u.name).join(", ")}>
+                            {f.usedBy[0].kind === "brand" ? "бренд: " : ""}
+                            {f.usedBy[0].kind === "product" && f.usedBy[0].id ? (
+                              <a href={`/product/${f.usedBy[0].id}`} target="_blank" rel="noreferrer" className="text-[#2f9488] hover:underline">{f.usedBy[0].name}</a>
+                            ) : (
+                              <span className="text-[#2b2d42]">{f.usedBy[0].name}</span>
+                            )}
+                            {f.usedBy.length > 1 ? <span className="text-[#8a94a0]"> +{f.usedBy.length - 1}</span> : null}
+                          </span>
+                        )}
+                      </td>
+                      <td className="max-w-[160px] px-2 py-1.5">
+                        <span className={`block truncate ${f.alt ? "text-[#2b2d42]" : "text-[#c9d1d6]"}`} title={f.alt}>{f.alt || "—"}</span>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-[#8a94a0]">
+                        {f.mtime ? new Date(f.mtime).toLocaleDateString("uk-UA") : "—"}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center gap-2">
+                          {f.dupCount > 1 && (
+                            <span title={`Однакових за вмістом файлів: ${f.dupCount}`}
+                              className="rounded-[2px] bg-[#fff4e5] px-1 text-[10px] text-[#92600a]">×{f.dupCount}</span>
+                          )}
+                          <button onClick={() => copy(f.url)} title="Копіювати посилання" className="text-[#8a94a0] hover:text-[#2b2d42]">⧉</button>
+                          <button onClick={() => remove(f)} title="Видалити" className="text-[#8a94a0] hover:text-[#c62828]">✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {files.map((f, i) => (
               <div key={f.url}
@@ -3075,6 +3225,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
               </div>
             ))}
           </div>
+          )}
 
           {/* Keyed by path: opening a different file remounts the panel, which
               is why its fields need no effect to stay in sync. Without that,

@@ -5,7 +5,7 @@ import path from "path";
 import { forgetMedia, fullPath, IMAGE_RE, syncMediaIndex } from "@/lib/mediaIndex";
 import { dropThumbs, thumbUrl } from "@/lib/mediaThumbs";
 import { q } from "@/lib/pg";
-import { mediaCounts, MediaUsage, parseMediaFilter, selectMedia, usageFor } from "@/lib/mediaQuery";
+import { mediaCounts, MediaUsage, mediaSummary, parseMediaFilter, selectMedia, usageFor } from "@/lib/mediaQuery";
 
 export type { MediaUsage } from "@/lib/mediaQuery";
 export type MediaSource = "uploads" | "catalog";
@@ -31,6 +31,9 @@ export async function GET(req: Request) {
 
   const rows = await selectMedia(filter, { limit: perPage, offset: (page - 1) * perPage, withTotal: true });
   const counts = await mediaCounts();
+  // Two different questions: counts describe the library, summary describes
+  // what this filter covers.
+  const summary = await mediaSummary(filter);
   const usage = await usageFor(rows.map((r) => r.path));
 
   const files = rows.map((r) => ({
@@ -45,10 +48,11 @@ export async function GET(req: Request) {
     alt: r.alt,
     title: r.title,
     mtime: r.mtime ? new Date(r.mtime).getTime() : 0,
+    dupCount: r.dup_count,
     usedBy: usage.get(r.path) ?? [],
   }));
 
-  return NextResponse.json({ files, total: Number(rows[0]?.total ?? 0), page, perPage, counts });
+  return NextResponse.json({ files, total: Number(rows[0]?.total ?? 0), page, perPage, counts, summary });
 }
 
 /**

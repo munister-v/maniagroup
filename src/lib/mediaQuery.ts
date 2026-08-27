@@ -174,7 +174,7 @@ export async function usageFor(paths: string[]): Promise<Map<string, MediaUsage[
 export type MediaRow = {
   path: string; source: "uploads" | "catalog"; folder: string; original_name: string;
   bytes: string; width: number; height: number; alt: string; title: string;
-  mtime: string | null; created_at: string;
+  mtime: string | null; created_at: string; sha256: string; dup_count: number;
 };
 
 /** Rows matching a filter. `limit: null` for an export that must cover everything. */
@@ -182,11 +182,21 @@ export async function selectMedia(f: MediaFilter, opts: { limit: number | null; 
   const { ctes, where, params, order } = buildMediaQuery(f);
   const totalCol = opts.withTotal ? ", (count(*) OVER ())::text AS total" : "";
   const paging = opts.limit === null ? "" : `LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}`;
+  // dup_count travels with the row so the list can mark twins without a second
+  // request per file. Grouping the whole table costs one pass; asking per file
+  // would be one query per rendered row.
+  const withDups = `${ctes.join(",")},
+  dups AS (
+    SELECT sha256, count(*)::int AS n FROM media WHERE sha256 <> '' GROUP BY sha256 HAVING count(*) > 1
+  )`;
   return q<MediaRow & { total?: string }>(
-    `WITH ${ctes.join(",")}
+    `WITH ${withDups}
      SELECT m.path, m.source, m.folder, m.original_name, m.bytes::text, m.width, m.height,
-            m.alt, m.title, m.mtime, m.created_at${totalCol}
-       FROM media m LEFT JOIN used u ON u.src = m.path
+            m.alt, m.title, m.mtime, m.created_at, m.sha256,
+            COALESCE(d.n, 0) AS dup_count${totalCol}
+       FROM media m
+       LEFT JOIN used u ON u.src = m.path
+       LEFT JOIN dups d ON d.sha256 = m.sha256 AND m.sha256 <> ''
        ${where}
       ORDER BY ${order}
       ${paging}`,
@@ -208,5 +218,39 @@ export async function mediaCounts() {
   return {
     all: Number(c?.all ?? 0), uploads: Number(c?.uploads ?? 0), catalog: Number(c?.catalog ?? 0),
     used: Number(c?.used ?? 0), free: Number(c?.free ?? 0),
+  };
+}
+
+/**
+ * Totals for the current filter, not the whole library.
+ *
+ * The chips above the grid answer "how big is the library"; this answers "what
+ * am I looking at right now" — which is the question you actually have when you
+ * have clicked into a branch and are deciding whether anything in it can go.
+ */
+export async function mediaSummary(f: MediaFilter) {
+  const { ctes, where, params } = buildMediaQuery(f);
+  const [r] = await q<{ files: string; bytes: string; free: string; dups: string; folders: string }>(
+    `WITH ${ctes.join(",")},
+     dups AS (
+       SELECT sha256 FROM media WHERE sha256 <> '' GROUP BY sha256 HAVING count(*) > 1
+     )
+     SELECT count(*)::text AS files,
+            COALESCE(sum(m.bytes), 0)::text AS bytes,
+            count(*) FILTER (WHERE u.src IS NULL)::text AS free,
+            count(*) FILTER (WHERE d.sha256 IS NOT NULL)::text AS dups,
+            count(DISTINCT m.folder)::text AS folders
+       FROM media m
+       LEFT JOIN used u ON u.src = m.path
+       LEFT JOIN dups d ON d.sha256 = m.sha256
+       ${where}`,
+    params,
+  );
+  return {
+    files: Number(r?.files ?? 0),
+    bytes: Number(r?.bytes ?? 0),
+    free: Number(r?.free ?? 0),
+    dups: Number(r?.dups ?? 0),
+    folders: Number(r?.folders ?? 0),
   };
 }
