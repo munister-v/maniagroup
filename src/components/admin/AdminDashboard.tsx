@@ -1954,6 +1954,9 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState<ImportReport | null>(null);
+  const [folders, setFolders] = useState<{ source: string; folder: string; files: number }[]>([]);
+  const [folderFilter, setFolderFilter] = useState<string | null>(null);
+  const [detail, setDetail] = useState<MediaFile | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLInputElement>(null);
   const importMode = useRef<"meta" | "attach">("meta");
@@ -1966,8 +1969,9 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     const p = new URLSearchParams({ source, usage, sort, q });
     const iso = sinceToIso(since);
     if (iso) p.set("since", iso);
+    if (folderFilter !== null) p.set("folder", folderFilter);
     return p;
-  }, [source, usage, sort, since]);
+  }, [source, usage, sort, since, folderFilter]);
 
   // Filtering happens on the server: the library is ~13.7k files since the
   // product photos moved off WordPress, far too many to ship to the browser.
@@ -1990,11 +1994,25 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     }
   }, [filterParams, onToast]);
 
+  const loadFolders = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/media/folders");
+      const d = await res.json();
+      setFolders(d.folders ?? []);
+    } catch { /* the tree is a convenience; the grid works without it */ }
+  }, []);
+
   // Debounce the search box so typing does not fire a request per keystroke.
+  // The folder rail rides along on the first pass and is refreshed explicitly
+  // after anything that changes it (a move, a new folder, an upload).
+  const foldersLoaded = useRef(false);
   useEffect(() => {
-    const t = setTimeout(() => load(1, search), 250);
+    const t = setTimeout(() => {
+      load(1, search);
+      if (!foldersLoaded.current) { foldersLoaded.current = true; loadFolders(); }
+    }, 250);
     return () => clearTimeout(t);
-  }, [search, load]);
+  }, [search, load, loadFolders]);
 
   // A menu that only closes by picking something from it is a menu you cannot
   // dismiss after opening it by accident.
@@ -2182,6 +2200,69 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     load(page, search);
   }
 
+  /**
+   * Moving is the one action here that can break the storefront: a path is a
+   * value copied into product cards, so the server rewrites every reference in
+   * one transaction and reports how many. Showing that number is the point —
+   * "перенесено 12, оновлено посилань 12" is checkable; a silent "готово" is not.
+   */
+  async function moveSelected() {
+    const chosen = [...selected];
+    if (chosen.length === 0) return;
+    const target = prompt(
+      `Перенести ${chosen.length} файлів у теку (порожньо = корінь джерела).\n\n` +
+      `Файл фізично переїде, а всі посилання на нього — у товарах, лого брендів і контенті — оновляться. ` +
+      `Старий шлях лишиться переадресацією.`,
+      folderFilter ?? "",
+    );
+    if (target === null) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/media/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "move", paths: chosen, folder: target.trim() }),
+      });
+      const d = await res.json();
+      if (!res.ok) { onToast?.(d.error ?? "Не вдалося перенести"); return; }
+      onToast?.(`Перенесено ${d.moved}, оновлено посилань: ${d.refs}`);
+      setSelected(new Set());
+      loadFolders();
+      load(page, search);
+    } catch {
+      onToast?.("Помилка перенесення");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function newFolder() {
+    const name = prompt("Назва нової теки (літери, цифри, крапка, дефіс, підкреслення):", "");
+    if (!name) return;
+    const res = await fetch("/api/admin/media/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create", source: source === "catalog" ? "catalog" : "uploads", folder: name.trim() }),
+    });
+    const d = await res.json();
+    if (!res.ok) { onToast?.(d.error ?? "Не вдалося створити"); return; }
+    onToast?.("Теку створено");
+    loadFolders();
+  }
+
+  async function saveMeta(file: MediaFile, alt: string, title: string) {
+    const res = await fetch("/api/admin/media", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: file.url, alt, title }),
+    });
+    if (!res.ok) { onToast?.("Не вдалося зберегти"); return; }
+    setFiles((fs) => fs.map((f) => (f.url === file.url ? { ...f, alt, title } : f)));
+    setDetail((d) => (d && d.url === file.url ? { ...d, alt, title } : d));
+    onToast?.("Збережено");
+  }
+
   const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.round(b / 1024)} КБ` : `${(b / 1024 / 1024).toFixed(1)} МБ`);
   const pages = Math.max(1, Math.ceil(total / PER_PAGE));
   const allOnPageSelected = files.length > 0 && files.every((f) => selected.has(f.url));
@@ -2350,10 +2431,37 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         <div className="mb-4 flex flex-wrap items-center gap-3 border border-[#2b2d42] bg-[#f7f9fa] px-4 py-2">
           <span className="text-[12px] text-[#2b2d42]">Вибрано: {selected.size}</span>
           <button onClick={() => exportSheet("xlsx")} className="text-[12px] text-[#2b2d42] underline hover:no-underline">У Excel</button>
+          <button onClick={moveSelected} disabled={busy} className="text-[12px] text-[#2b2d42] underline hover:no-underline disabled:opacity-50">Перенести в теку</button>
           <button onClick={removeSelected} disabled={busy} className="text-[12px] text-[#c62828] underline hover:no-underline disabled:opacity-50">Видалити вільні</button>
           <button onClick={() => setSelected(new Set())} className="ml-auto text-[12px] text-[#8a94a0] hover:text-[#2b2d42]">Зняти виділення</button>
         </div>
       )}
+
+      <div className="mb-4 flex flex-wrap items-center gap-1 border-b border-[#eef2f3] pb-3">
+        <button onClick={() => { setFolderFilter(null); setPage(1); }}
+          className={`h-8 px-3 text-[12px] ${folderFilter === null ? "bg-[#2b2d42] text-white" : "text-[#2b2d42] hover:bg-[#f7f9fa]"}`}>
+          Усі теки
+        </button>
+        {folders
+          .filter((f) => source === "all" || f.source === source)
+          .slice(0, 24)
+          .map((f) => (
+            <button key={`${f.source}/${f.folder}`} onClick={() => { setFolderFilter(f.folder); setPage(1); }}
+              title={`/${f.source}/${f.folder}`}
+              className={`h-8 px-3 text-[12px] ${folderFilter === f.folder ? "bg-[#2b2d42] text-white" : "text-[#2b2d42] hover:bg-[#f7f9fa]"}`}>
+              {f.folder || "корінь"} <span className="text-[#8a94a0]">· {f.files}</span>
+            </button>
+          ))}
+        {/* The catalog is one directory per product — 2800 of them. Listing
+            every one as a chip is not a tree, it is a wall, so the rail shows
+            the biggest and search covers the rest. */}
+        {folders.filter((f) => source === "all" || f.source === source).length > 24 && (
+          <span className="px-2 text-[12px] text-[#8a94a0]">
+            …ще {folders.filter((f) => source === "all" || f.source === source).length - 24} — шукайте через пошук
+          </span>
+        )}
+        <button onClick={newFolder} className="ml-auto h-8 px-3 text-[12px] text-[#2f9488] hover:bg-[#f7f9fa]">+ Нова тека</button>
+      </div>
 
       {usage === "free" && counts.free > 0 && (
         <p className="mb-3 text-[12px] text-[#8a94a0]">
@@ -2444,6 +2552,12 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
                     {fmtSize(f.size)}{f.width ? ` · ${f.width}×${f.height}` : ""}
                   </span>
                   <div className="flex shrink-0 gap-1">
+                    <button onClick={() => setDetail(f)} title="Деталі та alt"
+                      className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                        <path d="M12 8h.01M11 12h1v4h1M12 21a9 9 0 100-18 9 9 0 000 18z" />
+                      </svg>
+                    </button>
                     <button onClick={() => copy(f.url)} title="Копіювати посилання"
                       className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
@@ -2462,6 +2576,11 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
             ))}
           </div>
 
+          {/* Keyed by path: opening a different file remounts the panel, which
+              is why its fields need no effect to stay in sync. Without that,
+              the previous file's alt could be saved onto the new one. */}
+          {detail && <MediaDetail key={detail.url} file={detail} onClose={() => setDetail(null)} onSave={saveMeta} fmtSize={fmtSize} />}
+
           {pages > 1 && (
             <div className="mt-5 flex items-center justify-center gap-2">
               <button disabled={page <= 1} onClick={() => load(page - 1, search)}
@@ -2476,6 +2595,88 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     </div>
   );
 }
+/**
+ * One file, up close.
+ *
+ * Alt text is the only field in this library that reaches customers — a screen
+ * reader announces it and Google reads it — so editing it should not require a
+ * spreadsheet round-trip. Everything else here is what you need to decide
+ * whether a file can go: where it is, what it weighs, and who still uses it.
+ */
+function MediaDetail({
+  file, onClose, onSave, fmtSize,
+}: {
+  file: MediaFile;
+  onClose: () => void;
+  onSave: (f: MediaFile, alt: string, title: string) => Promise<void>;
+  fmtSize: (b: number) => string;
+}) {
+  const [alt, setAlt] = useState(file.alt);
+  const [title, setTitle] = useState(file.title);
+  const [saving, setSaving] = useState(false);
+
+  const dirty = alt !== file.alt || title !== file.title;
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-start justify-end bg-black/30" onClick={onClose}>
+      <div className="h-full w-full max-w-md overflow-y-auto bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h3 className="truncate text-[14px] font-medium text-[#2b2d42]" title={file.name}>{file.name}</h3>
+          <button onClick={onClose} className="shrink-0 text-[12px] text-[#8a94a0] hover:text-[#2b2d42]">Закрити</button>
+        </div>
+
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={file.url} alt={file.alt || file.name} className="mb-4 max-h-72 w-full bg-[#f7f9fa] object-contain" />
+
+        <dl className="mb-4 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-[12px]">
+          <dt className="text-[#8a94a0]">Шлях</dt>
+          <dd className="break-all text-[#2b2d42]">{file.url}</dd>
+          <dt className="text-[#8a94a0]">Тека</dt>
+          <dd className="text-[#2b2d42]">/{file.source}/{file.folder || ""}</dd>
+          <dt className="text-[#8a94a0]">Розмір</dt>
+          <dd className="text-[#2b2d42]">{fmtSize(file.size)}{file.width ? ` · ${file.width}×${file.height}` : ""}</dd>
+          <dt className="text-[#8a94a0]">Додано</dt>
+          <dd className="text-[#2b2d42]">{file.mtime ? new Date(file.mtime).toLocaleString("uk-UA") : "—"}</dd>
+        </dl>
+
+        <div className="mb-4">
+          <p className="mb-1 text-[11px] uppercase tracking-wider text-[#8a94a0]">Де використовується</p>
+          {file.usedBy.length === 0 ? (
+            <p className="text-[12px] text-[#8a94a0]">Ніде — файл вільний.</p>
+          ) : (
+            <ul className="space-y-1 text-[12px]">
+              {file.usedBy.map((u, i) => (
+                <li key={i} className="text-[#2b2d42]">
+                  {u.kind === "brand" ? "Бренд: " : u.kind === "content" ? "" : ""}
+                  {u.kind === "product" && u.id
+                    ? <a href={`/product/${u.id}`} target="_blank" rel="noreferrer" className="underline hover:no-underline">{u.name}</a>
+                    : u.name}
+                  {u.sku ? <span className="text-[#8a94a0]"> ({u.sku})</span> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <label className="mb-1 block text-[11px] uppercase tracking-wider text-[#8a94a0]">Alt — що бачить читалка екрана і Google</label>
+        <input value={alt} onChange={(e) => setAlt(e.target.value)}
+          className="mb-3 h-9 w-full border border-[#e6eaec] px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none" />
+
+        <label className="mb-1 block text-[11px] uppercase tracking-wider text-[#8a94a0]">Заголовок</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)}
+          className="mb-4 h-9 w-full border border-[#e6eaec] px-3 text-[12px] focus:border-[#2b2d42] focus:outline-none" />
+
+        <button
+          disabled={!dirty || saving}
+          onClick={async () => { setSaving(true); await onSave(file, alt, title); setSaving(false); }}
+          className="h-10 w-full border border-[#2f9488] text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-40">
+          {saving ? "Збереження…" : dirty ? "Зберегти" : "Змін немає"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SubscribersSection() {
   const [rows, setRows] = useState<Subscriber[]>([]);
   const [total, setTotal] = useState(0);

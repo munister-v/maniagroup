@@ -4,6 +4,7 @@ import { unlink } from "fs/promises";
 import path from "path";
 import { forgetMedia, fullPath, IMAGE_RE, syncMediaIndex } from "@/lib/mediaIndex";
 import { dropThumbs, thumbUrl } from "@/lib/mediaThumbs";
+import { q } from "@/lib/pg";
 import { mediaCounts, MediaUsage, parseMediaFilter, selectMedia, usageFor } from "@/lib/mediaQuery";
 
 export type { MediaUsage } from "@/lib/mediaQuery";
@@ -66,6 +67,32 @@ export async function POST(req: Request) {
     withHash: body.withHash ?? true,
   });
   return NextResponse.json({ ok: true, ...stats });
+}
+
+/**
+ * PATCH — alt and title for one file.
+ *
+ * Alt text is the one field here that reaches customers: it is what a screen
+ * reader announces and what Google reads. Editing it should not require a
+ * spreadsheet round-trip, so the grid can write it directly.
+ */
+export async function PATCH(req: Request) {
+  if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
+  const body = await req.json().catch(() => ({})) as { url?: string; alt?: string; title?: string };
+  const url = (body.url ?? "").trim();
+  if (!/^\/(uploads|catalog)\//.test(url) || url.includes("..")) {
+    return NextResponse.json({ error: "Невірний шлях" }, { status: 400 });
+  }
+  const rows = await q(
+    `UPDATE media
+        SET alt   = COALESCE($2, alt),
+            title = COALESCE($3, title)
+      WHERE path = $1
+  RETURNING path`,
+    [url, body.alt ?? null, body.title ?? null],
+  );
+  if (rows.length === 0) return NextResponse.json({ error: "Файл не знайдено" }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }
 
 /** DELETE ?name=… (uploads) or ?url=/catalog/<id>/<file> — refuses if in use. */
