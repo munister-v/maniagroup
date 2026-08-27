@@ -849,6 +849,50 @@ ALTER TABLE products    ADD COLUMN IF NOT EXISTS size_chart_code TEXT NOT NULL D
 -- brand badge) or 'light' (dark ink / transparent — renders on the white
 -- tile). See BrandLogo / homepage BrandStrip.
 ALTER TABLE brand_logos ADD COLUMN IF NOT EXISTS bg TEXT NOT NULL DEFAULT 'light';
+
+-- ── Media library ──────────────────────────────────────────────────────────
+-- The library used to be "whatever readdir finds". That answered "which files
+-- exist" and nothing else: the uploader names files by UUID, so the original
+-- filename was lost at upload time, and there was nowhere to keep alt text,
+-- dimensions or a hash. Every listing also walked 13.5k directory entries.
+--
+-- This table is a mirror of the disk, not a replacement for it. The path column holds the
+-- public URL (/uploads/x.webp, /catalog/<productId>/2.webp) exactly as it is
+-- stored in products.images — nothing here renames or moves a file.
+CREATE TABLE IF NOT EXISTS media (
+  id            BIGSERIAL PRIMARY KEY,
+  path          TEXT NOT NULL UNIQUE,            -- public URL, doubles as the disk path under MEDIA_ROOT
+  source        TEXT NOT NULL DEFAULT 'uploads', -- uploads | catalog
+  folder        TEXT NOT NULL DEFAULT '',        -- directory part below the source root ('' = root)
+  original_name TEXT NOT NULL DEFAULT '',        -- what the file was called before it became a UUID
+  ext           TEXT NOT NULL DEFAULT '',
+  bytes         BIGINT NOT NULL DEFAULT 0,
+  width         INTEGER NOT NULL DEFAULT 0,
+  height        INTEGER NOT NULL DEFAULT 0,
+  sha256        TEXT NOT NULL DEFAULT '',        -- '' until hashed; duplicates are found by this
+  alt           TEXT NOT NULL DEFAULT '',
+  title         TEXT NOT NULL DEFAULT '',
+  mtime         TIMESTAMPTZ,                     -- file mtime, what the grid sorts by
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_media_source  ON media(source);
+CREATE INDEX IF NOT EXISTS idx_media_folder  ON media(folder);
+CREATE INDEX IF NOT EXISTS idx_media_mtime   ON media(mtime DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_media_bytes   ON media(bytes DESC);
+CREATE INDEX IF NOT EXISTS idx_media_sha     ON media(sha256) WHERE sha256 <> '';
+CREATE INDEX IF NOT EXISTS idx_media_name_trgm ON media USING gin (original_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_media_path_trgm ON media USING gin (path gin_trgm_ops);
+
+-- Moving a file breaks every URL already baked into products.images and into
+-- Google's index. When the library starts moving files between real folders,
+-- the old path lands here and a lookup redirects it instead of 404-ing.
+CREATE TABLE IF NOT EXISTS media_aliases (
+  old_path   TEXT PRIMARY KEY,
+  media_id   BIGINT NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_media_aliases_media ON media_aliases(media_id);
 `;
 
 /**
