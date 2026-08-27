@@ -25,7 +25,7 @@ import { AiAssistant, AiInsights } from "./AiAssistant";
 
 /* ─── Types ─── */
 
-type Section = "overview" | "docs" | "content" | "media" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "payments" | "delivery" | "monitoring" | "backup" | "settings" | "help";
+type Section = "overview" | "docs" | "content" | "media" | "mediaUpload" | "catalog" | "products" | "offers" | "properties" | "propertyMatching" | "sizeCharts" | "classifier" | "brands" | "orders" | "customers" | "coupons" | "subscribers" | "accounting" | "payments" | "delivery" | "monitoring" | "backup" | "settings" | "help";
 
 type RecentOrder = {
   id: number;
@@ -103,6 +103,20 @@ const NAV_MAIN: RailItem[] = [
     ],
   },
   {
+    // Медіа жило в нижній службовій групі, куди треба доскролити, а окремого
+    // екрана завантаження не було зовсім: сотню фото від фотографа заливали
+    // через плитку в картці товару. Тепер це розділ поряд з товарами — там,
+    // де про фото й думають.
+    kind: "group",
+    key: "media",
+    label: "Медіа",
+    d: "M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z",
+    children: [
+      { id: "media", label: "Медіатека", hint: "усі фото, теки, пошук, вивантаження в Excel" },
+      { id: "mediaUpload", label: "Масове завантаження", hint: "перетягніть теку з фото — приймає сотні за раз" },
+    ],
+  },
+  {
     kind: "leaf",
     id: "orders",
     label: "Замовлення",
@@ -150,11 +164,6 @@ const NAV_ADMIN: { id: Section; label: string; d: string }[] = [
     id: "brands",
     label: "Бренди",
     d: "M3 7h18M3 12h18M3 17h18",
-  },
-  {
-    id: "media",
-    label: "Медіа",
-    d: "M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm2 11l4-5 3 4 2-2 3 3M9 10a1 1 0 100-2 1 1 0 000 2z",
   },
   {
     id: "content",
@@ -448,6 +457,7 @@ export function AdminDashboard({
             />
           )}
           {section === "media" && <MediaSection onToast={showToast} />}
+          {section === "mediaUpload" && <MediaUploadSection onToast={showToast} onDone={() => setSection("media")} />}
           {section === "catalog" && (
             <ErpImportTabs
               onImported={(msg) => { showToast(msg); setDataVersion((v) => v + 1); }}
@@ -1903,6 +1913,251 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Bulk photo upload ─── */
+
+type UploadItem = {
+  file: File;
+  status: "waiting" | "sending" | "done" | "duplicate" | "failed";
+  url?: string;
+  error?: string;
+};
+
+/**
+ * Mass upload, as a screen of its own.
+ *
+ * Photos arrive from a photographer as a folder of a few hundred files, and
+ * until now the only way in was the small tile inside a product card — one
+ * product at a time, with no idea which files made it. Here the whole folder
+ * goes in at once and every file says what happened to it, because "завантажено
+ * 247" is not an answer when 253 were dropped.
+ *
+ * Three at a time on purpose: sharp runs inside the web server that also serves
+ * the shop on a 1.7 GB box, and firing a folder at it all at once is exactly
+ * what got the photo migration OOM-killed.
+ */
+function MediaUploadSection({ onToast, onDone }: { onToast?: (m: string) => void; onDone?: () => void }) {
+  const [items, setItems] = useState<UploadItem[]>([]);
+  const [running, setRunning] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [folder, setFolder] = useState("");
+  const [folders, setFolders] = useState<{ source: string; folder: string; files: number }[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const dirRef = useRef<HTMLInputElement>(null);
+  const cancelRef = useRef(false);
+  // The workers read the list after it has been patched many times; state in a
+  // closure would be the version captured when start() was called.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
+  const loadFolders = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/media/folders");
+      const d = await res.json();
+      setFolders((d.folders ?? []).filter((f: { source: string }) => f.source === "uploads"));
+    } catch { /* the picker is a convenience */ }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(loadFolders, 0);
+    return () => clearTimeout(t);
+  }, [loadFolders]);
+
+  function queue(list: FileList | File[] | null) {
+    const arr = (list ? Array.from(list) : []).filter((f) => f.type.startsWith("image/"));
+    if (arr.length === 0) { onToast?.("Серед вибраного немає зображень"); return; }
+    setItems((prev) => {
+      // A folder dropped twice should not queue every file twice.
+      const seen = new Set(prev.map((i) => `${i.file.name}:${i.file.size}`));
+      const fresh = arr.filter((f) => !seen.has(`${f.name}:${f.size}`));
+      return [...prev, ...fresh.map((file): UploadItem => ({ file, status: "waiting" }))];
+    });
+  }
+
+  async function start() {
+    if (running) return;
+    cancelRef.current = false;
+    setRunning(true);
+
+    const pending = items.map((it, idx) => ({ it, idx })).filter(({ it }) => it.status === "waiting" || it.status === "failed");
+    let cursor = 0;
+
+    const patch = (idx: number, next: Partial<UploadItem>) =>
+      setItems((cur) => cur.map((it, i) => (i === idx ? { ...it, ...next } : it)));
+
+    async function worker() {
+      for (;;) {
+        if (cancelRef.current) return;
+        const job = pending[cursor++];
+        if (!job) return;
+        patch(job.idx, { status: "sending", error: undefined });
+        try {
+          const fd = new FormData();
+          fd.append("file", job.it.file);
+          const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            patch(job.idx, { status: "failed", error: d.error ?? `HTTP ${res.status}` });
+          } else if (d.duplicate) {
+            patch(job.idx, { status: "duplicate", url: d.url });
+          } else {
+            patch(job.idx, { status: "done", url: d.url });
+          }
+        } catch {
+          patch(job.idx, { status: "failed", error: "Немає зв'язку" });
+        }
+      }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(3, pending.length) }, worker));
+    setRunning(false);
+
+    // Uploads land in /uploads root; moving them into the chosen folder is the
+    // same transactional move the library uses, so links stay correct even for
+    // a file a product already picked up between the two steps.
+    if (folder && !cancelRef.current) {
+      const uploaded = itemsRef.current.filter((i) => i.status === "done" && i.url).map((i) => i.url!) as string[];
+      if (uploaded.length) {
+        try {
+          const res = await fetch("/api/admin/media/folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "move", paths: uploaded, folder }),
+          });
+          const d = await res.json();
+          if (!res.ok) onToast?.(d.error ?? "Завантажено, але не вдалося перенести в теку");
+        } catch {
+          onToast?.("Завантажено, але не вдалося перенести в теку");
+        }
+      }
+    }
+    loadFolders();
+  }
+
+  const counts = {
+    total: items.length,
+    done: items.filter((i) => i.status === "done").length,
+    duplicate: items.filter((i) => i.status === "duplicate").length,
+    failed: items.filter((i) => i.status === "failed").length,
+    waiting: items.filter((i) => i.status === "waiting").length,
+  };
+  const processed = counts.done + counts.duplicate + counts.failed;
+
+  const btn = "flex h-10 items-center gap-2 border px-5 text-[11px] uppercase tracking-wider disabled:opacity-50";
+
+  return (
+    <div className="max-w-4xl">
+      <div className="mb-5">
+        <h2 className="text-lg font-medium text-[#2b2d42]">Масове завантаження фото</h2>
+        <p className="text-[12px] text-[#8a94a0]">
+          Перетягніть теку або виберіть файли. Однакові фото не дублюються — повторне падає в «вже було».
+        </p>
+      </div>
+
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); queue(e.dataTransfer.files); }}
+        onClick={() => fileRef.current?.click()}
+        className={`cursor-pointer border border-dashed px-4 py-14 text-center text-sm transition-colors ${
+          dragOver ? "border-[#2b2d42] bg-[#f4f6f7] text-[#2b2d42]" : "border-[#d5dbe0] bg-white text-[#8a94a0]"
+        }`}
+      >
+        {dragOver ? "Відпустіть, щоб додати в чергу" : "Перетягніть фото сюди або натисніть, щоб вибрати"}
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { queue(e.target.files); e.target.value = ""; }} />
+      {/* webkitdirectory lets the admin pick the photographer's folder itself
+          rather than opening it and selecting a few hundred files by hand. */}
+      <input
+        ref={dirRef}
+        type="file"
+        hidden
+        multiple
+        // @ts-expect-error — non-standard but supported in every browser this panel runs in
+        webkitdirectory=""
+        onChange={(e) => { queue(e.target.files); e.target.value = ""; }}
+      />
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button onClick={() => dirRef.current?.click()} className={`${btn} border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#2b2d42]`}>
+          Вибрати теку цілком
+        </button>
+
+        <label className="flex items-center gap-2 text-[12px] text-[#8a94a0]">
+          Скласти в теку
+          <input
+            list="mg-upload-folders"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            placeholder="корінь /uploads"
+            className="h-10 w-52 border border-[#e6eaec] px-3 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none"
+          />
+          <datalist id="mg-upload-folders">
+            {folders.map((f) => <option key={f.folder} value={f.folder}>{`${f.folder || "корінь"} · ${f.files}`}</option>)}
+          </datalist>
+        </label>
+
+        <button
+          onClick={start}
+          disabled={running || counts.waiting + counts.failed === 0}
+          className={`${btn} ml-auto border-[#2f9488] text-[#2f9488] hover:bg-[#2f9488] hover:text-white`}
+        >
+          {running ? `Завантаження… ${processed} / ${counts.total}` : `Завантажити ${counts.waiting + counts.failed}`}
+        </button>
+        {running && (
+          <button onClick={() => { cancelRef.current = true; }} className={`${btn} border-[#e6eaec] bg-white text-[#c62828] hover:border-[#c62828]`}>
+            Зупинити
+          </button>
+        )}
+        {!running && items.length > 0 && (
+          <button onClick={() => setItems([])} className={`${btn} border-[#e6eaec] bg-white text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]`}>
+            Очистити список
+          </button>
+        )}
+      </div>
+
+      {items.length > 0 && (
+        <>
+          <div className="mt-5 h-1 w-full bg-[#eef2f3]">
+            <div className="h-1 bg-[#2f9488] transition-all" style={{ width: `${(processed / items.length) * 100}%` }} />
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-4 text-[12px]">
+            <span className="text-[#2b2d42]">Усього: {counts.total}</span>
+            <span className="text-[#2f9488]">Завантажено: {counts.done}</span>
+            <span className="text-[#8a94a0]">Вже було: {counts.duplicate}</span>
+            {counts.failed > 0 && <span className="text-[#c62828]">Помилок: {counts.failed}</span>}
+            {!running && processed === counts.total && counts.total > 0 && (
+              <button onClick={onDone} className="ml-auto text-[#2b2d42] underline hover:no-underline">
+                Відкрити медіатеку
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 max-h-[420px] overflow-y-auto border border-[#eef2f3] bg-white">
+            <table className="w-full text-[12px]">
+              <tbody>
+                {items.map((it, i) => (
+                  <tr key={`${it.file.name}-${i}`} className="border-b border-[#f4f6f7] last:border-0">
+                    <td className="truncate px-3 py-1.5 text-[#2b2d42]" title={it.file.name}>{it.file.name}</td>
+                    <td className="w-24 px-3 py-1.5 text-right text-[#8a94a0]">{Math.round(it.file.size / 1024)} КБ</td>
+                    <td className="w-40 px-3 py-1.5">
+                      {it.status === "waiting" && <span className="text-[#8a94a0]">у черзі</span>}
+                      {it.status === "sending" && <span className="text-[#2b2d42]">надсилання…</span>}
+                      {it.status === "done" && <span className="text-[#2f9488]">готово</span>}
+                      {it.status === "duplicate" && <span className="text-[#8a94a0]">вже було в бібліотеці</span>}
+                      {it.status === "failed" && <span className="text-[#c62828]" title={it.error}>помилка: {it.error}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
