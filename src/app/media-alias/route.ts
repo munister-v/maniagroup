@@ -27,5 +27,13 @@ export async function GET(req: Request) {
   const target = rows[0]?.path;
   if (!target) return new NextResponse("Not found", { status: 404 });
 
-  return NextResponse.redirect(new URL(target, url.origin), 301);
+  // A relative Location on purpose. Absolute would be built from the origin
+  // nginx proxied with — 127.0.0.1:3010 — and that is what the browser would
+  // then be sent to. RFC 7231 allows a relative reference here.
+  //
+  // Percent-encode per segment: a folder can be named «сезон-2026», and a
+  // header value has to be a ByteString. new URL() used to hide this by
+  // encoding on the way in.
+  const location = target.split("/").map(encodeURIComponent).join("/");
+  return new NextResponse(null, { status: 301, headers: { Location: location, "Cache-Control": "no-store" } });
 }

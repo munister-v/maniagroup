@@ -86,22 +86,18 @@ export async function moveMedia(paths: string[], folder: string): Promise<MoveRe
       // Rewrite references first: if any of this fails, the file has not moved
       // yet and the transaction rolls back to a fully consistent state.
       const re = `(${escapeRe(from)})(["?])`;
-
+      // Rewrite the whole images document, not just the src key: entries here
+      // carry a thumbnail alongside src (and could grow more keys), and a
+      // rewrite that updates one and not the other leaves a card pointing at
+      // two different files, only one of which exists. The trailing ["?] is
+      // what keeps /catalog/1/1.webp from matching inside a longer path that
+      // merely starts with it.
       const prod = await client.query(
         `UPDATE products p
-            SET images = (
-                  SELECT jsonb_agg(
-                           CASE WHEN split_part(e->>'src', '?', 1) = $1
-                                THEN jsonb_set(e, '{src}', to_jsonb($2::text ||
-                                       CASE WHEN position('?' in e->>'src') > 0
-                                            THEN substring(e->>'src' from position('?' in e->>'src'))
-                                            ELSE '' END))
-                                ELSE e END ORDER BY ord)
-                    FROM jsonb_array_elements(p.images) WITH ORDINALITY AS t(e, ord)
-                ),
+            SET images = regexp_replace(p.images::text, $3, $4, 'g')::jsonb,
                 image_src = CASE WHEN split_part(image_src, '?', 1) = $1 THEN $2 ELSE image_src END
           WHERE p.images::text LIKE '%' || $1 || '%' OR split_part(p.image_src, '?', 1) = $1`,
-        [from, to],
+        [from, to, re, `${to}\\2`],
       );
       refs += prod.rowCount ?? 0;
 
