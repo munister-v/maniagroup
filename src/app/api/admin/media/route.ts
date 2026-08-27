@@ -1,43 +1,12 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/adminAuth";
-import { q } from "@/lib/pg";
 import { unlink } from "fs/promises";
 import path from "path";
 import { forgetMedia, fullPath, IMAGE_RE, syncMediaIndex } from "@/lib/mediaIndex";
+import { mediaCounts, MediaUsage, parseMediaFilter, selectMedia, usageFor } from "@/lib/mediaQuery";
 
-export type MediaUsage = { id: string; name: string; sku: string };
+export type { MediaUsage } from "@/lib/mediaQuery";
 export type MediaSource = "uploads" | "catalog";
-
-/**
- * Which products point at which image, for a given set of paths.
- *
- * Scoped to the page being rendered (48 paths) rather than the whole catalog:
- * the unscoped version expanded every product's images array on every request.
- */
-async function usageFor(paths: string[]): Promise<Map<string, MediaUsage[]>> {
-  const map = new Map<string, MediaUsage[]>();
-  if (paths.length === 0) return map;
-  const rows = await q<{ id: string; name: string; sku: string; src: string }>(
-    `SELECT p.id::text, p.name, p.sku, img->>'src' AS src
-       FROM products p, jsonb_array_elements(p.images) AS img
-      WHERE img->>'src' = ANY($1::text[])`,
-    [paths],
-  );
-  for (const r of rows) {
-    const list = map.get(r.src) ?? [];
-    if (!list.some((u) => u.id === r.id)) list.push({ id: r.id, name: r.name, sku: r.sku });
-    map.set(r.src, list);
-  }
-  return map;
-}
-
-/** Every image path the catalog currently points at. Used for the used/free filter. */
-const USED_SRC_CTE = `
-  used AS (
-    SELECT DISTINCT img->>'src' AS src
-      FROM products p, jsonb_array_elements(p.images) AS img
-     WHERE img->>'src' LIKE '/uploads/%' OR img->>'src' LIKE '/catalog/%'
-  )`;
 
 /**
  * GET — the media library, filtered, counted and paginated in Postgres.
@@ -47,82 +16,19 @@ const USED_SRC_CTE = `
  * query per request instead of one directory walk.
  *
  *   ?source=all|uploads|catalog  ?usage=all|used|free  ?folder=  ?q=
+ *   ?since=<ISO date>  ?urls=<comma-separated selection>
  *   ?sort=new|big|name  ?page=  ?perPage=
  */
 export async function GET(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({}, { status: 401 });
 
   const sp = new URL(req.url).searchParams;
-  const source = sp.get("source") ?? "all";
-  const usageFilter = sp.get("usage") ?? "all";
-  const folder = sp.get("folder");
-  const term = (sp.get("q") ?? "").trim();
-  const sort = sp.get("sort") ?? "new";
+  const filter = parseMediaFilter(sp);
   const page = Math.max(1, Number(sp.get("page")) || 1);
   const perPage = Math.min(200, Math.max(1, Number(sp.get("perPage")) || 48));
 
-  const where: string[] = [];
-  const params: unknown[] = [];
-  const add = (sql: string, value: unknown) => {
-    params.push(value);
-    where.push(sql.replace("$?", `$${params.length}`));
-  };
-
-  if (source === "uploads" || source === "catalog") add("m.source = $?", source);
-  if (folder !== null) add("m.folder = $?", folder);
-  if (usageFilter === "used") where.push("u.src IS NOT NULL");
-  if (usageFilter === "free") where.push("u.src IS NULL");
-  // Searchable by filename, by the product it belongs to, and by SKU — the
-  // three things an admin actually remembers about a photo. The product half
-  // is resolved once into a CTE rather than as a correlated EXISTS: correlated,
-  // it re-expands every product's images array for each of the 13.5k rows.
-  const ctes = [USED_SRC_CTE];
-  if (term) {
-    params.push(`%${term}%`);
-    const like = `$${params.length}`;
-    ctes.push(`
-  matched AS (
-    SELECT DISTINCT img->>'src' AS src
-      FROM products p, jsonb_array_elements(p.images) AS img
-     WHERE p.name ILIKE ${like} OR p.sku ILIKE ${like}
-  )`);
-    where.push(`(m.path ILIKE ${like} OR m.original_name ILIKE ${like} OR m.path IN (SELECT src FROM matched))`);
-  }
-
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const order =
-    sort === "big" ? "m.bytes DESC" :
-    sort === "name" ? "m.original_name ASC, m.path ASC" :
-    "m.mtime DESC NULLS LAST";
-
-  const base = `FROM media m LEFT JOIN used u ON u.src = m.path ${whereSql}`;
-
-  const rows = await q<{
-    path: string; source: MediaSource; folder: string; original_name: string;
-    bytes: string; width: number; height: number; alt: string; title: string;
-    mtime: string | null; total: string;
-  }>(
-    `WITH ${ctes.join(",")}
-     SELECT m.path, m.source, m.folder, m.original_name, m.bytes::text, m.width, m.height,
-            m.alt, m.title, m.mtime, (count(*) OVER ())::text AS total
-       ${base}
-      ORDER BY ${order}
-      LIMIT ${perPage} OFFSET ${(page - 1) * perPage}`,
-    params,
-  );
-
-  // Counts describe the whole library, not the current page, so the filter
-  // chips can say how much each filter would show.
-  const [counts] = await q<{ all: string; uploads: string; catalog: string; used: string; free: string }>(
-    `WITH ${USED_SRC_CTE}
-     SELECT count(*)::text AS all,
-            count(*) FILTER (WHERE m.source = 'uploads')::text AS uploads,
-            count(*) FILTER (WHERE m.source = 'catalog')::text AS catalog,
-            count(*) FILTER (WHERE u.src IS NOT NULL)::text AS used,
-            count(*) FILTER (WHERE u.src IS NULL)::text AS free
-       FROM media m LEFT JOIN used u ON u.src = m.path`,
-  );
-
+  const rows = await selectMedia(filter, { limit: perPage, offset: (page - 1) * perPage, withTotal: true });
+  const counts = await mediaCounts();
   const usage = await usageFor(rows.map((r) => r.path));
 
   const files = rows.map((r) => ({
@@ -139,19 +45,7 @@ export async function GET(req: Request) {
     usedBy: usage.get(r.path) ?? [],
   }));
 
-  return NextResponse.json({
-    files,
-    total: Number(rows[0]?.total ?? 0),
-    page,
-    perPage,
-    counts: {
-      all: Number(counts?.all ?? 0),
-      uploads: Number(counts?.uploads ?? 0),
-      catalog: Number(counts?.catalog ?? 0),
-      used: Number(counts?.used ?? 0),
-      free: Number(counts?.free ?? 0),
-    },
-  });
+  return NextResponse.json({ files, total: Number(rows[0]?.total ?? 0), page, perPage, counts });
 }
 
 /**

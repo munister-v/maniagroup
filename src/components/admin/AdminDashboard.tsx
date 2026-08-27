@@ -1911,10 +1911,31 @@ function CouponsSection({ onToast }: { onToast?: (m: string) => void }) {
 /* ─── Media library ─── */
 
 type MediaUsage = { id: string; name: string; sku: string };
-type MediaFile = { url: string; name: string; size: number; mtime: number; usedBy: MediaUsage[]; source: "uploads" | "catalog" };
+type MediaFile = {
+  url: string; name: string; size: number; mtime: number; usedBy: MediaUsage[];
+  source: "uploads" | "catalog"; folder: string; width: number; height: number; alt: string; title: string;
+};
 type MediaCounts = { all: number; uploads: number; catalog: number; used: number; free: number };
+type ImportReport = {
+  applied: boolean; mode: string; rows: number;
+  changed?: number; unchanged?: number; products?: number; photos?: number;
+  problems: string[];
+};
 
 const PER_PAGE = 48;
+
+/** "Нові" needs a definition; these are the ones an admin actually asks for. */
+const SINCE_OPTIONS = [
+  { key: "", label: "За весь час" },
+  { key: "1", label: "За добу" },
+  { key: "7", label: "За тиждень" },
+  { key: "30", label: "За місяць" },
+] as const;
+
+function sinceToIso(days: string): string {
+  if (!days) return "";
+  return new Date(Date.now() - Number(days) * 86400_000).toISOString();
+}
 
 function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [files, setFiles] = useState<MediaFile[]>([]);
@@ -1923,21 +1944,39 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [search, setSearch] = useState("");
   const [source, setSource] = useState<"all" | "uploads" | "catalog">("all");
   const [usage, setUsage] = useState<"all" | "used" | "free">("all");
-  const [sort, setSort] = useState<"new" | "big">("new");
+  const [since, setSince] = useState<string>("");
+  const [sort, setSort] = useState<"new" | "big" | "name">("new");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState<ImportReport | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sheetRef = useRef<HTMLInputElement>(null);
+  const importMode = useRef<"meta" | "attach">("meta");
+  const anchorRef = useRef<number | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Filtering happens on the server: the library is ~13.5k files since the
+  /** Everything the server needs to reproduce what is on screen right now. */
+  const filterParams = useCallback((q: string) => {
+    const p = new URLSearchParams({ source, usage, sort, q });
+    const iso = sinceToIso(since);
+    if (iso) p.set("since", iso);
+    return p;
+  }, [source, usage, sort, since]);
+
+  // Filtering happens on the server: the library is ~13.7k files since the
   // product photos moved off WordPress, far too many to ship to the browser.
   const load = useCallback(async (p: number, q: string) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        source, usage, sort, q, page: String(p), perPage: String(PER_PAGE),
-      });
+      const params = filterParams(q);
+      params.set("page", String(p));
+      params.set("perPage", String(PER_PAGE));
       const res = await fetch(`/api/admin/media?${params}`);
       const data = await res.json();
       setFiles(data.files ?? []);
@@ -1949,7 +1988,7 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     } finally {
       setLoading(false);
     }
-  }, [source, usage, sort, onToast]);
+  }, [filterParams, onToast]);
 
   // Debounce the search box so typing does not fire a request per keystroke.
   useEffect(() => {
@@ -1957,10 +1996,25 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     return () => clearTimeout(t);
   }, [search, load]);
 
+  // A menu that only closes by picking something from it is a menu you cannot
+  // dismiss after opening it by accident.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [menuOpen]);
+
   async function upload(list: FileList | File[] | null) {
     const arr = list ? Array.from(list) : [];
     if (arr.length === 0) return;
     setUploading(true);
+    setProgress({ done: 0, total: arr.length });
+    let done = 0;
+    let duplicates = 0;
+
     async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
       const out: R[] = new Array(items.length);
       let i = 0;
@@ -1973,21 +2027,93 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
       await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
       return out;
     }
+
+    // Three at a time: sharp runs inside the web server that also serves the
+    // shop, and firing a dropped folder at it all at once is how the photo
+    // migration got OOM-killed.
     const results = await mapLimit(arr, 3, async (file) => {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
-      if (res.ok) return true;
+      done++;
+      setProgress({ done, total: arr.length });
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}));
+        if (d.duplicate) duplicates++;
+        return true;
+      }
       const d = await res.json().catch(() => ({}));
       onToast?.(d.error ?? `Не вдалося завантажити ${file.name}`);
       return false;
     });
+
     setUploading(false);
+    setProgress(null);
     if (inputRef.current) inputRef.current.value = "";
     const ok = results.filter(Boolean).length;
-    if (ok) onToast?.(`Завантажено: ${ok}`);
+    if (ok) {
+      onToast?.(duplicates
+        ? `Завантажено: ${ok - duplicates}, вже були в бібліотеці: ${duplicates}`
+        : `Завантажено: ${ok}`);
+    }
     load(1, search);
   }
+
+  /** Pull in whatever landed on disk outside the uploader (імпорт, міграція). */
+  async function syncFromDisk() {
+    setBusy(true);
+    onToast?.("Звіряю з диском…");
+    try {
+      let added = 0, updated = 0, removed = 0;
+      for (let round = 0; round < 60; round++) {
+        const res = await fetch("/api/admin/media", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "sync", limit: 400 }),
+        });
+        if (!res.ok) throw new Error("sync failed");
+        const d = await res.json();
+        added += d.added; updated += d.updated; removed += d.removed;
+        if (d.added + d.updated === 0) break;
+      }
+      onToast?.(`Звірено: +${added} нових, ${updated} оновлених, ${removed} зниклих`);
+      load(1, search);
+    } catch {
+      onToast?.("Не вдалося звірити з диском");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function exportSheet(format: "xlsx" | "csv" | "json") {
+    const params = filterParams(search);
+    params.set("format", format);
+    // A tick-box selection is an answer, not a filter: when it exists, it IS
+    // the scope, whatever the chips above say.
+    if (selected.size) params.set("urls", [...selected].join(","));
+    window.location.assign(`/api/admin/media/export?${params}`);
+  }
+
+  async function importSheet(file: File, apply: boolean) {
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mode", importMode.current);
+      if (apply) fd.append("apply", "1");
+      const res = await fetch("/api/admin/media/import", { method: "POST", body: fd });
+      const d = await res.json();
+      if (!res.ok) { onToast?.(d.error ?? "Не вдалося прочитати файл"); return; }
+      setReport(d);
+      if (apply) { onToast?.("Застосовано"); load(1, search); }
+    } catch {
+      onToast?.("Помилка імпорту");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pendingSheet = useRef<File | null>(null);
 
   async function copy(url: string) {
     const full = `${location.origin}${url}`;
@@ -1999,33 +2125,85 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     }
   }
 
+  async function removeOne(f: MediaFile, force = false): Promise<"ok" | "in-use" | "fail"> {
+    const qs = `url=${encodeURIComponent(f.url)}${force ? "&force=1" : ""}`;
+    const res = await fetch(`/api/admin/media?${qs}`, { method: "DELETE" });
+    if (res.ok) return "ok";
+    if (res.status === 409) return "in-use";
+    return "fail";
+  }
+
   async function remove(f: MediaFile) {
     if (!confirm(`Видалити «${f.name}»?`)) return;
-    const qs = `url=${encodeURIComponent(f.url)}`;
-    let res = await fetch(`/api/admin/media?${qs}`, { method: "DELETE" });
+    let r = await removeOne(f);
 
     // The server refuses while a product still shows the file and tells us
     // which, so the second prompt can name them instead of guessing.
-    if (res.status === 409) {
-      const d: { usedBy?: MediaUsage[] } = await res.json().catch(() => ({}));
-      const list = (d.usedBy ?? []).map((u) => `• ${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n");
+    if (r === "in-use") {
+      const list = f.usedBy.map((u) => `• ${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n");
       if (!confirm(`Це фото стоїть на товарах:\n\n${list}\n\nВидалити все одно? У картках воно стане «битим».`)) return;
-      res = await fetch(`/api/admin/media?${qs}&force=1`, { method: "DELETE" });
+      r = await removeOne(f, true);
     }
 
-    if (res.ok) {
+    if (r === "ok") {
       setFiles((fs) => fs.filter((x) => x.url !== f.url));
+      setSelected((s) => { const n = new Set(s); n.delete(f.url); return n; });
       onToast?.("Видалено");
     } else {
       onToast?.("Не вдалося видалити");
     }
   }
 
+  /**
+   * Bulk delete stops at the first in-use file and reports, instead of asking
+   * once per file: a "видалити все одно?" prompt repeated forty times is a
+   * prompt nobody reads by the tenth.
+   */
+  async function removeSelected() {
+    const chosen = files.filter((f) => selected.has(f.url));
+    if (chosen.length === 0) return;
+    const inUse = chosen.filter((f) => f.usedBy.length > 0);
+    if (!confirm(
+      inUse.length
+        ? `Вибрано ${chosen.length}, з них ${inUse.length} стоять на товарах.\n\nВидалити лише вільні (${chosen.length - inUse.length})?`
+        : `Видалити ${chosen.length} файлів?`,
+    )) return;
+
+    setBusy(true);
+    let ok = 0, skipped = 0, failed = 0;
+    for (const f of chosen) {
+      if (f.usedBy.length > 0) { skipped++; continue; }
+      const r = await removeOne(f);
+      if (r === "ok") ok++; else if (r === "in-use") skipped++; else failed++;
+    }
+    setBusy(false);
+    setSelected(new Set());
+    onToast?.(`Видалено ${ok}${skipped ? `, пропущено зайнятих ${skipped}` : ""}${failed ? `, помилок ${failed}` : ""}`);
+    load(page, search);
+  }
+
   const fmtSize = (b: number) => (b < 1024 * 1024 ? `${Math.round(b / 1024)} КБ` : `${(b / 1024 / 1024).toFixed(1)} МБ`);
   const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const allOnPageSelected = files.length > 0 && files.every((f) => selected.has(f.url));
 
   const chip = (active: boolean) =>
     `h-9 border px-3 text-[12px] ${active ? "border-[#2b2d42] bg-[#2b2d42] text-white" : "border-[#e6eaec] bg-white text-[#2b2d42] hover:border-[#b6c0ca]"}`;
+  const ghost = "flex h-10 items-center gap-2 border border-[#e6eaec] bg-white px-4 text-[11px] uppercase tracking-wider text-[#2b2d42] hover:border-[#2b2d42] disabled:opacity-50";
+
+  // Shift+click selects a range, which needs to remember where the range
+  // started — the anchor is a ref, not state: it never affects what is drawn.
+  function toggle(url: string, shiftKey: boolean, index: number) {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (shiftKey && anchorRef.current !== null) {
+        const [a, b] = [anchorRef.current, index].sort((x, y) => x - y);
+        for (let i = a; i <= b; i++) n.add(files[i].url);
+      } else if (n.has(url)) n.delete(url);
+      else n.add(url);
+      return n;
+    });
+    anchorRef.current = index;
+  }
 
   return (
     <div
@@ -2041,15 +2219,63 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
             {counts.all} зображень · {counts.catalog} з каталогу, {counts.uploads} завантажених вручну · перетягніть файли будь-де на сторінці
           </p>
         </div>
-        <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
-        <button onClick={() => inputRef.current?.click()} disabled={uploading}
-          className="flex h-10 items-center gap-2 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-            <path d="M12 4v12m0-12l-4 4m4-4l4 4M4 20h16" />
-          </svg>
-          {uploading ? "Завантаження…" : "Завантажити"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={inputRef} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
+          <input
+            ref={sheetRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) { pendingSheet.current = f; importSheet(f, false); }
+              e.target.value = "";
+            }}
+          />
+          <button onClick={syncFromDisk} disabled={busy} className={ghost} title="Знайти файли, що потрапили на диск повз завантажувач (імпорт, міграція)">
+            Звірити з диском
+          </button>
+          <div className="relative" ref={menuRef}>
+            {/* Click, not hover: a hover menu simply cannot be opened on a
+                touchscreen, and this panel is used from a phone. */}
+            <button onClick={() => setMenuOpen((v) => !v)} className={ghost} disabled={busy}>Excel ▾</button>
+            <div className={`absolute right-0 z-20 min-w-[240px] border border-[#e6eaec] bg-white p-1 shadow-lg ${menuOpen ? "block" : "hidden"}`}>
+              <p className="px-3 py-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">
+                Вивантажити {selected.size ? `вибрані · ${selected.size}` : `за фільтром · ${total}`}
+              </p>
+              {(["xlsx", "csv", "json"] as const).map((f) => (
+                <button key={f} onClick={() => { setMenuOpen(false); exportSheet(f); }}
+                  className="block w-full px-3 py-2 text-left text-[12px] text-[#2b2d42] hover:bg-[#f7f9fa]">
+                  {f.toUpperCase()}
+                </button>
+              ))}
+              <div className="my-1 border-t border-[#eef2f3]" />
+              <p className="px-3 py-2 text-[10px] uppercase tracking-wider text-[#8a94a0]">Завантажити назад</p>
+              <button onClick={() => { setMenuOpen(false); importMode.current = "meta"; sheetRef.current?.click(); }}
+                className="block w-full px-3 py-2 text-left text-[12px] text-[#2b2d42] hover:bg-[#f7f9fa]">
+                Alt і заголовки
+              </button>
+              <button onClick={() => { setMenuOpen(false); importMode.current = "attach"; sheetRef.current?.click(); }}
+                className="block w-full px-3 py-2 text-left text-[12px] text-[#2b2d42] hover:bg-[#f7f9fa]">
+                Прив&apos;язати фото до товарів (SKU + шлях)
+              </button>
+            </div>
+          </div>
+          <button onClick={() => inputRef.current?.click()} disabled={uploading}
+            className="flex h-10 items-center gap-2 border border-[#2f9488] px-5 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+              <path d="M12 4v12m0-12l-4 4m4-4l4 4M4 20h16" />
+            </svg>
+            {uploading && progress ? `${progress.done} / ${progress.total}` : uploading ? "Завантаження…" : "Завантажити"}
+          </button>
+        </div>
       </div>
+
+      {uploading && progress && (
+        <div className="mb-4 h-1 w-full bg-[#eef2f3]">
+          <div className="h-1 bg-[#2f9488] transition-all" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <input
@@ -2068,16 +2294,71 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
             <button key={k} onClick={() => { setUsage(k); setPage(1); }} className={chip(usage === k)}>{label}</button>
           ))}
         </div>
-        <select value={sort} onChange={(e) => setSort(e.target.value as "new" | "big")}
+        <select value={since} onChange={(e) => { setSince(e.target.value); setPage(1); }}
+          className="h-9 border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
+          {SINCE_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value as "new" | "big" | "name")}
           className="h-9 border border-[#e6eaec] bg-white px-2 text-[12px] text-[#2b2d42] focus:border-[#2b2d42] focus:outline-none">
           <option value="new">Спочатку нові</option>
           <option value="big">Спочатку важкі</option>
+          <option value="name">За назвою</option>
         </select>
       </div>
+
+      {report && (
+        <div className="mb-4 border border-[#e6eaec] bg-white p-4">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <h3 className="text-[13px] font-medium text-[#2b2d42]">
+              {report.applied ? "Застосовано" : "Попередній перегляд імпорту"}
+              <span className="ml-2 text-[11px] text-[#8a94a0]">
+                {report.mode === "meta" ? "alt і заголовки" : "прив'язка фото до товарів"} · рядків у файлі: {report.rows}
+              </span>
+            </h3>
+            <button onClick={() => setReport(null)} className="text-[12px] text-[#8a94a0] hover:text-[#2b2d42]">Закрити</button>
+          </div>
+          <p className="text-[12px] text-[#2b2d42]">
+            {report.mode === "meta"
+              ? `Змінить ${report.changed ?? 0} файлів, без змін ${report.unchanged ?? 0}.`
+              : `Торкнеться ${report.products ?? 0} товарів, додасть ${report.photos ?? 0} фото.`}
+          </p>
+          {report.problems.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[12px] text-[#c62828]">Проблемних рядків: {report.problems.length}</summary>
+              <ul className="mt-1 max-h-40 overflow-auto text-[11px] text-[#8a94a0]">
+                {report.problems.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            </details>
+          )}
+          {!report.applied && (
+            <div className="mt-3 flex gap-2">
+              <button
+                disabled={busy}
+                onClick={() => { if (pendingSheet.current) importSheet(pendingSheet.current, true); }}
+                className="h-9 border border-[#2f9488] px-4 text-[11px] uppercase tracking-wider text-[#2f9488] hover:bg-[#2f9488] hover:text-white disabled:opacity-50">
+                Застосувати
+              </button>
+              <button onClick={() => setReport(null)} className="h-9 border border-[#e6eaec] px-4 text-[11px] uppercase tracking-wider text-[#8a94a0] hover:border-[#2b2d42] hover:text-[#2b2d42]">
+                Скасувати
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 border border-[#2b2d42] bg-[#f7f9fa] px-4 py-2">
+          <span className="text-[12px] text-[#2b2d42]">Вибрано: {selected.size}</span>
+          <button onClick={() => exportSheet("xlsx")} className="text-[12px] text-[#2b2d42] underline hover:no-underline">У Excel</button>
+          <button onClick={removeSelected} disabled={busy} className="text-[12px] text-[#c62828] underline hover:no-underline disabled:opacity-50">Видалити вільні</button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-[12px] text-[#8a94a0] hover:text-[#2b2d42]">Зняти виділення</button>
+        </div>
+      )}
 
       {usage === "free" && counts.free > 0 && (
         <p className="mb-3 text-[12px] text-[#8a94a0]">
           Ці файли не стоять на жодному товарі — зазвичай це залишки після переімпорту каталогу.
+          Врахуйте: облік ведеться за фото товарів, банери та контент сторінок сюди поки не входять.
         </p>
       )}
 
@@ -2093,11 +2374,42 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
         </div>
       ) : (
         <>
+          <div className="mb-2 flex items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-[#8a94a0]">
+              <input
+                type="checkbox"
+                checked={allOnPageSelected}
+                onChange={(e) => setSelected((s) => {
+                  const n = new Set(s);
+                  for (const f of files) { if (e.target.checked) n.add(f.url); else n.delete(f.url); }
+                  return n;
+                })}
+              />
+              Вибрати всі на сторінці
+            </label>
+            <span className="text-[12px] text-[#8a94a0]">Shift+клік — діапазон</span>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {files.map((f) => (
-              <div key={f.url} className="group relative overflow-hidden rounded-[3px] border border-[#eef2f3] bg-white">
+            {files.map((f, i) => (
+              <div key={f.url}
+                className={`group relative overflow-hidden rounded-[3px] border bg-white ${selected.has(f.url) ? "border-[#2b2d42] ring-1 ring-[#2b2d42]" : "border-[#eef2f3]"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={f.url} alt={f.name} className="aspect-square w-full object-cover" loading="lazy" />
+                <img
+                  src={f.url}
+                  alt={f.alt || f.name}
+                  title={`${f.name}\n${f.width}×${f.height}`}
+                  className="aspect-square w-full cursor-pointer object-cover"
+                  loading="lazy"
+                  onClick={(e) => toggle(f.url, e.shiftKey, i)}
+                />
+
+                <input
+                  type="checkbox"
+                  checked={selected.has(f.url)}
+                  onChange={(e) => toggle(f.url, (e.nativeEvent as MouseEvent).shiftKey, i)}
+                  className="absolute right-1 top-1 h-4 w-4 cursor-pointer accent-[#2b2d42]"
+                />
 
                 {f.usedBy.length === 0 ? (
                   <span className="absolute left-1 top-1 rounded-[2px] bg-[#8a94a0]/90 px-1 text-[9px] uppercase text-white">вільне</span>
@@ -2107,14 +2419,16 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
                     target="_blank"
                     rel="noreferrer"
                     title={f.usedBy.map((u) => `${u.name}${u.sku ? ` (${u.sku})` : ""}`).join("\n")}
-                    className="absolute left-1 top-1 max-w-[92%] truncate rounded-[2px] bg-[#2f9488]/95 px-1 text-[9px] text-white hover:bg-[#2f9488]"
+                    className="absolute left-1 top-1 max-w-[80%] truncate rounded-[2px] bg-[#2f9488]/95 px-1 text-[9px] text-white hover:bg-[#2f9488]"
                   >
                     {f.usedBy.length === 1 ? f.usedBy[0].name : `${f.usedBy.length} товари`}
                   </a>
                 )}
 
                 <div className="flex items-center justify-between gap-1 px-2 py-1.5">
-                  <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>{fmtSize(f.size)}</span>
+                  <span className="truncate text-[10px] text-[#8a94a0]" title={f.name}>
+                    {fmtSize(f.size)}{f.width ? ` · ${f.width}×${f.height}` : ""}
+                  </span>
                   <div className="flex shrink-0 gap-1">
                     <button onClick={() => copy(f.url)} title="Копіювати посилання"
                       className="flex h-6 w-6 items-center justify-center rounded-[2px] text-[#8a94a0] hover:bg-[#f7f9fa] hover:text-[#2b2d42]">
@@ -2148,7 +2462,6 @@ function MediaSection({ onToast }: { onToast?: (m: string) => void }) {
     </div>
   );
 }
-
 function SubscribersSection() {
   const [rows, setRows] = useState<Subscriber[]>([]);
   const [total, setTotal] = useState(0);
