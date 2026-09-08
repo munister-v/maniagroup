@@ -39,7 +39,7 @@ export default async function BrandsPage() {
   return (
     <main className="wrap py-12 md:py-16">
       <nav className="mb-6 text-[11px] uppercase tracking-luxe text-muted">
-        <Link href="/" className="hover:text-ink">Головна</Link>
+        <Link href="/" className="crumb-link hover:text-ink">Головна</Link>
         <span className="mx-2 text-line">/</span>
         <span className="text-ink">Бренди</span>
       </nav>
@@ -71,7 +71,11 @@ export default async function BrandsPage() {
                   imgClass="max-h-[58px] max-w-full object-contain"
                   textClass="text-center font-display text-[16px] leading-tight tracking-wide text-ink/75"
                 />
-                <span className="absolute bottom-1.5 right-2 text-[10px] tabular-nums text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">{b.count}</span>
+                {/* На телефоні hover не існує, тож лічильник там просто НЕ показувався
+                    жодного разу — хоча кількість товарів і є причина зайти в бренд.
+                    Тому на мобільному він видимий завжди, а ховається лише там,
+                    де є курсор і плитка й так підсвічується. */}
+                <span className="absolute bottom-1.5 right-2 text-[11px] tabular-nums text-muted/60 transition-opacity md:opacity-0 md:group-hover:opacity-100">{b.count}</span>
               </Link>
             </li>
           ))}
@@ -87,7 +91,9 @@ export default async function BrandsPage() {
               <li key={b.slug}>
                 <Link
                   href={`/catalog?brand=${b.slug}`}
-                  className="flex items-baseline justify-between gap-2 text-[15px] text-ink/70 transition-colors hover:text-ink"
+                  // py-1.5 — ціль пальця, а не повітря: рядок був 23px заввишки,
+                  // а сусідні бренди стоять один під одним.
+                  className="flex items-baseline justify-between gap-2 py-1.5 text-[15px] text-ink/70 transition-colors hover:text-ink"
                 >
                   <span className="truncate font-display">{b.name}</span>
                   <span className="shrink-0 text-[11px] tabular-nums text-muted/60">{b.count}</span>

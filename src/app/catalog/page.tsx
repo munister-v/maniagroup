@@ -284,10 +284,10 @@ export default async function CatalogPage({
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <Reveal>
         <p className="text-[11px] uppercase tracking-luxe text-muted">
-          <Link href="/" className="link-underline">Головна</Link>{" / "}
+          <Link href="/" className="link-underline crumb-link">Головна</Link>{" / "}
           {landingName ? (
             <>
-              <Link href="/catalog" className="link-underline">Каталог</Link>
+              <Link href="/catalog" className="link-underline crumb-link">Каталог</Link>
               {" / "}
               <span className="text-ink/70">{landingName}</span>
             </>

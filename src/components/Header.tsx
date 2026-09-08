@@ -233,7 +233,7 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
               <Icon d={ICONS.bag} />
               {cartCount > 0 && (
                 <span
-                  className={`absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-medium ${
+                  className={`absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-medium ${
                     solid ? "bg-ink text-paper" : "bg-paper text-ink"
                   }`}
                 >
@@ -410,7 +410,7 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
                 className="flex min-h-12 w-full items-center justify-between py-3 text-[12px] font-semibold uppercase tracking-luxe text-[var(--color-sale)]"
               >
                 Sale
-                <span className="bg-[var(--color-sale)] px-1.5 py-0.5 text-[9px] text-white">%</span>
+                <span className="bg-[var(--color-sale)] px-1.5 py-0.5 text-[10px] text-white">%</span>
               </Link>
             </li>
             <li>
@@ -549,7 +549,7 @@ export function Header({ brands = [], brandLogos = {}, social }: { brands?: Bran
                           </p>
                           <p className="truncate text-sm text-ink">{p.name}</p>
                           {p.inStock === false && (
-                            <p className="text-[10px] uppercase tracking-luxe text-muted">
+                            <p className="text-[11px] uppercase tracking-[0.14em] text-muted">
                               Немає в наявності
                             </p>
                           )}
@@ -660,7 +660,7 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
         {/* Text-only brands — compact list */}
         {textOnly.length > 0 && (
           <div className={withLogo.length > 0 ? "mt-5 border-t border-line/40 pt-5" : ""}>
-            <p className="mb-2 text-[10px] uppercase tracking-luxe text-muted/60">Також</p>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted/70">Також</p>
             <ul className="flex flex-wrap gap-x-5 gap-y-1">
               {textOnly.map((b) => (
                 <li key={b.slug}>
@@ -694,7 +694,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
       <div className={`wrap grid gap-8 py-9 ${gridClass}`}>
         {item.columns.map((col) => (
           <div key={col.title}>
-            <h4 className="text-[10px] uppercase tracking-[0.22em] text-muted/60 border-b border-line pb-2">
+            <h4 className="text-[11px] uppercase tracking-[0.16em] text-muted/70 border-b border-line pb-2">
               {col.title}
             </h4>
             <ul className="mt-3 space-y-2">
@@ -751,7 +751,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
           <Grain />
           <div className="absolute inset-0 flex flex-col justify-end p-4 text-paper">
             <p className="font-display text-lg leading-tight">{item.featured.title}</p>
-            <span className="mt-1 text-[10px] uppercase tracking-luxe opacity-80">
+            <span className="mt-1 text-[11px] uppercase tracking-[0.14em] opacity-90">
               {item.featured.caption} →
             </span>
           </div>

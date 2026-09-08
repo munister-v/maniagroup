@@ -16,7 +16,7 @@ export default async function DeliveryPage() {
       <div className="border-b border-line bg-cloud/40">
         <div className="wrap py-14 md:py-20">
           <p className="text-[11px] uppercase tracking-luxe text-muted">
-            <Link href="/" className="link-underline">Головна</Link> / Доставка та оплата
+            <Link href="/" className="link-underline crumb-link">Головна</Link> / Доставка та оплата
           </p>
           <h1 className="mt-3 font-display text-4xl text-ink md:text-5xl lg:text-6xl">Доставка та оплата</h1>
           <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted">{delivery.subtitle}</p>
@@ -30,7 +30,7 @@ export default async function DeliveryPage() {
               { k: "Оплата", v: "При отриманні" },
             ].map((x) => (
               <div key={x.k}>
-                <dt className="text-[10px] uppercase tracking-luxe text-muted">{x.k}</dt>
+                <dt className="text-[11px] uppercase tracking-[0.14em] text-muted">{x.k}</dt>
                 <dd className="mt-1.5 font-display text-xl text-ink md:text-2xl">{x.v}</dd>
               </div>
             ))}
@@ -50,7 +50,7 @@ export default async function DeliveryPage() {
                   <span className="font-display text-base leading-none text-ink/25">
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  <p className="text-[10px] uppercase tracking-luxe text-muted">{c.eyebrow}</p>
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted">{c.eyebrow}</p>
                 </div>
                 <h2 className="mt-3 font-display text-2xl text-ink md:text-[1.7rem]">{c.title}</h2>
                 <p className="mt-3 max-w-md text-sm leading-[1.75] text-muted">{c.text}</p>

@@ -32,7 +32,7 @@ export default async function AboutPage() {
         <div className="wrap py-20 md:py-28">
           <Reveal>
             <p className="text-[11px] uppercase tracking-luxe text-paper/50">
-              <Link href="/" className="hover:text-paper/80">Головна</Link> / Про нас
+              <Link href="/" className="crumb-link hover:text-paper/80">Головна</Link> / Про нас
             </p>
             <h1 className="mt-4 max-w-2xl font-display text-4xl leading-tight md:text-6xl">
               {about.heroTitle.split("—").map((part, i, arr) =>

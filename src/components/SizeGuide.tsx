@@ -34,7 +34,7 @@ function ChartTable({ chart, type }: { chart: SizeChart; type: SizeChartType }) 
   // крізь підпис: на телефоні виходило «РОЗМІР 39T)» одне поверх одного.
   // Тінь праворуч показує, що колонка лежить над таблицею, а не в ній.
   const th =
-    "sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud px-4 py-3 text-left text-[10px] uppercase tracking-[0.12em] text-muted shadow-[6px_0_8px_-6px_rgba(26,23,20,0.18)] sm:px-5 sm:text-[11px] sm:tracking-luxe";
+    "sticky left-0 z-10 whitespace-nowrap border-r border-line bg-cloud px-4 py-3 text-left text-[11px] uppercase tracking-[0.1em] text-muted shadow-[6px_0_8px_-6px_rgba(26,23,20,0.18)] sm:px-5 sm:text-[11px] sm:tracking-luxe";
 
   return (
     <Reveal>
@@ -139,9 +139,9 @@ export async function SizeGuide({
           <p className="mt-10 max-w-2xl text-sm leading-relaxed text-muted">
             Розміри навіть в одного бренду відрізняються залежно від моделі та крою.
             Якщо сумніваєтесь — напишіть нам, підкажемо по конкретній речі.{" "}
-            <Link href="/contacts" className="link-underline text-ink">Контакти</Link>
+            <Link href="/contacts" className="link-underline crumb-link text-ink">Контакти</Link>
             {" · "}
-            <Link href="/returns" className="link-underline text-ink">Умови обміну</Link>
+            <Link href="/returns" className="link-underline crumb-link text-ink">Умови обміну</Link>
           </p>
         </div>
       </section>

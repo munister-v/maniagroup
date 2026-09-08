@@ -16,7 +16,7 @@ export default async function ReturnsPage() {
       <div className="border-b border-line bg-cloud/40">
         <div className="wrap py-14 md:py-20">
           <p className="text-[11px] uppercase tracking-luxe text-muted">
-            <Link href="/" className="link-underline">Головна</Link> / Обмін і повернення
+            <Link href="/" className="link-underline crumb-link">Головна</Link> / Обмін і повернення
           </p>
           <h1 className="mt-3 font-display text-4xl text-ink md:text-5xl lg:text-6xl">Обмін і повернення</h1>
           <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted"

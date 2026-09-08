@@ -17,7 +17,7 @@ export default async function ContactsPage() {
       <div className="border-b border-line bg-cloud/40">
         <div className="wrap py-14 md:py-20">
           <p className="text-[11px] uppercase tracking-luxe text-muted">
-            <Link href="/" className="link-underline">Головна</Link> / Контакти
+            <Link href="/" className="link-underline crumb-link">Головна</Link> / Контакти
           </p>
           <h1 className="mt-3 font-display text-4xl text-ink md:text-5xl lg:text-6xl">
             Контакти

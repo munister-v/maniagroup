@@ -115,7 +115,7 @@ export function CartDrawer({
                 )}
               </div>
               <div className="flex-1">
-                <p className="text-[10px] uppercase tracking-luxe text-muted">{it.brand}</p>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-muted">{it.brand}</p>
                 <h3 className="text-sm text-ink">{it.name}</h3>
                 {it.variation && (
                   <p className="mt-1 text-xs text-muted">Розмір: {it.variation}</p>
