@@ -76,7 +76,7 @@ export default async function AboutPage() {
               <div className="grid grid-cols-2 gap-px overflow-hidden border border-paper/10 bg-paper/10">
                 {["Документи\nпроходження", "Гарантія\nвиробника", "Перевірка\nперед відправкою", "Повернення\nбез питань"].map((t, i) => (
                   <div key={i} className="bg-ink p-6">
-                    <span className="font-display text-3xl text-paper/15">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="font-display text-3xl text-paper/25">{String(i + 1).padStart(2, "0")}</span>
                     <p className="mt-2 whitespace-pre-line text-[11px] uppercase tracking-luxe text-paper/60">{t}</p>
                   </div>
                 ))}

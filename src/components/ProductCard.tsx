@@ -74,10 +74,10 @@ export function ProductCard({ product }: { product: Product }) {
             екрана не прочитати. Тому тут: кегль 11px (нижче 11 на телефоні
             текст уже не читається), трекінг знято, і замість обрізання —
             два рядки фіксованої висоти, щоб сітка не поїхала. */}
-        <p className="mt-1 line-clamp-2 min-h-[2.2em] text-[11px] leading-[1.1] text-muted/80 tabular-nums [overflow-wrap:anywhere] sm:hidden" title={codes || undefined}>
+        <p className="mt-1 line-clamp-2 min-h-[2.2em] text-[11px] leading-[1.1] text-muted tabular-nums [overflow-wrap:anywhere] sm:hidden" title={codes || undefined}>
           {article || ""}
         </p>
-        <p className="mt-1 hidden min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums sm:block" title={codes || undefined}>
+        <p className="mt-1 hidden min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted tabular-nums sm:block" title={codes || undefined}>
           {codes}
         </p>
 

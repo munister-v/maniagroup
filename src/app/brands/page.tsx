@@ -75,7 +75,7 @@ export default async function BrandsPage() {
                     жодного разу — хоча кількість товарів і є причина зайти в бренд.
                     Тому на мобільному він видимий завжди, а ховається лише там,
                     де є курсор і плитка й так підсвічується. */}
-                <span className="absolute bottom-1.5 right-2 text-[11px] tabular-nums text-muted/60 transition-opacity md:opacity-0 md:group-hover:opacity-100">{b.count}</span>
+                <span className="absolute bottom-1.5 right-2 text-[11px] tabular-nums text-muted transition-opacity md:opacity-0 md:group-hover:opacity-100">{b.count}</span>
               </Link>
             </li>
           ))}
@@ -96,7 +96,7 @@ export default async function BrandsPage() {
                   className="flex items-baseline justify-between gap-2 py-1.5 text-[15px] text-ink/70 transition-colors hover:text-ink"
                 >
                   <span className="truncate font-display">{b.name}</span>
-                  <span className="shrink-0 text-[11px] tabular-nums text-muted/60">{b.count}</span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-muted">{b.count}</span>
                 </Link>
               </li>
             ))}

@@ -297,7 +297,7 @@ export default async function CatalogPage({
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
           <h1 className="font-display text-3xl text-ink md:text-4xl">{title}</h1>
-          <span className="text-[11px] uppercase tracking-[0.14em] text-muted/60">
+          <span className="text-[11px] uppercase tracking-[0.14em] text-muted">
             {total.toLocaleString("uk-UA")} товарів
           </span>
         </div>

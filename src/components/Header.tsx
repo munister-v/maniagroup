@@ -660,7 +660,7 @@ function BrandsPanel({ brands, logoMap }: { brands: Brand[]; logoMap: Record<str
         {/* Text-only brands — compact list */}
         {textOnly.length > 0 && (
           <div className={withLogo.length > 0 ? "mt-5 border-t border-line/40 pt-5" : ""}>
-            <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted/70">Також</p>
+            <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-muted">Також</p>
             <ul className="flex flex-wrap gap-x-5 gap-y-1">
               {textOnly.map((b) => (
                 <li key={b.slug}>
@@ -694,7 +694,7 @@ function MegaPanel({ item }: { item: MegaMenu }) {
       <div className={`wrap grid gap-8 py-9 ${gridClass}`}>
         {item.columns.map((col) => (
           <div key={col.title}>
-            <h4 className="text-[11px] uppercase tracking-[0.16em] text-muted/70 border-b border-line pb-2">
+            <h4 className="text-[11px] uppercase tracking-[0.16em] text-muted border-b border-line pb-2">
               {col.title}
             </h4>
             <ul className="mt-3 space-y-2">

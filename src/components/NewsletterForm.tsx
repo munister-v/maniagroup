@@ -48,7 +48,7 @@ export function NewsletterForm({ source = "home", tone = "light" }: { source?: s
           placeholder="Ваш e-mail"
           className={`h-12 w-full px-4 text-sm focus:outline-none sm:flex-1 ${
             dark
-              ? "border border-paper/25 bg-transparent text-paper placeholder:text-paper/40 focus:border-paper"
+              ? "border border-paper/25 bg-transparent text-paper placeholder:text-paper/60 focus:border-paper"
               : "border border-line bg-white text-ink placeholder:text-muted focus:border-ink"
           }`}
         />

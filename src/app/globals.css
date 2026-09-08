@@ -7,7 +7,11 @@
   --color-paper: #fbfaf8; /* near-white background, faint warmth */
   --color-cloud: #f2efea; /* tile / hairline fill */
   --color-line: #e7e2d9; /* hairlines & borders */
-  --color-muted: #908676; /* secondary text */
+  /* Був #908676 — 3.44:1 на папері й 3.13:1 на плитці, тобто ВЕСЬ вторинний
+     текст вітрини (бренд і розміри в картці, підписи, комірки доставки) не
+     дотягував до порогу 4.5:1. Той самий відтінок, на 20% темніший: 5.03:1 на
+     папері, 4.57:1 на плитці. Щоб повернути старий вигляд — правити тут. */
+  --color-muted: #736b5e; /* secondary text */
   --color-accent: #7a5c3e; /* bronze — used sparingly */
   --color-sale: #c1352a; /* sale / discount red */
 

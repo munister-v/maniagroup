@@ -42,7 +42,7 @@ export default async function ContactsPage() {
                   {phone}
                 </a>
                 <p className="mt-3 text-sm text-muted">Щодня 9:00–20:00</p>
-                <p className="mt-1 text-xs text-muted/70">
+                <p className="mt-1 text-xs text-muted">
                   Дзвінки, Viber, WhatsApp
                 </p>
               </div>

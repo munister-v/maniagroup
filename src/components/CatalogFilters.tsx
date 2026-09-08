@@ -122,7 +122,7 @@ export function CatalogFilters({
                     <span className={`text-sm transition-colors ${checked ? "text-ink" : "text-muted group-hover:text-ink"}`}>
                       {b.name}
                     </span>
-                    {b.count != null && <span className="ml-auto text-[11px] tabular-nums text-muted/50">{b.count}</span>}
+                    {b.count != null && <span className="ml-auto text-[11px] tabular-nums text-muted">{b.count}</span>}
                   </button>
                 </li>
               );
