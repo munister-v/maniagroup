@@ -24,7 +24,7 @@ export default async function LoginPage({
         // один раз і внизу, після дії, заради якої людина прийшла.
         <p className="text-[13px] text-muted">
           Ще немає акаунту?{" "}
-          <Link href="/account/register" className="link-underline text-ink">
+          <Link href="/account/register" className="link-underline crumb-link text-ink">
             Зареєструватись
           </Link>
         </p>

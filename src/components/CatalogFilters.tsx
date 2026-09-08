@@ -267,7 +267,7 @@ export function CatalogFilters({
                 max: undefined,
               });
             }}
-            className="link-underline text-[11px] uppercase tracking-luxe text-ink"
+            className="link-underline crumb-link text-[11px] uppercase tracking-luxe text-ink"
           >
             Скинути фільтри
           </button>

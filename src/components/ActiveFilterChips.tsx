@@ -116,7 +116,7 @@ export function ActiveFilterChips({
       {chips.length > 1 && (
         <button
           onClick={() => router.push(clearHref)}
-          className="link-underline ml-1 text-[11px] uppercase tracking-luxe text-muted hover:text-ink"
+          className="link-underline crumb-link ml-1 text-[11px] uppercase tracking-luxe text-muted hover:text-ink"
         >
           Скинути все
         </button>

@@ -52,7 +52,7 @@ export function AccountLoginForm({ redirectTo }: { redirectTo: string }) {
           <span className="text-[11px] uppercase tracking-luxe text-muted">Пароль</span>
           <Link
             href="/account/forgot-password"
-            className="text-[11px] text-muted transition-colors hover:text-ink"
+            className="crumb-link text-[11px] text-muted transition-colors hover:text-ink"
             tabIndex={-1}
           >
             Забули пароль?
@@ -81,12 +81,14 @@ export function AccountLoginForm({ redirectTo }: { redirectTo: string }) {
       </label>
 
       {/* Remember me */}
-      <label className="flex cursor-pointer items-center gap-2.5">
+      {/* py-1.5 на label: сам чекбокс 16px, і без цього ціль пальця
+          вдвічі менша за норму. Падінг на підписі, не на квадратику. */}
+      <label className="flex cursor-pointer items-center gap-2.5 py-1.5">
         <input
           type="checkbox"
           checked={rememberMe}
           onChange={(e) => setRememberMe(e.target.checked)}
-          className="h-4 w-4 accent-ink"
+          className="h-[18px] w-[18px] accent-ink"
         />
         <span className="text-[12px] text-muted">Запам&apos;ятати мене на 30 днів</span>
       </label>

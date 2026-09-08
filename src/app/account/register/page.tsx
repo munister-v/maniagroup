@@ -18,7 +18,7 @@ export default async function RegisterPage() {
       footer={
         <p className="text-[13px] text-muted">
           Вже є акаунт?{" "}
-          <Link href="/account/login" className="link-underline text-ink">
+          <Link href="/account/login" className="link-underline crumb-link text-ink">
             Увійти
           </Link>
         </p>
