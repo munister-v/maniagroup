@@ -101,7 +101,7 @@ export async function SizeGuide({
       <div className="border-b border-line bg-cloud/40">
         <div className="wrap py-14 md:py-20">
           <p className="text-[11px] uppercase tracking-luxe text-muted">
-            <Link href="/" className="link-underline">Головна</Link> / {title}
+            <Link href="/" className="link-underline crumb-link">Головна</Link> / {title}
           </p>
           <h1 className="mt-3 font-display text-4xl text-ink md:text-5xl lg:text-6xl">{title}</h1>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">{intro}</p>

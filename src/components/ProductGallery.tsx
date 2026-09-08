@@ -92,7 +92,10 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
                   такою ж: у неї неможливо влучити пальцем. Тепер кнопка має
                   висоту 24px і прозорі поля навколо смужки, а смужка лишається
                   тонкою: клікабельна зона більша за намальоване. */}
-              <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-0.5 md:hidden">
+              {/* gap і висота кнопки — не косметика: сама крапка 6px, і без
+                  цього поля ціль виходила 14×24px, тобто вдвічі менша за
+                  палець. Розтягуємо саму кнопку, крапка лишається тією ж. */}
+              <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-1 md:hidden">
                 {shown.map((_, i) => (
                   <button
                     key={i}
@@ -101,7 +104,7 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
                     // оголошує просто «кнопка», шість разів поспіль.
                     aria-label={`Фото ${i + 1} з ${shown.length}`}
                     aria-current={i === active}
-                    className="flex h-6 items-center px-1"
+                    className="flex h-10 items-center px-1.5"
                   >
                     <span
                       className={`block h-1 rounded-full transition-all ${
@@ -113,7 +116,7 @@ export function ProductGallery({ images, name }: { images: GalleryImage[]; name:
               </div>
 
               {/* Counter badge */}
-              <span className="absolute right-3 top-3 bg-paper/75 px-2 py-0.5 text-[10px] tabular-nums text-ink backdrop-blur-sm md:hidden">
+              <span className="absolute right-3 top-3 bg-paper/75 px-2 py-0.5 text-[11px] tabular-nums text-ink backdrop-blur-sm md:hidden">
                 {active + 1} / {shown.length}
               </span>
             </>

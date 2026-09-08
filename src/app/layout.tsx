@@ -9,10 +9,14 @@ import { dbBrands } from "@/lib/productSource";
 import { getResolvedBrandLogoMap } from "@/lib/brandLogos";
 import { SITE_URL, SITE_INDEXABLE } from "@/lib/siteUrl";
 
+// Ваги свідомо звужені до тих, що реально рендеряться. Були оголошені
+// 400/500/600/700 × normal+italic — це 40 правил @font-face, з яких на
+// вітрині малювались рівно два: 400 normal (усі заголовки) та 400 italic
+// (виділення в заголовку /about). 600 лишаємо на аватар кабінету.
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
   subsets: ["latin", "cyrillic"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "600"],
   style: ["normal", "italic"],
   display: "swap",
 });
@@ -22,10 +26,11 @@ const cormorant = Cormorant_Garamond({
 // системним шрифтом). Через це в кожному заголовку «НОВІ НАДХОДЖЕННЯ» літера
 // «І» була з іншої гарнітури, і так у будь-якому українському слові.
 // Montserrat геометричний так само, а кирилицю закриває повністю.
+// Без weight: Montserrat на Google Fonts змінний (wght 100..900), і тоді
+// на кожен subset їде ОДИН файл замість чотирьох статичних накреслень.
 const montserrat = Montserrat({
   variable: "--font-body",
   subsets: ["latin", "cyrillic", "cyrillic-ext"],
-  weight: ["300", "400", "500", "600"],
   display: "swap",
 });
 
@@ -109,7 +114,10 @@ async function AnnouncementBar() {
   if (!announcementActive(content)) return null;
   return (
     <div className="bg-ink text-paper">
-      <p className="wrap py-2 text-center text-[11px] uppercase tracking-luxe">
+      {/* На 375px цей рядок займав ТРИ рядки й з'їдав перший екран: винен був
+          не кегль, а трекінг 0.2em — на капсі це п'ята частина ширини кожної
+          літери. На телефоні тримаємо 0.08em, з sm повертаємо люксовий. */}
+      <p className="wrap py-2 text-center text-[11px] uppercase tracking-[0.08em] sm:tracking-luxe">
         {content.announcement}
       </p>
     </div>

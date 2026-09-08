@@ -93,7 +93,7 @@ export function ProductCardMedia({
           <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-display text-[3.6rem] leading-none text-ink/12">
             {brandMark(brand)}
           </span>
-          <span className="absolute bottom-3 left-3 rounded-full bg-paper/70 px-2.5 py-1 text-[9px] uppercase tracking-luxe text-ink/55 backdrop-blur-sm">
+          <span className="absolute bottom-3 left-3 rounded-full bg-paper/70 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-ink/60 backdrop-blur-sm">
             фото готується
           </span>
         </div>

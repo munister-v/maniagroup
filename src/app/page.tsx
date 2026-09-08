@@ -112,9 +112,17 @@ function Hero({ hero, image }: {
           <p className="hero-rise text-[11px] font-semibold uppercase tracking-[0.25em] text-paper/70" style={{ animationDelay: "0ms" }}>
             {hero.eyebrow}
           </p>
-          <h1 className="hero-rise mt-4 max-w-[16ch] font-sans leading-[1.02] text-paper" style={{ animationDelay: "80ms" }}>
-            <span className="block text-[clamp(2.3rem,5vw,4.2rem)] font-light uppercase tracking-[0.05em]">{hero.titleLine1}</span>
-            <span className="block text-[clamp(2.3rem,5vw,4.2rem)] font-light uppercase tracking-[0.05em]">{hero.titleAccent}</span>
+          {/* max-w тут свідомо в em, а не в ch: ch міряється шрифтом і кеглем
+              САМОГО h1 (16px Montserrat), а рядки всередині — 37..67px капсом.
+              Через це «16ch» давали 170px на телефоні, рядок не вміщався і
+              слово відлітало третім рядком. em успадковує кегль рядка.
+              У clamp середній член був 5vw: на 375px це 19px, тобто нижче
+              мінімуму, і формула залипала на 2.3rem на КОЖНОМУ телефоні.
+              9vw дає живе масштабування з 360px і впирається у стелю на
+              планшеті, де вже працює md-кегль. */}
+          <h1 className="hero-rise mt-4 font-sans leading-[1.06] text-paper" style={{ animationDelay: "80ms" }}>
+            <span className="block max-w-[11em] text-[clamp(2.1rem,9vw,4.2rem)] font-light uppercase tracking-[0.05em] text-balance">{hero.titleLine1}</span>
+            <span className="block max-w-[11em] text-[clamp(2.1rem,9vw,4.2rem)] font-light uppercase tracking-[0.05em] text-balance">{hero.titleAccent}</span>
           </h1>
           <p className="hero-rise mt-5 max-w-[40ch] text-[14px] leading-relaxed text-paper/70" style={{ animationDelay: "150ms" }}>
             {hero.subtitle}

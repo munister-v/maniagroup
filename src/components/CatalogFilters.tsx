@@ -62,7 +62,7 @@ export function CatalogFilters({
         <button type="button" onClick={() => go({ onSale: !active.onSale })} className="flex min-h-12 w-full cursor-pointer items-center justify-between gap-2 rounded-[3px] px-1 text-left transition-colors hover:bg-cloud/50">
           <span className="flex items-center gap-2 text-sm text-ink">
             Тільки зі знижкою
-            <span className="bg-[var(--color-sale)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-luxe text-white">Sale</span>
+            <span className="bg-[var(--color-sale)] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-white">Sale</span>
           </span>
           <span
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
@@ -290,7 +290,7 @@ export function CatalogFilters({
         </svg>
         Фільтри
         {count > 0 && (
-          <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-ink px-1 text-[9px] tabular-nums text-paper">
+          <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-ink px-1 text-[10px] tabular-nums text-paper">
             {count}
           </span>
         )}

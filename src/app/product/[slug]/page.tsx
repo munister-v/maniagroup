@@ -146,10 +146,12 @@ function ProductView({
     <section className="wrap py-12 md:py-16">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      {/* Посилання тут — .crumb-link: інлайновий бокс не росте від
+          line-height, тож ціль пальця дає лише вертикальний падінг. */}
       <p className="text-[11px] uppercase tracking-luxe text-muted">
-        <Link href="/" className="link-underline">Головна</Link>{" "}
-        / <Link href="/catalog" className="link-underline">Каталог</Link> /{" "}
-        <Link href={`/catalog?category=${product.categorySlug ?? ""}`} className="link-underline">
+        <Link href="/" className="link-underline crumb-link">Головна</Link>{" "}
+        / <Link href="/catalog" className="link-underline crumb-link">Каталог</Link> /{" "}
+        <Link href={`/catalog?category=${product.categorySlug ?? ""}`} className="link-underline crumb-link">
           {product.category}
         </Link>
       </p>

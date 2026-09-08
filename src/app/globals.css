@@ -20,9 +20,36 @@
 }
 
 * {
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
   box-sizing: border-box;
+}
+
+/* Рендеринг тексту оголошуємо на body, а не на «*».
+   optimizeLegibility на кожному вузлі змушував Chrome перераховувати кернінг
+   і лігатури для всього дерева — на каталозі це тисячі елементів, а користі
+   нуль: kern і liga браузер вмикає сам. Лишаємо явний контракт на шрифтові
+   можливості, щоб Cormorant не вирішував за нас, які цифри малювати. */
+body {
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  font-variant-numeric: lining-nums proportional-nums;
+}
+
+/* antialiased стоншує Montserrat 300/400 на світлому папері: на телефоні
+   текст сірішає замість того, щоб бути чорним. Лишаємо його там, де світле
+   по темному — там субпіксельне згладжування навпаки роздуває літери. */
+.on-dark,
+.text-paper {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ціни, кількості, розміри — цифри однакової ширини, щоб колонка не гуляла.
+   У заголовках (font-display) ширину не рівняємо, лише забороняємо
+   старостильні цифри Cormorant, які провалюються нижче базової лінії. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.font-display {
+  font-variant-numeric: lining-nums;
 }
 
 html {
@@ -92,6 +119,14 @@ a {
   .wrap {
     padding-inline: 3rem;
   }
+}
+
+/* Хлібні крихти: посилання всередині рядка мають висоту КЕГЛЯ (14px), і
+   line-height їх не збільшує — inline-бокс не росте. Тому ціль пальця робимо
+   вертикальним падінгом на inline-block, не чіпаючи вигляд рядка. */
+.crumb-link {
+  display: inline-block;
+  padding-block: 0.55rem;
 }
 
 /* tracked uppercase — used for eyebrows, nav, labels */

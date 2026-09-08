@@ -42,7 +42,7 @@ export async function Footer() {
                 головне велике (телефон антиквою — його й набирають), решта —
                 тихі рядки з іконкою. Ціль пальця тримає min-h, а не рамка. */}
             <div>
-              <p className="text-[10px] uppercase tracking-[0.26em] text-muted">Контакти магазину</p>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-muted">Контакти магазину</p>
               <p className="mt-3 font-display text-xl tracking-wordmark text-ink md:text-2xl">
                 MANIA&nbsp;GROUP
               </p>
@@ -102,7 +102,7 @@ export async function Footer() {
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:contents">
             {COLUMNS.map((col) => (
               <div key={col.title}>
-                <h4 className="text-[10px] uppercase tracking-luxe text-ink md:text-[11px]">
+                <h4 className="text-[11px] uppercase tracking-[0.14em] text-ink md:tracking-luxe">
                   {col.title}
                 </h4>
                 <ul className="mt-2 md:mt-4 md:space-y-2.5">
@@ -128,7 +128,7 @@ export async function Footer() {
       </div>
 
       <div className="border-t border-line">
-        <div className="wrap flex flex-col gap-3 py-5 text-[10px] uppercase tracking-luxe text-muted md:flex-row md:items-center md:justify-between md:py-6 md:text-[11px]">
+        <div className="wrap flex flex-col gap-3 py-5 text-[11px] uppercase tracking-[0.12em] text-muted md:flex-row md:items-center md:justify-between md:py-6 md:tracking-luxe">
           <p className="text-center leading-relaxed sm:text-left">
             © {new Date().getFullYear()} Mania Group · Усі права захищені
           </p>

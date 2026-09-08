@@ -37,15 +37,15 @@ export function ProductCard({ product }: { product: Product }) {
         </div>
 
         {archived ? (
-          <span className="absolute left-3 top-3 z-20 bg-ink/70 px-2.5 py-1 text-[10px] uppercase tracking-luxe text-paper backdrop-blur-sm">
+          <span className="absolute left-3 top-3 z-20 bg-ink/70 px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-paper backdrop-blur-sm">
             Немає в наявності
           </span>
         ) : discount ? (
-          <span className="absolute left-3 top-3 z-20 bg-[#b3392c] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-luxe text-paper">
-            -{discount}%
+          <span className="absolute left-3 top-3 z-20 bg-[#b3392c] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-paper">
+            {"\u2212"}{discount}%
           </span>
         ) : tag ? (
-          <span className="absolute left-3 top-3 z-20 bg-paper/90 px-2.5 py-1 text-[10px] uppercase tracking-luxe text-ink backdrop-blur-sm">
+          <span className="absolute left-3 top-3 z-20 bg-paper/90 px-2.5 py-1 text-[11px] uppercase tracking-[0.14em] text-ink backdrop-blur-sm">
             {TAG_LABELS[tag]}
           </span>
         ) : null}
@@ -58,7 +58,7 @@ export function ProductCard({ product }: { product: Product }) {
       </div>
 
       <div className="mt-3 px-0.5">
-        <p className="truncate text-[10px] uppercase tracking-luxe text-muted">{brand || "MANIA GROUP"}</p>
+        <p className="truncate text-[11px] uppercase tracking-[0.14em] text-muted">{brand || "MANIA GROUP"}</p>
         <h3 className="mt-1 line-clamp-2 min-h-[2.45em] text-[13px] leading-snug text-ink md:text-sm">{name}</h3>
 
         {/* Артикул — клієнт диктує його по телефону й шукає ним у каталозі,
@@ -68,7 +68,13 @@ export function ProductCard({ product }: { product: Product }) {
         {/* Без uppercase: 34 товари мають малі літери в артикулі («A53202-new»),
             і CSS-переверт показував би код, якого не існує — а його з екрана
             переписують у пошук і диктують менеджеру. */}
-        <p className="mt-1 min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums sm:hidden" title={codes || undefined}>
+        {/* На телефоні артикул фізично не вміщався НІКОЛИ: 10px із трекінгом
+            0.08em просили 157px при 143px доступних, і truncate різав кожну
+            картку без винятку — тобто код, заради якого рядок і існує, з
+            екрана не прочитати. Тому тут: кегль 11px (нижче 11 на телефоні
+            текст уже не читається), трекінг знято, і замість обрізання —
+            два рядки фіксованої висоти, щоб сітка не поїхала. */}
+        <p className="mt-1 line-clamp-2 min-h-[2.2em] text-[11px] leading-[1.1] text-muted/80 tabular-nums [overflow-wrap:anywhere] sm:hidden" title={codes || undefined}>
           {article || ""}
         </p>
         <p className="mt-1 hidden min-h-[1.1em] truncate text-[10px] tracking-[0.08em] text-muted/80 tabular-nums sm:block" title={codes || undefined}>
