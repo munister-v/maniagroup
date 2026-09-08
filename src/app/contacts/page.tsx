@@ -140,7 +140,7 @@ export default async function ContactsPage() {
                 <p className="mt-1">14 днів з дня отримання</p>
               </div>
               <div className="md:ml-auto">
-                <Link href="/delivery" className="link-underline text-[11px] uppercase tracking-luxe text-ink">
+                <Link href="/delivery" className="link-underline crumb-link text-[11px] uppercase tracking-luxe text-ink">
                   Умови доставки →
                 </Link>
               </div>

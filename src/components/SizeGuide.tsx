@@ -105,7 +105,7 @@ export async function SizeGuide({
           </p>
           <h1 className="mt-3 font-display text-4xl text-ink md:text-5xl lg:text-6xl">{title}</h1>
           <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted">{intro}</p>
-          <Link href={otherHref} className="link-underline mt-5 inline-block text-[12px] uppercase tracking-luxe text-ink">
+          <Link href={otherHref} className="link-underline crumb-link mt-5 inline-block text-[12px] uppercase tracking-luxe text-ink">
             {otherLabel}
           </Link>
         </div>

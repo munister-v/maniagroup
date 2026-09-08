@@ -50,7 +50,7 @@ export default async function BrandsPage() {
           <h1 className="mt-2 font-display text-3xl text-ink md:text-4xl">Усі бренди в одному місці</h1>
           <p className="mt-2 text-sm text-muted">{total} марок у каталозі · лише оригінал</p>
         </div>
-        <Link href="/catalog" className="link-underline whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink">
+        <Link href="/catalog" className="link-underline crumb-link whitespace-nowrap text-[11px] uppercase tracking-luxe text-ink">
           Весь каталог →
         </Link>
       </div>
