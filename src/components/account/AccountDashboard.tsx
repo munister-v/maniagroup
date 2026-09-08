@@ -288,7 +288,7 @@ function OrdersTab() {
       <h2 className="mb-6 font-display text-2xl text-ink">Замовлення</h2>
       {orders.length === 0 ? (
         <div className="border border-line p-10 text-center">
-          <p className="font-display text-2xl text-ink/30">Замовлень ще немає</p>
+          <p className="font-display text-2xl text-ink/60">Замовлень ще немає</p>
           <p className="mt-2 text-sm text-muted">Перейдіть до каталогу та оберіть перші речі</p>
           <Link href="/catalog" className="mt-6 inline-flex h-11 items-center bg-ink px-8 text-[12px] uppercase tracking-luxe text-paper hover:opacity-85">
             До каталогу →
@@ -440,7 +440,7 @@ function WishlistTab({ initialIds }: { initialIds: string[] }) {
           <svg viewBox="0 0 24 24" className="mx-auto h-10 w-10 text-ink/15" fill="none" stroke="currentColor" strokeWidth="1.2">
             <path d="M12 20.5 4.6 13.2a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9a4.6 4.6 0 0 1 6.5 6.5L12 20.5Z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <p className="mt-3 font-display text-xl text-ink/30">Список порожній</p>
+          <p className="mt-3 font-display text-xl text-ink/60">Список порожній</p>
           <p className="mt-1 text-sm text-muted">Натисніть ♡ на будь-якому товарі, щоб додати</p>
           <Link href="/catalog" className="mt-5 inline-flex h-11 items-center bg-ink px-8 text-[12px] uppercase tracking-luxe text-paper hover:opacity-85">
             До каталогу →

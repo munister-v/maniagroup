@@ -128,7 +128,7 @@ export async function SizeGuide({
             {steps.map((s) => (
               <Reveal key={s.n}>
                 <div className="h-full bg-paper p-8 md:p-10">
-                  <p className="font-display text-3xl text-ink/20">{s.n}</p>
+                  <p className="font-display text-3xl text-ink/50">{s.n}</p>
                   <h3 className="mt-3 text-base text-ink">{s.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-muted">{s.text}</p>
                 </div>

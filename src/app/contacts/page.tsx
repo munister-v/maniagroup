@@ -64,7 +64,7 @@ export default async function ContactsPage() {
                 <p className="mt-3 text-sm text-muted">
                   Нові надходження, lookbook та відповіді у Direct
                 </p>
-                <span className="mt-4 text-[11px] uppercase tracking-luxe text-ink/50 transition-colors group-hover:text-ink">
+                <span className="mt-4 text-[11px] uppercase tracking-luxe text-ink/65 transition-colors group-hover:text-ink">
                   Перейти →
                 </span>
               </a>

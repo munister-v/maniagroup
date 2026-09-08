@@ -85,7 +85,7 @@ export default async function DeliveryPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[11px] uppercase tracking-luxe text-muted">Незабаром</p>
-                    <h3 className="mt-2 font-display text-xl text-ink/50">Онлайн-оплата карткою</h3>
+                    <h3 className="mt-2 font-display text-xl text-ink/65">Онлайн-оплата карткою</h3>
                   </div>
                   <span className="mt-1 h-2 w-2 rounded-full bg-line" />
                 </div>
