@@ -18,17 +18,45 @@ export function Reveal({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    const show = () => setVisible(true);
+
+    // У фоновій вкладці IntersectionObserver не звітує взагалі: людина
+    // відкриває каталог у новій вкладці (Cmd+клік — звичайна річ у покупках),
+    // переходить у неї — і сторінка порожня, бо жоден блок так і не отримав
+    // is-visible. Тому все, що вже в кадрі на момент показу вкладки,
+    // показуємо одразу, без анімації входу.
+    if (document.hidden) {
+      const onShow = () => {
+        document.removeEventListener("visibilitychange", onShow);
+        const r = el.getBoundingClientRect();
+        if (r.top < window.innerHeight && r.bottom > 0) show();
+      };
+      document.addEventListener("visibilitychange", onShow);
+    }
+
     const io = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setVisible(true);
+          show();
           io.disconnect();
         }
       },
       { threshold: 0.12, rootMargin: "0px 0px -8% 0px" },
     );
     io.observe(el);
-    return () => io.disconnect();
+
+    // Страховка на випадок, коли спостерігач мовчить, а блок стоїть у кадрі:
+    // краще показати без анімації, ніж лишити порожнє місце назавжди.
+    const guard = window.setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight && r.bottom > 0) show();
+    }, 1200);
+
+    return () => {
+      io.disconnect();
+      window.clearTimeout(guard);
+    };
   }, []);
 
   return (

@@ -220,16 +220,28 @@ a {
   mix-blend-mode: soft-light;
 }
 
-/* ── scroll-reveal ── */
+/* ── scroll-reveal ──
+   Ховати вміст має право ЛИШЕ той код, який уміє його показати. Тому
+   opacity:0 висить не на .reveal, а на «html.js .reveal»: клас js ставить
+   інлайновий скрипт у <head> (див. layout.tsx) до першого малювання.
+   Без нього — тобто якщо скрипт не виконався, JS вимкнено, гідрація впала
+   чи браузер старий — вміст просто видимий, а не зникає назавжди.
+
+   Приводом стала жива сторінка каталогу: 25 блоків із 25, включно з
+   заголовком, крихтами й УСІМА картками товару, лишалися прозорими, бо
+   IntersectionObserver не звітує, поки вкладка фонова (document.hidden) —
+   а це звичайна річ: людина відкриває каталог у новій вкладці. */
 .reveal {
-  opacity: 0;
-  transform: translateY(26px);
   transition:
     opacity 0.9s cubic-bezier(0.2, 0.7, 0.2, 1),
     transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+html.js .reveal {
+  opacity: 0;
+  transform: translateY(26px);
   will-change: opacity, transform;
 }
-.reveal.is-visible {
+html.js .reveal.is-visible {
   opacity: 1;
   transform: none;
 }

@@ -142,6 +142,12 @@ export default async function RootLayout({
       lang="uk"
       className={`${cormorant.variable} ${montserrat.variable} h-full`}
     >
+      <head>
+        {/* Ставить клас ДО першого малювання: далі globals.css ховає .reveal
+            лише під html.js. Якщо цей рядок не виконався — анімації немає, і
+            сторінка просто видима, замість того щоб лишитись порожньою. */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
+      </head>
       <body className="flex min-h-full flex-col font-sans">
         <script
           type="application/ld+json"
