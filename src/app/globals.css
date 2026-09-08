@@ -245,6 +245,12 @@ html.js .reveal.is-visible {
   opacity: 1;
   transform: none;
 }
+/* Показ без переходу: у фоновій вкладці браузер переходи не програє, і
+   властивість застигає на старті — клас стоїть, а прозорість лишається
+   нульовою. Там, де анімація все одно нікому не видима, вона лише заважає. */
+html.js .reveal.is-instant {
+  transition: none;
+}
 
 /* ── hero entrance ── */
 @keyframes rise {

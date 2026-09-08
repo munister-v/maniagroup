@@ -14,12 +14,16 @@ export function Reveal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const [instant, setInstant] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
-    const show = () => setVisible(true);
+    const show = (withoutAnimation = false) => {
+      if (withoutAnimation) setInstant(true);
+      setVisible(true);
+    };
 
     // У фоновій вкладці IntersectionObserver не звітує взагалі: людина
     // відкриває каталог у новій вкладці (Cmd+клік — звичайна річ у покупках),
@@ -30,7 +34,7 @@ export function Reveal({
       const onShow = () => {
         document.removeEventListener("visibilitychange", onShow);
         const r = el.getBoundingClientRect();
-        if (r.top < window.innerHeight && r.bottom > 0) show();
+        if (r.top < window.innerHeight && r.bottom > 0) show(true);
       };
       document.addEventListener("visibilitychange", onShow);
     }
@@ -50,7 +54,7 @@ export function Reveal({
     // краще показати без анімації, ніж лишити порожнє місце назавжди.
     const guard = window.setTimeout(() => {
       const r = el.getBoundingClientRect();
-      if (r.top < window.innerHeight && r.bottom > 0) show();
+      if (r.top < window.innerHeight && r.bottom > 0) show(document.hidden);
     }, 1200);
 
     return () => {
@@ -63,7 +67,7 @@ export function Reveal({
     <div
       ref={ref}
       style={delay ? { transitionDelay: `${delay}ms` } : undefined}
-      className={`reveal ${visible ? "is-visible" : ""} ${className}`}
+      className={`reveal ${visible ? "is-visible" : ""} ${instant ? "is-instant" : ""} ${className}`}
     >
       {children}
     </div>
